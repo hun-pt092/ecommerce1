@@ -1,0 +1,521 @@
+import React, { useEffect, useState } from 'react';
+import { 
+  Card, 
+  Button, 
+  InputNumber, 
+  message, 
+  Spin, 
+  Row, 
+  Col, 
+  Typography,
+  Divider,
+  Empty,
+  Space,
+  Popconfirm,
+  Image,
+  Modal,
+  Form,
+  Input
+} from 'antd';
+import { 
+  ShoppingCartOutlined, 
+  DeleteOutlined,
+  CreditCardOutlined,
+  ArrowLeftOutlined,
+  MinusOutlined,
+  PlusOutlined
+} from '@ant-design/icons';
+import { useNavigate } from 'react-router-dom';
+import authAxios from '../api/AuthAxios';
+
+const { Title, Text } = Typography;
+
+const CartPage = () => {
+  const navigate = useNavigate();
+  const [cart, setCart] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [updating, setUpdating] = useState(false);
+  const [checkoutModalVisible, setCheckoutModalVisible] = useState(false);
+  const [checkoutLoading, setCheckoutLoading] = useState(false);
+  const [form] = Form.useForm();
+
+  useEffect(() => {
+    fetchCart();
+  }, []);
+
+  // Debug effect để log cart changes
+  useEffect(() => {
+    console.log('=== CART STATE UPDATED ===');
+    console.log('Cart:', cart);
+    console.log('Items count:', cart?.items?.length || 0);
+    console.log('Items:', cart?.items);
+  }, [cart]);
+
+  const fetchCart = async () => {
+    const token = localStorage.getItem('access_token');
+    if (!token) {
+      message.warning('Vui lòng đăng nhập để xem giỏ hàng');
+      navigate('/login');
+      return;
+    }
+
+    try {
+      const response = await authAxios.get('cart/');
+      setCart(response.data);
+    } catch (error) {
+      message.error('Không thể tải giỏ hàng');
+      console.error(error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const updateCartItem = async (itemIndex, newQuantity) => {
+    if (newQuantity <= 0) {
+      removeCartItem(itemIndex);
+      return;
+    }
+
+    setUpdating(true);
+    try {
+      const currentItem = cart.items[itemIndex];
+      const quantityDiff = newQuantity - currentItem.quantity;
+      
+      if (quantityDiff !== 0) {
+        // Sử dụng PUT method để cập nhật số lượng
+        await authAxios.put('cart/', {
+          product_variant_id: currentItem.product_variant.id,
+          quantity: quantityDiff
+        });
+        
+        // Fetch lại cart từ server để đảm bảo sync
+        await fetchCart();
+
+        // Cập nhật cart count trong navigation
+        if (window.updateCartCount) {
+          window.updateCartCount();
+        }
+
+        message.success('Đã cập nhật giỏ hàng');
+      }
+    } catch (error) {
+      // Hiển thị lỗi cụ thể từ backend (stock validation)
+      if (error.response && error.response.data && error.response.data.error) {
+        message.error(error.response.data.error);
+      } else {
+        message.error('Có lỗi khi cập nhật giỏ hàng');
+      }
+      console.error('Update cart error:', error);
+      
+      // Fetch lại cart để reset về trạng thái ban đầu
+      fetchCart();
+    } finally {
+      setUpdating(false);
+    }
+  };
+
+  const removeCartItem = async (itemIndex) => {
+    setUpdating(true);
+    try {
+      const itemToRemove = cart.items[itemIndex];
+      
+      console.log('=== REMOVING ITEM ===');
+      console.log('Item to remove:', itemToRemove);
+      console.log('Current cart items:', cart.items.length);
+      
+      // Sử dụng DELETE method để xóa item hoàn toàn
+      const response = await authAxios.delete('cart/', {
+        data: {
+          product_variant_id: itemToRemove.product_variant.id
+        }
+      });
+      
+      console.log('Remove response:', response.data);
+      
+      // Fetch lại cart từ server để đảm bảo sync
+      await fetchCart();
+
+      // Cập nhật cart count trong navigation
+      if (window.updateCartCount) {
+        window.updateCartCount();
+      }
+
+      message.success('Đã xóa sản phẩm khỏi giỏ hàng');
+    } catch (error) {
+      message.error('Có lỗi khi xóa sản phẩm');
+      console.error(error);
+    } finally {
+      setUpdating(false);
+    }
+  };
+
+  const calculateItemTotal = (item) => {
+    // Giả sử giá được lưu trong product (cần cập nhật API để trả về giá)
+    const price = item.product_variant?.product?.price || 0;
+    return price * item.quantity;
+  };
+
+  const calculateTotal = () => {
+    if (!cart || !cart.items) return 0;
+    return cart.items.reduce((total, item) => {
+      return total + calculateItemTotal(item);
+    }, 0);
+  };
+
+  const handleCheckout = () => {
+    if (!cart || !cart.items || cart.items.length === 0) {
+      message.warning('Giỏ hàng trống');
+      return;
+    }
+    
+    setCheckoutModalVisible(true);
+  };
+
+  const onCheckoutSubmit = async (values) => {
+    setCheckoutLoading(true);
+    try {
+      const orderData = {
+        shipping_name: values.shipping_name,
+        shipping_address: values.shipping_address,
+        shipping_city: values.shipping_city,
+        shipping_postal_code: values.shipping_postal_code || '',
+        phone_number: values.phone_number,
+        notes: values.notes || ''
+      };
+
+      const response = await authAxios.post('orders/create-from-cart/', orderData);
+      
+      message.success('Đặt hàng thành công!');
+      setCheckoutModalVisible(false);
+      form.resetFields();
+      
+      // Clear cart and update navigation
+      setCart({ items: [] });
+      if (window.updateCartCount) {
+        window.updateCartCount();
+      }
+      
+      // Show success message with order info
+      Modal.success({
+        title: 'Đặt hàng thành công!',
+        content: `Mã đơn hàng của bạn là: #${response.data.id}. Chúng tôi sẽ liên hệ với bạn sớm nhất.`,
+      });
+      
+    } catch (error) {
+      message.error('Có lỗi khi đặt hàng. Vui lòng thử lại');
+      console.error('Error creating order:', error);
+    } finally {
+      setCheckoutLoading(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div style={{ textAlign: 'center', marginTop: '100px' }}>
+        <Spin size="large" />
+      </div>
+    );
+  }
+
+  const isEmpty = !cart || !cart.items || cart.items.length === 0;
+
+  return (
+    <div style={{ padding: '20px', maxWidth: '1200px', margin: '0 auto' }}>
+      <Button 
+        icon={<ArrowLeftOutlined />} 
+        onClick={() => navigate('/')}
+        style={{ marginBottom: '20px' }}
+      >
+        Tiếp tục mua sắm
+      </Button>
+
+      <Title level={2} style={{ marginBottom: '30px' }}>
+        <ShoppingCartOutlined /> Giỏ hàng của bạn
+      </Title>
+
+      {isEmpty ? (
+        <Card>
+          <Empty
+            image={Empty.PRESENTED_IMAGE_SIMPLE}
+            description={
+              <span>
+                Giỏ hàng của bạn đang trống
+              </span>
+            }
+          >
+            <Button type="primary" onClick={() => navigate('/')}>
+              Mua sắm ngay
+            </Button>
+          </Empty>
+        </Card>
+      ) : (
+        <Row gutter={[24, 24]}>
+          {/* Cart Items */}
+          <Col xs={24} lg={16}>
+            <Card title={`Sản phẩm trong giỏ (${cart.items.length})`}>
+              {cart.items.map((item, index) => (
+                <div key={index}>
+                  <Row gutter={[16, 16]} align="middle">
+                    {/* Product Image */}
+                    <Col xs={24} sm={6} md={4}>
+                      <div
+                        style={{
+                          width: '80px',
+                          height: '80px',
+                          background: 'linear-gradient(45deg, #f0f0f0, #e0e0e0)',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          borderRadius: '8px',
+                          fontSize: '24px',
+                          color: '#999'
+                        }}
+                      >
+                        📷
+                      </div>
+                    </Col>
+
+                    {/* Product Info */}
+                    <Col xs={24} sm={18} md={10}>
+                      <div>
+                        <Title level={5} style={{ margin: 0, marginBottom: '4px' }}>
+                          Sản phẩm #{item.product_variant.id}
+                        </Title>
+                        <Text type="secondary">
+                          Kích cỡ: {item.product_variant.size} | 
+                          Màu: {item.product_variant.color}
+                        </Text>
+                        <br />
+                        <Text strong style={{ color: '#1890ff' }}>
+                          150,000₫ {/* Placeholder - cần API trả về giá */}
+                        </Text>
+                      </div>
+                    </Col>
+
+                    {/* Quantity Controls */}
+                    <Col xs={12} sm={12} md={6}>
+                      {/* Stock warning */}
+                      {item.product_variant && item.product_variant.stock_quantity <= 5 && (
+                        <div style={{ marginBottom: '8px' }}>
+                          <Text type="warning" style={{ fontSize: '12px' }}>
+                            ⚠️ Chỉ còn {item.product_variant.stock_quantity} sản phẩm
+                          </Text>
+                        </div>
+                      )}
+                      
+                      <Space.Compact>
+                        <Button
+                          icon={<MinusOutlined />}
+                          onClick={() => updateCartItem(index, item.quantity - 1)}
+                          disabled={updating || item.quantity <= 1}
+                          size="small"
+                        />
+                        <InputNumber
+                          value={item.quantity}
+                          min={1}
+                          max={item.product_variant?.stock_quantity || 99}
+                          onChange={(value) => {
+                            // Nếu value null hoặc <= 0, xóa item
+                            if (!value || value <= 0) {
+                              removeCartItem(index);
+                            } else {
+                              updateCartItem(index, value);
+                            }
+                          }}
+                          disabled={updating}
+                          style={{ width: '60px' }}
+                          size="small"
+                        />
+                        <Button
+                          icon={<PlusOutlined />}
+                          onClick={() => updateCartItem(index, item.quantity + 1)}
+                          disabled={updating || item.quantity >= (item.product_variant?.stock_quantity || 99)}
+                          size="small"
+                        />
+                      </Space.Compact>
+                      
+                      {/* Stock info */}
+                      {item.product_variant && (
+                        <div style={{ marginTop: '4px' }}>
+                          <Text type="secondary" style={{ fontSize: '11px' }}>
+                            Tồn kho: {item.product_variant.stock_quantity}
+                          </Text>
+                        </div>
+                      )}
+                    </Col>
+
+                    {/* Total & Delete */}
+                    <Col xs={12} sm={12} md={4}>
+                      <div style={{ textAlign: 'right' }}>
+                        <Text strong style={{ fontSize: '16px', color: '#1890ff' }}>
+                          {(150000 * item.quantity).toLocaleString()}₫
+                        </Text>
+                        <br />
+                        <Popconfirm
+                          title="Xóa sản phẩm?"
+                          description="Bạn có chắc muốn xóa sản phẩm này?"
+                          onConfirm={() => removeCartItem(index)}
+                          okText="Xóa"
+                          cancelText="Hủy"
+                        >
+                          <Button
+                            type="text"
+                            danger
+                            icon={<DeleteOutlined />}
+                            size="small"
+                            disabled={updating}
+                          >
+                            Xóa
+                          </Button>
+                        </Popconfirm>
+                      </div>
+                    </Col>
+                  </Row>
+                  {index < cart.items.length - 1 && <Divider />}
+                </div>
+              ))}
+            </Card>
+          </Col>
+
+          {/* Order Summary */}
+          <Col xs={24} lg={8}>
+            <Card title="Tóm tắt đơn hàng" style={{ position: 'sticky', top: '20px' }}>
+              <div style={{ marginBottom: '20px' }}>
+                <Row justify="space-between" style={{ marginBottom: '8px' }}>
+                  <Text>Tạm tính:</Text>
+                  <Text>{(150000 * cart.items.reduce((sum, item) => sum + item.quantity, 0)).toLocaleString()}₫</Text>
+                </Row>
+                <Row justify="space-between" style={{ marginBottom: '8px' }}>
+                  <Text>Phí vận chuyển:</Text>
+                  <Text>30,000₫</Text>
+                </Row>
+                <Divider style={{ margin: '12px 0' }} />
+                <Row justify="space-between" style={{ marginBottom: '16px' }}>
+                  <Title level={4} style={{ margin: 0 }}>Tổng cộng:</Title>
+                  <Title level={4} style={{ margin: 0, color: '#ff4d4f' }}>
+                    {(150000 * cart.items.reduce((sum, item) => sum + item.quantity, 0) + 30000).toLocaleString()}₫
+                  </Title>
+                </Row>
+              </div>
+
+              <Button
+                type="primary"
+                size="large"
+                icon={<CreditCardOutlined />}
+                onClick={handleCheckout}
+                block
+                style={{ 
+                  height: '50px',
+                  marginBottom: '16px'
+                }}
+              >
+                Tiến hành thanh toán
+              </Button>
+
+              <Button
+                size="large"
+                onClick={() => navigate('/')}
+                block
+              >
+                Tiếp tục mua sắm
+              </Button>
+
+              {/* Shipping Info */}
+              <Divider />
+              <div style={{ fontSize: '12px', color: '#666' }}>
+                <div style={{ marginBottom: '8px' }}>
+                  🚚 Miễn phí vận chuyển cho đơn hàng từ 500,000₫
+                </div>
+                <div style={{ marginBottom: '8px' }}>
+                  📦 Giao hàng trong 2-5 ngày làm việc
+                </div>
+                <div>
+                  🔄 Đổi trả miễn phí trong 30 ngày
+                </div>
+              </div>
+            </Card>
+          </Col>
+        </Row>
+      )}
+
+      {/* Checkout Modal */}
+      <Modal
+        title="Thông tin giao hàng"
+        open={checkoutModalVisible}
+        onCancel={() => setCheckoutModalVisible(false)}
+        footer={null}
+        width={600}
+      >
+        <Form
+          form={form}
+          layout="vertical"
+          onFinish={onCheckoutSubmit}
+        >
+          <Form.Item
+            label="Họ và tên"
+            name="shipping_name"
+            rules={[{ required: true, message: 'Vui lòng nhập họ và tên' }]}
+          >
+            <Input placeholder="Nhập họ và tên" />
+          </Form.Item>
+
+          <Form.Item
+            label="Số điện thoại"
+            name="phone_number"
+            rules={[{ required: true, message: 'Vui lòng nhập số điện thoại' }]}
+          >
+            <Input placeholder="Nhập số điện thoại" />
+          </Form.Item>
+
+          <Form.Item
+            label="Địa chỉ"
+            name="shipping_address"
+            rules={[{ required: true, message: 'Vui lòng nhập địa chỉ' }]}
+          >
+            <Input.TextArea rows={3} placeholder="Nhập địa chỉ chi tiết" />
+          </Form.Item>
+
+          <Row gutter={16}>
+            <Col span={12}>
+              <Form.Item
+                label="Thành phố"
+                name="shipping_city"
+                rules={[{ required: true, message: 'Vui lòng nhập thành phố' }]}
+              >
+                <Input placeholder="Thành phố" />
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+              <Form.Item
+                label="Mã bưu điện"
+                name="shipping_postal_code"
+              >
+                <Input placeholder="Mã bưu điện (không bắt buộc)" />
+              </Form.Item>
+            </Col>
+          </Row>
+
+          <Form.Item
+            label="Ghi chú"
+            name="notes"
+          >
+            <Input.TextArea rows={2} placeholder="Ghi chú cho đơn hàng (không bắt buộc)" />
+          </Form.Item>
+
+          <Form.Item>
+            <Space style={{ width: '100%', justifyContent: 'flex-end' }}>
+              <Button onClick={() => setCheckoutModalVisible(false)}>
+                Hủy
+              </Button>
+              <Button type="primary" htmlType="submit" loading={checkoutLoading}>
+                Đặt hàng ({calculateTotal().toLocaleString('vi-VN')}đ)
+              </Button>
+            </Space>
+          </Form.Item>
+        </Form>
+      </Modal>
+    </div>
+  );
+};
+
+export default CartPage;

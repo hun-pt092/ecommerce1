@@ -1,0 +1,74 @@
+# Django
+*.pyc
+__pycache__/
+*.so
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+db.sqlite3
+db.sqlite3-journal
+media/
+staticfiles/
+
+# Django migrations (tuỳ chọn - bạn có thể commit migrations)
+# */migrations/*.py
+# !*/migrations/__init__.py
+
+# Python
+*.egg-info/
+dist/
+build/
+.Python
+*.egg
+
+# Virtual Environment
+venv/
+env/
+ENV/
+
+# Node.js / React
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.npm
+.yarn-integrity
+
+# React build
+/build
+/dist
+
+# Cache
+.cache/
+.parcel-cache/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Testing
+coverage/
+.nyc_output/
+.coverage
+
+# Temporary files
+*.tmp
+*.temp
