@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import User, Product, ProductVariant, Order, OrderItem
+from .models import User, Product, ProductVariant, Order, OrderItem, Category, Brand, ProductImage
 from django.contrib.auth.password_validation import validate_password
 from rest_framework.validators import UniqueValidator
 
@@ -34,6 +34,24 @@ class RegisterSerializer(serializers.ModelSerializer):
         user.save()
         return user
 
+# Category serializer
+class CategorySerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Category
+        fields = '__all__'
+
+# Brand serializer
+class BrandSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Brand
+        fields = '__all__'
+
+# ProductImage serializer
+class ProductImageSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ProductImage
+        fields = '__all__'
+
 # Product serializers
 class ProductVariantSerializer(serializers.ModelSerializer):
     class Meta:
@@ -42,10 +60,50 @@ class ProductVariantSerializer(serializers.ModelSerializer):
 
 class ProductSerializer(serializers.ModelSerializer):
     variants = ProductVariantSerializer(many=True, read_only=True)
+    images = ProductImageSerializer(many=True, read_only=True)
+    category = CategorySerializer(read_only=True)
+    brand = BrandSerializer(read_only=True)
 
     class Meta:
         model = Product
         fields = '__all__'
+
+# Admin product serializer with create/update functionality
+class AdminProductSerializer(serializers.ModelSerializer):
+    variants = ProductVariantSerializer(many=True, required=False)
+    images = ProductImageSerializer(many=True, read_only=True)
+    category_name = serializers.CharField(source='category.name', read_only=True)
+    brand_name = serializers.CharField(source='brand.name', read_only=True)
+
+    class Meta:
+        model = Product
+        fields = '__all__'
+    
+    def create(self, validated_data):
+        variants_data = validated_data.pop('variants', [])
+        product = Product.objects.create(**validated_data)
+        
+        # Tạo variants
+        for variant_data in variants_data:
+            ProductVariant.objects.create(product=product, **variant_data)
+        
+        return product
+    
+    def update(self, instance, validated_data):
+        variants_data = validated_data.pop('variants', [])
+        
+        # Update product
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+        instance.save()
+        
+        # Update variants (xóa cũ, tạo mới)
+        if variants_data:
+            instance.variants.all().delete()
+            for variant_data in variants_data:
+                ProductVariant.objects.create(product=instance, **variant_data)
+        
+        return instance
 
 
 

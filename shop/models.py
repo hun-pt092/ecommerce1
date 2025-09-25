@@ -1,5 +1,14 @@
 from django.db import models
 from django.contrib.auth.models import AbstractUser
+import uuid
+import os
+
+
+def product_image_path(instance, filename):
+    """Tạo đường dẫn upload ảnh sản phẩm"""
+    ext = filename.split('.')[-1]
+    filename = f'{uuid.uuid4().hex}.{ext}'
+    return os.path.join('products', str(instance.product.id), filename)
 
 
 # Custom User model để dễ mở rộng (thêm is_admin,...)
@@ -14,17 +23,82 @@ class Category(models.Model):
     def __str__(self):
         return self.name
 
+class Brand(models.Model):
+    name = models.CharField(max_length=100, unique=True)
+    description = models.TextField(blank=True)
+    logo = models.ImageField(upload_to='brands/', blank=True, null=True)
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return self.name
+
+    class Meta:
+        ordering = ['name']
+
 class Product(models.Model):
     name = models.CharField(max_length=200)
+    sku = models.CharField(max_length=50, unique=True, blank=True)  # Mã SKU
     description = models.TextField(blank=True)
+    short_description = models.TextField(max_length=500, blank=True)  # Mô tả ngắn
     category = models.ForeignKey(Category, on_delete=models.CASCADE, related_name='products')
+    brand = models.ForeignKey(Brand, on_delete=models.SET_NULL, null=True, blank=True, related_name='products')
+    material = models.CharField(max_length=100, blank=True)  # Chất liệu
     price = models.DecimalField(max_digits=10, decimal_places=2)
     discount_price = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    
+    # Trạng thái sản phẩm
+    is_active = models.BooleanField(default=True)  # Hiển thị hay không
+    is_featured = models.BooleanField(default=False)  # Sản phẩm nổi bật
+    is_new = models.BooleanField(default=False)  # Sản phẩm mới
+    
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     def __str__(self):
         return self.name
+    
+    def save(self, *args, **kwargs):
+        # Tự động tạo SKU nếu chưa có
+        if not self.sku:
+            self.sku = f"PRD-{uuid.uuid4().hex[:8].upper()}"
+        super().save(*args, **kwargs)
+    
+    def get_main_image(self):
+        """Lấy ảnh chính của sản phẩm"""
+        main_image = self.images.filter(is_main=True).first()
+        return main_image.image.url if main_image else None
+    
+    def get_all_images(self):
+        """Lấy tất cả ảnh của sản phẩm theo thứ tự"""
+        return self.images.all().order_by('order', 'id')
+
+    class Meta:
+        ordering = ['-created_at']
+
+class ProductImage(models.Model):
+    product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name='images')
+    image = models.ImageField(upload_to=product_image_path)
+    alt_text = models.CharField(max_length=200, blank=True)  # Mô tả ảnh cho SEO
+    is_main = models.BooleanField(default=False)  # Ảnh chính
+    order = models.PositiveIntegerField(default=0)  # Thứ tự hiển thị
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    def __str__(self):
+        status = "Main" if self.is_main else "Additional"
+        return f"{self.product.name} - {status} Image #{self.order}"
+    
+    def save(self, *args, **kwargs):
+        # Nếu đây là ảnh chính, bỏ đánh dấu ảnh chính cũ
+        if self.is_main:
+            ProductImage.objects.filter(
+                product=self.product, 
+                is_main=True
+            ).exclude(id=self.id).update(is_main=False)
+        super().save(*args, **kwargs)
+    
+    class Meta:
+        ordering = ['order', 'id']
 
 class ProductVariant(models.Model):
     product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name='variants')

@@ -1,7 +1,7 @@
 #from django.shortcuts import render
 
 from rest_framework import generics, permissions
-from .models import Product, ProductVariant, User, Order, OrderItem
+from .models import Product, ProductVariant, User, Order, OrderItem, Category, Brand, ProductImage
 from .serializers import (
     RegisterSerializer, ProductSerializer, OrderSerializer, 
     OrderCreateSerializer, OrderStatusUpdateSerializer,
@@ -439,3 +439,114 @@ class OrderStatusUpdateView(APIView):
                 {"error": "Order not found"}, 
                 status=status.HTTP_404_NOT_FOUND
             )
+
+
+# ===== ADMIN API VIEWS =====
+
+from .serializers import CategorySerializer, BrandSerializer, AdminProductSerializer, ProductImageSerializer
+
+# Admin: Categories CRUD
+class AdminCategoryListView(generics.ListCreateAPIView):
+    queryset = Category.objects.all()
+    serializer_class = CategorySerializer
+    permission_classes = [IsAuthenticated]
+    
+    def get_queryset(self):
+        if not (self.request.user.is_admin or self.request.user.is_superuser):
+            return Category.objects.none()
+        return Category.objects.all()
+
+class AdminCategoryDetailView(generics.RetrieveUpdateDestroyAPIView):
+    queryset = Category.objects.all()
+    serializer_class = CategorySerializer
+    permission_classes = [IsAuthenticated]
+    
+    def get_queryset(self):
+        if not (self.request.user.is_admin or self.request.user.is_superuser):
+            return Category.objects.none()
+        return Category.objects.all()
+
+# Admin: Brands CRUD
+class AdminBrandListView(generics.ListCreateAPIView):
+    queryset = Brand.objects.all()
+    serializer_class = BrandSerializer
+    permission_classes = [IsAuthenticated]
+    
+    def get_queryset(self):
+        if not (self.request.user.is_admin or self.request.user.is_superuser):
+            return Brand.objects.none()
+        return Brand.objects.all()
+
+class AdminBrandDetailView(generics.RetrieveUpdateDestroyAPIView):
+    queryset = Brand.objects.all()
+    serializer_class = BrandSerializer
+    permission_classes = [IsAuthenticated]
+    
+    def get_queryset(self):
+        if not (self.request.user.is_admin or self.request.user.is_superuser):
+            return Brand.objects.none()
+        return Brand.objects.all()
+
+# Admin: Products CRUD
+class AdminProductListView(generics.ListCreateAPIView):
+    queryset = Product.objects.all()
+    serializer_class = AdminProductSerializer
+    permission_classes = [IsAuthenticated]
+    
+    def get_queryset(self):
+        if not (self.request.user.is_admin or self.request.user.is_superuser):
+            return Product.objects.none()
+        return Product.objects.all().select_related('category', 'brand').prefetch_related('variants', 'images')
+    
+    def perform_create(self, serializer):
+        product = serializer.save()
+        
+        # Handle image uploads
+        images_data = self.request.FILES.getlist('images')
+        for i, image_file in enumerate(images_data):
+            is_main = i == 0  # First image is main
+            ProductImage.objects.create(
+                product=product,
+                image=image_file,
+                is_main=is_main,
+                order=i,
+                alt_text=f"{product.name} - Image {i+1}"
+            )
+        
+        # Handle variants from JSON
+        variants_json = self.request.data.get('variants')
+        if variants_json:
+            import json
+            try:
+                variants_data = json.loads(variants_json)
+                for variant_data in variants_data:
+                    ProductVariant.objects.create(
+                        product=product,
+                        size=variant_data.get('size', ''),
+                        color=variant_data.get('color', ''),
+                        stock_quantity=variant_data.get('stock_quantity', 0)
+                    )
+            except json.JSONDecodeError:
+                pass
+
+class AdminProductDetailView(generics.RetrieveUpdateDestroyAPIView):
+    queryset = Product.objects.all()
+    serializer_class = AdminProductSerializer
+    permission_classes = [IsAuthenticated]
+    
+    def get_queryset(self):
+        if not (self.request.user.is_admin or self.request.user.is_superuser):
+            return Product.objects.none()
+        return Product.objects.all().select_related('category', 'brand').prefetch_related('variants', 'images')
+
+# Admin check endpoint
+class AdminCheckView(APIView):
+    permission_classes = [IsAuthenticated]
+    
+    def get(self, request):
+        user = request.user
+        return Response({
+            'is_admin': user.is_admin or user.is_superuser,
+            'username': user.username,
+            'email': user.email
+        })
