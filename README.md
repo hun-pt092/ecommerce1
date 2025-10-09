@@ -105,5 +105,8 @@ Frontend sẽ chạy tại: http://localhost:3000
 4. Push to branch (`git push origin feature/AmazingFeature`)
 5. Tạo Pull Request
 
-## cài thêm
+## 📦 Cài đặt thêm
+
+```bash
 npm install date-fns
+```
