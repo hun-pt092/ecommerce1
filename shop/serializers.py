@@ -74,6 +74,15 @@ class AdminProductSerializer(serializers.ModelSerializer):
     images = ProductImageSerializer(many=True, read_only=True)
     category_name = serializers.CharField(source='category.name', read_only=True)
     brand_name = serializers.CharField(source='brand.name', read_only=True)
+    
+    # Handle foreign key fields
+    category = serializers.PrimaryKeyRelatedField(queryset=Category.objects.all(), required=True)
+    brand = serializers.PrimaryKeyRelatedField(queryset=Brand.objects.all(), required=False, allow_null=True)
+    
+    # Handle boolean fields from FormData
+    is_active = serializers.BooleanField(required=False, default=True)
+    is_featured = serializers.BooleanField(required=False, default=False)
+    is_new = serializers.BooleanField(required=False, default=False)
 
     class Meta:
         model = Product
@@ -270,3 +279,11 @@ class OrderStatusUpdateSerializer(serializers.ModelSerializer):
         if value not in valid_payment_statuses:
             raise serializers.ValidationError(f"Invalid payment status. Must be one of: {list(valid_payment_statuses.keys())}")
         return value
+
+# User serializer for admin management
+class UserSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = User
+        fields = ('id', 'username', 'email', 'first_name', 'last_name', 
+                 'is_active', 'is_admin', 'is_staff', 'date_joined', 'last_login')
+        read_only_fields = ('id', 'date_joined', 'last_login')

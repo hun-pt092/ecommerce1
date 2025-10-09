@@ -11,12 +11,14 @@ import CartPage from './pages/CartPage';
 import OrdersPage from './pages/OrdersPage';
 import DebugPage from './pages/DebugPage';
 import TestConnectionPage from './pages/TestConnectionPage';
-import QuickRegisterTest from './pages/QuickRegisterTest';
+
 
 // Admin pages
 import AdminDashboard from './pages/admin/AdminDashboard';
 import ProductList from './pages/admin/ProductList';
 import AddProduct from './pages/admin/AddProduct';
+import OrderManagement from './pages/admin/OrderManagement';
+import UserManagement from './pages/admin/UserManagement';
 
 function App() {
   return (
@@ -35,6 +37,8 @@ function App() {
                 <Route path="/products/list" element={<ProductList />} />
                 <Route path="/products/add" element={<AddProduct />} />
                 <Route path="/products/edit/:id" element={<AddProduct />} />
+                <Route path="/orders" element={<OrderManagement />} />
+                <Route path="/users" element={<UserManagement />} />
               </Routes>
             </AdminLayout>
           </AdminProtectedRoute>
@@ -50,7 +54,7 @@ function App() {
               <Route path="/orders" element={<OrdersPage />} />
               <Route path="/debug" element={<DebugPage />} />
               <Route path="/test" element={<TestConnectionPage />} />
-              <Route path="/quicktest" element={<QuickRegisterTest />} />
+
             </Routes>
           </Layout>
         } />

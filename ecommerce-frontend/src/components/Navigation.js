@@ -1,15 +1,20 @@
 import React, { useState, useEffect } from 'react';
-import { Layout, Menu, Badge, Button, Space, Dropdown, Avatar } from 'antd';
+import { Layout, Menu, Badge, Button, Space, Dropdown, Avatar, Modal, Descriptions, Tag } from 'antd';
 import { 
   HomeOutlined, 
   ShoppingCartOutlined, 
   UserOutlined,
   LoginOutlined,
   LogoutOutlined,
-  UserAddOutlined
+  UserAddOutlined,
+  MailOutlined,
+  PhoneOutlined,
+  CalendarOutlined
 } from '@ant-design/icons';
 import { useNavigate, useLocation } from 'react-router-dom';
 import authAxios from '../api/AuthAxios';
+import { format } from 'date-fns';
+import { vi } from 'date-fns/locale';
 
 const { Header } = Layout;
 
@@ -18,17 +23,21 @@ const Navigation = () => {
   const location = useLocation();
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [cartItemCount, setCartItemCount] = useState(0);
+  const [userInfo, setUserInfo] = useState(null);
+  const [profileModalVisible, setProfileModalVisible] = useState(false);
 
   useEffect(() => {
     // Check if user is logged in
     const token = localStorage.getItem('access_token');
     setIsLoggedIn(!!token);
     
-    // Fetch cart item count if logged in
+    // Fetch cart item count and user info if logged in
     if (token) {
       fetchCartCount();
+      fetchUserInfo();
     } else {
       setCartItemCount(0);
+      setUserInfo(null);
     }
   }, [location]);
 
@@ -43,6 +52,16 @@ const Navigation = () => {
     }
   };
 
+  const fetchUserInfo = async () => {
+    try {
+      const response = await authAxios.get('user/');
+      setUserInfo(response.data);
+    } catch (error) {
+      console.error('Error fetching user info:', error);
+      setUserInfo(null);
+    }
+  };
+
   // Expose function để các component khác có thể update cart count
   window.updateCartCount = fetchCartCount;
 
@@ -50,6 +69,7 @@ const Navigation = () => {
     localStorage.removeItem('access_token');
     localStorage.removeItem('refresh_token');
     setIsLoggedIn(false);
+    setUserInfo(null);
     navigate('/');
   };
 
@@ -59,8 +79,7 @@ const Navigation = () => {
       label: 'Thông tin cá nhân',
       icon: <UserOutlined />,
       onClick: () => {
-        // TODO: Navigate to profile page
-        console.log('Navigate to profile');
+        setProfileModalVisible(true);
       }
     },
     {
@@ -156,11 +175,28 @@ const Navigation = () => {
               placement="bottomRight"
               arrow
             >
-              <Button
-                type="text"
-                icon={<Avatar size="small" icon={<UserOutlined />} />}
-                style={{ display: 'flex', alignItems: 'center' }}
-              />
+              <div style={{ 
+                display: 'flex', 
+                alignItems: 'center', 
+                cursor: 'pointer',
+                padding: '4px 8px',
+                borderRadius: '6px',
+                transition: 'background-color 0.3s',
+                ':hover': { backgroundColor: '#f0f0f0' }
+              }}>
+                <Avatar size="small" icon={<UserOutlined />} />
+                <span style={{ 
+                  marginLeft: '8px',
+                  color: '#595959',
+                  fontSize: '14px',
+                  fontWeight: '500'
+                }}>
+                  {userInfo?.first_name ? 
+                    `${userInfo.first_name} ${userInfo.last_name || ''}`.trim() : 
+                    userInfo?.username || 'User'
+                  }
+                </span>
+              </div>
             </Dropdown>
           ) : (
             <Space>
@@ -183,6 +219,128 @@ const Navigation = () => {
           )}
         </Space>
       </div>
+
+      {/* Profile Modal */}
+      <Modal
+        title={
+          <div style={{ display: 'flex', alignItems: 'center' }}>
+            <Avatar size="large" icon={<UserOutlined />} style={{ marginRight: 12 }} />
+            <div>
+              <div style={{ fontSize: '18px', fontWeight: 'bold' }}>
+                Thông tin cá nhân
+              </div>
+              <div style={{ fontSize: '14px', color: '#8c8c8c', fontWeight: 'normal' }}>
+                {userInfo?.first_name ? 
+                  `${userInfo.first_name} ${userInfo.last_name || ''}`.trim() : 
+                  userInfo?.username || 'User'
+                }
+              </div>
+            </div>
+          </div>
+        }
+        open={profileModalVisible}
+        onCancel={() => setProfileModalVisible(false)}
+        footer={[
+          <Button key="close" onClick={() => setProfileModalVisible(false)}>
+            Đóng
+          </Button>
+        ]}
+        width={600}
+      >
+        {userInfo && (
+          <Descriptions bordered column={1} size="middle">
+            <Descriptions.Item 
+              label={
+                <span>
+                  <UserOutlined style={{ marginRight: 8 }} />
+                  Tên đăng nhập
+                </span>
+              }
+            >
+              <Tag color="blue">{userInfo.username}</Tag>
+            </Descriptions.Item>
+            
+            <Descriptions.Item 
+              label={
+                <span>
+                  <UserOutlined style={{ marginRight: 8 }} />
+                  Họ tên
+                </span>
+              }
+            >
+              {userInfo.first_name || userInfo.last_name ? 
+                `${userInfo.first_name || ''} ${userInfo.last_name || ''}`.trim() : 
+                <span style={{ color: '#8c8c8c' }}>Chưa cập nhật</span>
+              }
+            </Descriptions.Item>
+
+            <Descriptions.Item 
+              label={
+                <span>
+                  <MailOutlined style={{ marginRight: 8 }} />
+                  Email
+                </span>
+              }
+            >
+              {userInfo.email || <span style={{ color: '#8c8c8c' }}>Chưa cập nhật</span>}
+            </Descriptions.Item>
+
+            <Descriptions.Item 
+              label={
+                <span>
+                  <UserOutlined style={{ marginRight: 8 }} />
+                  Vai trò
+                </span>
+              }
+            >
+              <Tag color={userInfo.is_staff ? 'red' : 'green'}>
+                {userInfo.is_staff ? 'Quản trị viên' : 'Khách hàng'}
+              </Tag>
+            </Descriptions.Item>
+
+            <Descriptions.Item 
+              label={
+                <span>
+                  <CalendarOutlined style={{ marginRight: 8 }} />
+                  Ngày tham gia
+                </span>
+              }
+            >
+              {userInfo.date_joined ? 
+                format(new Date(userInfo.date_joined), 'dd/MM/yyyy HH:mm', { locale: vi }) :
+                <span style={{ color: '#8c8c8c' }}>Không xác định</span>
+              }
+            </Descriptions.Item>
+
+            <Descriptions.Item 
+              label={
+                <span>
+                  <UserOutlined style={{ marginRight: 8 }} />
+                  Trạng thái tài khoản
+                </span>
+              }
+            >
+              <Tag color={userInfo.is_active ? 'success' : 'error'}>
+                {userInfo.is_active ? 'Hoạt động' : 'Bị khóa'}
+              </Tag>
+            </Descriptions.Item>
+
+            <Descriptions.Item 
+              label={
+                <span>
+                  <CalendarOutlined style={{ marginRight: 8 }} />
+                  Đăng nhập lần cuối
+                </span>
+              }
+            >
+              {userInfo.last_login ? 
+                format(new Date(userInfo.last_login), 'dd/MM/yyyy HH:mm', { locale: vi }) :
+                <span style={{ color: '#8c8c8c' }}>Chưa có thông tin</span>
+              }
+            </Descriptions.Item>
+          </Descriptions>
+        )}
+      </Modal>
     </Header>
   );
 };

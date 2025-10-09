@@ -7,7 +7,11 @@ from .views import (
     # Admin views
     AdminCategoryListView, AdminCategoryDetailView,
     AdminBrandListView, AdminBrandDetailView,
-    AdminProductListView, AdminProductDetailView, AdminCheckView
+    AdminProductListView, AdminProductDetailView, AdminCheckView,
+    # Admin dashboard and management
+    AdminDashboardStatsView, AdminOrderStatsView, AdminUserStatsView,
+    AdminUserListView, AdminUserDetailView, AdminUserStatusUpdateView,
+    CurrentUserView
 )
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 
@@ -17,6 +21,7 @@ urlpatterns = [
     path('login/', TokenObtainPairView.as_view(), name='token_obtain_pair'),
     path('token/', TokenObtainPairView.as_view(), name='token_obtain_pair_alt'),
     path('token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
+    path('user/', CurrentUserView.as_view(), name='current_user'),
     
     # Products
     path('products/', ProductListView.as_view(), name='product_list'),
@@ -52,5 +57,18 @@ urlpatterns = [
     
     # Admin - Authentication
     path('admin/check-admin/', AdminCheckView.as_view(), name='admin_check'),
+    
+    # Admin - Dashboard & Statistics
+    path('api/dashboard/statistics/', AdminDashboardStatsView.as_view(), name='admin_dashboard_stats'),
+    path('api/orders/statistics/', AdminOrderStatsView.as_view(), name='admin_order_stats'),
+    
+    # Admin - User Management
+    path('api/users/', AdminUserListView.as_view(), name='admin_user_list'),
+    path('api/users/statistics/', AdminUserStatsView.as_view(), name='admin_user_stats'),
+    path('api/users/<int:pk>/', AdminUserDetailView.as_view(), name='admin_user_detail'),
+    path('api/users/<int:pk>/status/', AdminUserStatusUpdateView.as_view(), name='admin_user_status'),
+    
+    # Admin - Orders Management (using existing AdminOrderListView)
+    path('api/orders/', AdminOrderListView.as_view(), name='admin_orders_api'),
 ]
 

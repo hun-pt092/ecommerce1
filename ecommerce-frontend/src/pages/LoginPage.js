@@ -19,8 +19,28 @@ const LoginPage = () => {
       localStorage.setItem('access_token', response.data.access);
       localStorage.setItem('refresh_token', response.data.refresh);
 
-      message.success('Đăng nhập thành công!');
-      navigate('/'); // chuyển về homepage
+      // Get user info to check if admin
+      try {
+        const userResponse = await axios.get('http://localhost:8000/api/user/', {
+          headers: {
+            Authorization: `Bearer ${response.data.access}`
+          }
+        });
+        localStorage.setItem('user', JSON.stringify(userResponse.data));
+        
+        message.success('Đăng nhập thành công!');
+        
+        // Redirect based on user role
+        if (userResponse.data.is_admin || userResponse.data.is_superuser) {
+          navigate('/admin/dashboard');
+        } else {
+          navigate('/');
+        }
+      } catch (userErr) {
+        console.error('Error getting user info:', userErr);
+        message.success('Đăng nhập thành công!');
+        navigate('/');
+      }
     } catch (err) {
       console.error('Login error:', err);
       if (err.response) {

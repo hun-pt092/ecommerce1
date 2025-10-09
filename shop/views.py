@@ -1,13 +1,28 @@
 #from django.shortcuts import render
 
 from rest_framework import generics, permissions
+from rest_framework.views import APIView
+from rest_framework.response import Response
 from .models import Product, ProductVariant, User, Order, OrderItem, Category, Brand, ProductImage
 from .serializers import (
     RegisterSerializer, ProductSerializer, OrderSerializer, 
     OrderCreateSerializer, OrderStatusUpdateSerializer,
-    OrderItemSerializer
+    OrderItemSerializer, UserSerializer
 )
 from rest_framework_simplejwt.views import TokenObtainPairView
+
+# Custom permission for admin only
+class IsAdminUser(permissions.BasePermission):
+    def has_permission(self, request, view):
+        return bool(request.user and request.user.is_authenticated and request.user.is_admin)
+
+# Current User Info
+class CurrentUserView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+    
+    def get(self, request):
+        serializer = UserSerializer(request.user)
+        return Response(serializer.data)
 
 
 from rest_framework.views import APIView
@@ -229,12 +244,9 @@ class OrderDetailView(generics.RetrieveAPIView):
 class AdminOrderListView(generics.ListAPIView):
     queryset = Order.objects.all()
     serializer_class = OrderSerializer
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAdminUser]
     
     def get_queryset(self):
-        # Only allow admin users to see all orders
-        if not self.request.user.is_admin and not self.request.user.is_superuser:
-            return Order.objects.none()
         return Order.objects.all()
 
 # Admin: Update order status
@@ -498,7 +510,48 @@ class AdminProductListView(generics.ListCreateAPIView):
             return Product.objects.none()
         return Product.objects.all().select_related('category', 'brand').prefetch_related('variants', 'images')
     
+    def create(self, request, *args, **kwargs):
+        # Debug logging
+        print("=== ADMIN PRODUCT CREATE DEBUG ===")
+        print("User:", request.user.username)
+        print("Is admin:", request.user.is_admin)
+        print("Is superuser:", request.user.is_superuser)
+        print("Request data keys:", list(request.data.keys()))
+        print("Request files keys:", list(request.FILES.keys()))
+        
+        # Check admin permission first
+        if not (request.user.is_admin or request.user.is_superuser):
+            return Response(
+                {"error": "Admin access required"}, 
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        # Call parent create method
+        try:
+            response = super().create(request, *args, **kwargs)
+            print("Product created successfully")
+            return response
+        except Exception as e:
+            print(f"Error creating product: {str(e)}")
+            return Response(
+                {"error": f"Failed to create product: {str(e)}"}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+    
     def perform_create(self, serializer):
+        # Debug logging
+        print("=== ADMIN PRODUCT CREATE DEBUG ===")
+        print("User:", self.request.user.username)
+        print("Is admin:", self.request.user.is_admin)
+        print("Is superuser:", self.request.user.is_superuser)
+        print("Request data:", dict(self.request.data))
+        print("Request files:", list(self.request.FILES.keys()))
+        
+        # Check admin permission
+        if not (self.request.user.is_admin or self.request.user.is_superuser):
+            from rest_framework.exceptions import PermissionDenied
+            raise PermissionDenied("Admin access required")
+            
         product = serializer.save()
         
         # Handle image uploads
@@ -538,6 +591,111 @@ class AdminProductDetailView(generics.RetrieveUpdateDestroyAPIView):
         if not (self.request.user.is_admin or self.request.user.is_superuser):
             return Product.objects.none()
         return Product.objects.all().select_related('category', 'brand').prefetch_related('variants', 'images')
+    
+    def update(self, request, *args, **kwargs):
+        # Debug logging
+        print("=== ADMIN PRODUCT UPDATE DEBUG ===")
+        print("User:", request.user.username)
+        print("Product ID:", kwargs.get('pk'))
+        print("Request data keys:", list(request.data.keys()))
+        print("Request files keys:", list(request.FILES.keys()))
+        
+        # Check admin permission
+        if not (request.user.is_admin or request.user.is_superuser):
+            return Response(
+                {"error": "Admin access required"}, 
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        # Get the product instance
+        instance = self.get_object()
+        
+        # Debug brand field specifically
+        print("Brand in request.data:", request.data.get('brand'))
+        print("Category in request.data:", request.data.get('category'))
+        
+        # Update basic product fields
+        serializer = self.get_serializer(instance, data=request.data, partial=True)
+        if serializer.is_valid():
+            print("Serializer is valid. Validated data:", serializer.validated_data)
+            product = serializer.save()
+            
+            # Handle deleted images
+            deleted_image_ids_json = request.data.get('deleted_image_ids')
+            if deleted_image_ids_json:
+                import json
+                try:
+                    deleted_ids = json.loads(deleted_image_ids_json)
+                    # Delete the images
+                    ProductImage.objects.filter(
+                        id__in=deleted_ids, 
+                        product=product
+                    ).delete()
+                except json.JSONDecodeError:
+                    pass
+            
+            # Handle existing images updates
+            existing_images_json = request.data.get('existing_images')
+            if existing_images_json:
+                import json
+                try:
+                    existing_images_data = json.loads(existing_images_json)
+                    for img_data in existing_images_data:
+                        try:
+                            img_obj = ProductImage.objects.get(
+                                id=img_data['id'], 
+                                product=product
+                            )
+                            # Reset all images to not main if this one is being set as main
+                            if img_data.get('is_main'):
+                                ProductImage.objects.filter(product=product).update(is_main=False)
+                            
+                            img_obj.is_main = img_data.get('is_main', False)
+                            img_obj.alt_text = img_data.get('alt_text', '')
+                            img_obj.order = img_data.get('order', 0)
+                            img_obj.save()
+                        except ProductImage.DoesNotExist:
+                            continue
+                except json.JSONDecodeError:
+                    pass
+            
+            # Handle new image uploads
+            new_images = request.FILES.getlist('images')
+            for i, image_file in enumerate(new_images):
+                # Get existing images count to set proper order
+                existing_count = product.images.count()
+                ProductImage.objects.create(
+                    product=product,
+                    image=image_file,
+                    is_main=False,  # Don't auto-set main for updates
+                    order=existing_count + i,
+                    alt_text=f"{product.name} - Image {existing_count + i + 1}"
+                )
+            
+            # Handle variants update (replace all)
+            variants_json = request.data.get('variants')
+            if variants_json:
+                import json
+                try:
+                    variants_data = json.loads(variants_json)
+                    # Delete existing variants
+                    product.variants.all().delete()
+                    # Create new variants
+                    for variant_data in variants_data:
+                        ProductVariant.objects.create(
+                            product=product,
+                            size=variant_data.get('size', ''),
+                            color=variant_data.get('color', ''),
+                            stock_quantity=variant_data.get('stock_quantity', 0)
+                        )
+                except json.JSONDecodeError:
+                    pass
+            
+            # Return updated product data
+            return Response(self.get_serializer(product).data)
+        else:
+            print("Serializer errors:", serializer.errors)
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 # Admin check endpoint
 class AdminCheckView(APIView):
@@ -550,3 +708,166 @@ class AdminCheckView(APIView):
             'username': user.username,
             'email': user.email
         })
+
+# Dashboard Statistics API
+class AdminDashboardStatsView(APIView):
+    permission_classes = [IsAdminUser]
+    
+    def get(self, request):
+        
+        from django.db.models import Count, Sum
+        from django.utils import timezone
+        from datetime import timedelta
+        
+        # Get current month's data
+        now = timezone.now()
+        start_of_month = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        start_of_today = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        
+        stats = {
+            'total_products': ProductVariant.objects.filter(product__is_active=True).count(),  # Tổng sản phẩm (variants)
+            'total_product_types': Product.objects.filter(is_active=True).count(),  # Tổng loại sản phẩm
+            'total_orders': Order.objects.count(),
+            'total_users': User.objects.count(),
+            'total_revenue': Order.objects.filter(
+                payment_status='completed'
+            ).aggregate(
+                total=Sum('total_price')
+            )['total'] or 0,
+            
+            # Monthly stats
+            'monthly_orders': Order.objects.filter(
+                created_at__gte=start_of_month
+            ).count(),
+            'monthly_revenue': Order.objects.filter(
+                created_at__gte=start_of_month,
+                payment_status='completed'
+            ).aggregate(
+                total=Sum('total_price')
+            )['total'] or 0,
+            
+            # Today stats
+            'today_orders': Order.objects.filter(
+                created_at__gte=start_of_today
+            ).count(),
+            'today_users': User.objects.filter(
+                date_joined__gte=start_of_today
+            ).count(),
+            
+            # Recent data
+            'recent_orders': OrderSerializer(
+                Order.objects.order_by('-created_at')[:5], 
+                many=True
+            ).data,
+            'recent_users': [
+                {
+                    'id': user.id,
+                    'username': user.username,
+                    'email': user.email,
+                    'date_joined': user.date_joined
+                }
+                for user in User.objects.order_by('-date_joined')[:5]
+            ]
+        }
+        
+        return Response(stats)
+
+# Orders Statistics API
+class AdminOrderStatsView(APIView):
+    permission_classes = [IsAdminUser]
+    
+    def get(self, request):
+        
+        from django.db.models import Count, Sum
+        
+        stats = {
+            'total_orders': Order.objects.count(),
+            'status_breakdown': dict(
+                Order.objects.values('status').annotate(count=Count('id')).values_list('status', 'count')
+            ),
+            'payment_breakdown': dict(
+                Order.objects.values('payment_status').annotate(count=Count('id')).values_list('payment_status', 'count')
+            ),
+            'total_revenue': Order.objects.filter(
+                payment_status='completed'
+            ).aggregate(total=Sum('total_price'))['total'] or 0
+        }
+        
+        return Response(stats)
+
+# Users Statistics API
+class AdminUserStatsView(APIView):
+    permission_classes = [IsAdminUser]
+    
+    def get(self, request):
+        from django.db.models import Count
+        from django.utils import timezone
+        from datetime import timedelta
+        
+        # Get current month's data
+        now = timezone.now()
+        start_of_month = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        
+        stats = {
+            'total_users': User.objects.count(),
+            'active_users': User.objects.filter(is_active=True).count(),
+            'inactive_users': User.objects.filter(is_active=False).count(),
+            'admin_users': User.objects.filter(is_admin=True).count(),
+            'monthly_new_users': User.objects.filter(
+                date_joined__gte=start_of_month
+            ).count(),
+        }
+        
+        return Response(stats)
+
+# Users Management API  
+class AdminUserListView(generics.ListAPIView):
+    permission_classes = [IsAdminUser]
+    serializer_class = UserSerializer
+    
+    def get_queryset(self):
+        return User.objects.order_by('-date_joined')
+    
+    def get_serializer_context(self):
+        context = super().get_serializer_context()
+        context['include_sensitive'] = False  # Don't include password in response
+        return context
+
+class AdminUserDetailView(generics.RetrieveUpdateAPIView):
+    permission_classes = [IsAdminUser]
+    serializer_class = UserSerializer
+    
+    def get_queryset(self):
+        return User.objects.all()
+
+# Update User Status (activate/deactivate)
+class AdminUserStatusUpdateView(APIView):
+    permission_classes = [IsAdminUser]
+    
+    def patch(self, request, pk):
+        
+        try:
+            user = User.objects.get(pk=pk)
+            action = request.data.get('action')
+            
+            if action == 'activate':
+                user.is_active = True
+                message = f'User {user.username} has been activated'
+            elif action == 'deactivate':
+                user.is_active = False
+                message = f'User {user.username} has been deactivated'
+            else:
+                return Response({'error': 'Invalid action'}, status=400)
+            
+            user.save()
+            return Response({
+                'message': message,
+                'user': {
+                    'id': user.id,
+                    'username': user.username,
+                    'is_active': user.is_active
+                }
+            })
+            
+        except User.DoesNotExist:
+            return Response({'error': 'User not found'}, status=404)

@@ -11,7 +11,6 @@ import {
   Col,
   Typography,
   message,
-  Divider,
   Space,
   Spin,
 } from 'antd';
@@ -37,29 +36,91 @@ const AddProduct = () => {
   const [brands, setBrands] = useState([]);
   const [images, setImages] = useState([]);
   const [variants, setVariants] = useState([]);
+  const [deletedImageIds, setDeletedImageIds] = useState([]); // Track deleted existing images
+  const [isDataLoaded, setIsDataLoaded] = useState(false); // Prevent duplicate API calls
 
   // Fetch categories, brands và product data (nếu edit mode)
   useEffect(() => {
-    fetchInitialData();
-  }, [id]);
+    if (!isDataLoaded) {
+      fetchInitialData();
+    }
+  }, [id, isDataLoaded]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Fallback để set lại form values khi categories và brands đã load xong
+  const [productData, setProductData] = useState(null);
+  
+  useEffect(() => {
+    if (isEditMode && productData && categories.length > 0 && brands.length > 0) {
+      // Kiểm tra xem form có đang thiếu values không
+      const currentValues = form.getFieldsValue();
+      if (!currentValues.category || !currentValues.brand) {
+        console.log('Fallback: Re-setting form values - current missing values:', {
+          category: currentValues.category,
+          brand: currentValues.brand
+        });
+        
+        const formValues = {
+          name: productData.name,
+          short_description: productData.short_description,
+          description: productData.description,
+          category: productData.category?.id,
+          brand: productData.brand?.id,
+          material: productData.material,
+          price: productData.price,
+          discount_price: productData.discount_price,
+          is_active: productData.is_active,
+          is_featured: productData.is_featured,
+          is_new: productData.is_new,
+        };
+        
+        form.setFieldsValue(formValues);
+        console.log('Fallback: Form values set to:', formValues);
+      }
+    }
+  }, [categories, brands, productData, isEditMode, form]);
 
   const fetchInitialData = async () => {
+    if (isDataLoaded) {
+      console.log('Data already loaded, skipping...');
+      return;
+    }
+    
     try {
-      // Fetch categories và brands
+      // Fetch categories và brands TRƯỚC
+      console.log('Loading categories and brands...');
       const [categoriesRes, brandsRes] = await Promise.all([
         authAxios.get('/admin/categories/'),
         authAxios.get('/admin/brands/')
       ]);
+      
+      console.log('Categories loaded:', categoriesRes.data.length);
+      console.log('Brands loaded:', brandsRes.data.length);
+      
+      // Set categories và brands NGAY LẬP TỨC
       setCategories(categoriesRes.data);
       setBrands(brandsRes.data);
 
-      // Nếu là edit mode, fetch product data
+      // Wait a bit để đảm bảo state được update
+      await new Promise(resolve => setTimeout(resolve, 100));
+
+      // Nếu là edit mode, fetch product data SAU KHI categories/brands đã sẵn sàng
       if (isEditMode) {
+        console.log('Loading product data...');
         const productRes = await authAxios.get(`/admin/products/${id}/`);
         const product = productRes.data;
         
-        // Set form values
-        form.setFieldsValue({
+        console.log('=== EDIT MODE DEBUG ===');
+        console.log('Product data:', product);
+        console.log('Category:', product.category);
+        console.log('Brand:', product.brand);
+        console.log('Categories loaded:', categoriesRes.data);
+        console.log('Brands loaded:', brandsRes.data);
+        
+        // Lưu product data vào state để fallback useEffect có thể sử dụng
+        setProductData(product);
+        
+        // Prepare form values
+        const formValues = {
           name: product.name,
           short_description: product.short_description,
           description: product.description,
@@ -71,17 +132,34 @@ const AddProduct = () => {
           is_active: product.is_active,
           is_featured: product.is_featured,
           is_new: product.is_new,
-        });
+        };
+        
+        console.log('Form values to set:', formValues);
+        
+        // Wait a bit để đảm bảo dropdowns đã được render với options
+        await new Promise(resolve => setTimeout(resolve, 200));
+        
+        // Set form values
+        console.log('Setting form values...');
+        form.setFieldsValue(formValues);
+        
+        // Verify form values were set
+        setTimeout(() => {
+          const currentValues = form.getFieldsValue();
+          console.log('Current form values after set:', currentValues);
+        }, 100);
 
         // Set images
         if (product.images && product.images.length > 0) {
-          const imageList = product.images.map(img => ({
-            uid: img.id,
-            name: img.alt_text || 'Product Image',
+          const imageList = product.images.map((img, index) => ({
+            uid: `existing-${img.id}`, // String uid for existing images
+            name: img.alt_text || `Product Image ${index + 1}`,
             url: img.image,
+            status: 'done', // Mark as uploaded
             is_main: img.is_main,
-            alt_text: img.alt_text,
-            order: img.order,
+            alt_text: img.alt_text || '',
+            order: img.order || index,
+            existingImageId: img.id, // Keep track of existing image ID
           }));
           setImages(imageList);
         }
@@ -97,6 +175,7 @@ const AddProduct = () => {
       console.error('Fetch error:', error);
     } finally {
       setPageLoading(false);
+      setIsDataLoaded(true); // Mark data as loaded to prevent duplicate calls
     }
   };
 
@@ -105,33 +184,91 @@ const AddProduct = () => {
     setLoading(true);
     
     try {
+      console.log('=== FORM SUBMIT DEBUG ===');
+      console.log('Form values:', values);
+      console.log('Brand value specifically:', values.brand);
+      console.log('Category value specifically:', values.category);
+      console.log('All form fields from form.getFieldsValue():', form.getFieldsValue());
+      console.log('Images:', images);
+      console.log('Variants:', variants);
+      
       // Tạo FormData để gửi cả text và file
       const formData = new FormData();
       
-      // Thêm thông tin sản phẩm
+      // Kiểm tra đặc biệt cho brand field
+      if (values.brand === null || values.brand === undefined) {
+        console.log('⚠️ BRAND FIELD IS NULL/UNDEFINED!');
+        console.log('Brand dropdown options:', brands);
+        console.log('Selected brand in form:', form.getFieldValue('brand'));
+      }
+      
+      // Thêm thông tin sản phẩm - ĐĂNG BIỆt XỬ LÝ brand field
       Object.keys(values).forEach(key => {
-        if (values[key] !== undefined && values[key] !== null) {
-          formData.append(key, values[key]);
+        const value = values[key];
+        
+        // Đặc biệt xử lý brand field - cho phép null
+        if (key === 'brand') {
+          if (value !== undefined) {
+            console.log(`✅ Adding ${key}:`, value, '(type:', typeof value, ')');
+            formData.append(key, value || ''); // Convert null to empty string
+          } else {
+            console.log(`❌ SKIPPING ${key} - undefined`);
+          }
+        }
+        // Xử lý các field khác
+        else if (value !== undefined && value !== null && value !== '') {
+          console.log(`✅ Adding ${key}:`, value);
+          formData.append(key, value);
+        } else {
+          console.log(`❌ SKIPPING ${key} because it is:`, value);
         }
       });
       
-      // Thêm ảnh mới (chỉ những ảnh có file)
+      // Debug: Kiểm tra những gì đã được thêm vào FormData
+      console.log('=== FORMDATA DEBUG ===');
+      for (let [key, value] of formData.entries()) {
+        console.log(`FormData contains: ${key} = ${value}`);
+      }
+      
+      // Thêm ảnh (mới và cũ)
+      const newImages = [];
+      const existingImages = [];
+      
       images.forEach((image) => {
         if (image.file) {
+          // Ảnh mới (có file)
+          newImages.push(image);
           formData.append('images', image.file);
           formData.append(`image_${image.uid}_is_main`, image.is_main);
           formData.append(`image_${image.uid}_alt_text`, image.alt_text || '');
           formData.append(`image_${image.uid}_order`, image.order || 0);
+        } else if (image.existingImageId) {
+          // Ảnh cũ (cập nhật thông tin)
+          existingImages.push({
+            id: image.existingImageId,
+            is_main: image.is_main,
+            alt_text: image.alt_text || '',
+            order: image.order || 0
+          });
         }
       });
+      
+      // Gửi thông tin ảnh cũ được cập nhật (chỉ trong edit mode)
+      if (isEditMode && existingImages.length > 0) {
+        formData.append('existing_images', JSON.stringify(existingImages));
+      }
+      
+      // Gửi danh sách ảnh bị xóa (chỉ trong edit mode)
+      if (isEditMode && deletedImageIds.length > 0) {
+        formData.append('deleted_image_ids', JSON.stringify(deletedImageIds));
+      }
       
       // Thêm variants
       formData.append('variants', JSON.stringify(variants));
       
-      let response;
       if (isEditMode) {
         // Update product
-        response = await authAxios.put(`/admin/products/${id}/`, formData, {
+        await authAxios.put(`/admin/products/${id}/`, formData, {
           headers: {
             'Content-Type': 'multipart/form-data',
           },
@@ -139,7 +276,7 @@ const AddProduct = () => {
         message.success('Cập nhật sản phẩm thành công!');
       } else {
         // Create product
-        response = await authAxios.post('/admin/products/', formData, {
+        await authAxios.post('/admin/products/', formData, {
           headers: {
             'Content-Type': 'multipart/form-data',
           },
@@ -290,7 +427,27 @@ const AddProduct = () => {
             <Card title="Hình ảnh sản phẩm" style={{ marginBottom: 24 }}>
               <ProductImageUpload 
                 images={images}
-                onChange={setImages}
+                onChange={(newImages) => {
+                  // Track deleted existing images
+                  if (isEditMode) {
+                    const currentExistingIds = images
+                      .filter(img => img.existingImageId)
+                      .map(img => img.existingImageId);
+                    const newExistingIds = newImages
+                      .filter(img => img.existingImageId)
+                      .map(img => img.existingImageId);
+                    
+                    const newlyDeleted = currentExistingIds.filter(
+                      id => !newExistingIds.includes(id)
+                    );
+                    
+                    if (newlyDeleted.length > 0) {
+                      setDeletedImageIds(prev => [...prev, ...newlyDeleted]);
+                    }
+                  }
+                  
+                  setImages(newImages);
+                }}
               />
             </Card>
 
