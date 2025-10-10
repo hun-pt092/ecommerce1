@@ -1,12 +1,25 @@
-import React, { useState } from 'react';
-import { Form, Input, Button, message, Card } from 'antd';
-import { UserOutlined, LockOutlined, MailOutlined } from '@ant-design/icons';
+import React, { useState, useEffect } from 'react';
+import { Form, Input, Button, message, Card, Typography, Divider } from 'antd';
+import { UserOutlined, LockOutlined, MailOutlined, EyeInvisibleOutlined, EyeTwoTone } from '@ant-design/icons';
 import axios from 'axios';
 import { useNavigate, Link } from 'react-router-dom';
+
+const { Title, Text } = Typography;
 
 const RegisterPage = () => {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
+  const [form] = Form.useForm();
+
+  useEffect(() => {
+    // Scroll to top when page loads
+    window.scrollTo(0, 0);
+    // Check if already logged in
+    const token = localStorage.getItem('access_token');
+    if (token) {
+      navigate('/');
+    }
+  }, [navigate]);
 
   const onFinish = async (values) => {
     setLoading(true);
@@ -68,21 +81,36 @@ const RegisterPage = () => {
       display: 'flex', 
       alignItems: 'center', 
       justifyContent: 'center',
-      background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)'
+      background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+      padding: '20px'
     }}>
       <Card 
         style={{ 
-          width: 400, 
-          boxShadow: '0 4px 20px rgba(0,0,0,0.1)',
-          borderRadius: '10px'
+          width: '100%',
+          maxWidth: 450, 
+          boxShadow: '0 8px 30px rgba(0,0,0,0.15)',
+          borderRadius: '12px',
+          background: 'rgba(255,255,255,0.95)',
+          backdropFilter: 'blur(10px)'
         }}
-        title={
-          <div style={{ textAlign: 'center', fontSize: '24px', fontWeight: 'bold' }}>
-            Đăng ký tài khoản
-          </div>
-        }
+        bordered={false}
       >
-        <Form onFinish={onFinish} layout="vertical" size="large">
+        <div style={{ textAlign: 'center', marginBottom: '30px' }}>
+          <Title level={2} style={{ color: '#1890ff', marginBottom: '8px' }}>
+            🛍️ Fashion Store
+          </Title>
+          <Text type="secondary" style={{ fontSize: '16px' }}>
+            Tạo tài khoản mới để bắt đầu mua sắm
+          </Text>
+        </div>
+
+        <Form 
+          form={form}
+          onFinish={onFinish} 
+          layout="vertical" 
+          size="large"
+          requiredMark={false}
+        >
           <Form.Item 
             name="username" 
             label="Tên đăng nhập" 

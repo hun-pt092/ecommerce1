@@ -1,12 +1,25 @@
-import React, { useState } from 'react';
-import { Form, Input, Button, message, Card } from 'antd';
-import { UserOutlined, LockOutlined } from '@ant-design/icons';
+import React, { useState, useEffect } from 'react';
+import { Form, Input, Button, message, Card, Typography, Divider, Checkbox } from 'antd';
+import { UserOutlined, LockOutlined, EyeInvisibleOutlined, EyeTwoTone } from '@ant-design/icons';
 import axios from 'axios';
 import { useNavigate, Link } from 'react-router-dom';
+
+const { Title, Text } = Typography;
 
 const LoginPage = () => {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
+  const [form] = Form.useForm();
+
+  useEffect(() => {
+    // Scroll to top when page loads
+    window.scrollTo(0, 0);
+    // Check if already logged in
+    const token = localStorage.getItem('access_token');
+    if (token) {
+      navigate('/');
+    }
+  }, [navigate]);
 
   const onFinish = async (values) => {
     setLoading(true);
@@ -77,50 +90,87 @@ const LoginPage = () => {
       display: 'flex', 
       alignItems: 'center', 
       justifyContent: 'center',
-      background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)'
+      background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+      padding: '20px'
     }}>
       <Card 
         style={{ 
-          width: 400, 
-          boxShadow: '0 4px 20px rgba(0,0,0,0.1)',
-          borderRadius: '10px'
+          width: '100%',
+          maxWidth: 400, 
+          boxShadow: '0 8px 30px rgba(0,0,0,0.15)',
+          borderRadius: '12px',
+          background: 'rgba(255,255,255,0.95)',
+          backdropFilter: 'blur(10px)'
         }}
-        title={
-          <div style={{ textAlign: 'center', fontSize: '24px', fontWeight: 'bold' }}>
-            Đăng nhập
-          </div>
-        }
+        bordered={false}
       >
-        <Form onFinish={onFinish} layout="vertical" size="large">
+        <div style={{ textAlign: 'center', marginBottom: '30px' }}>
+          <Title level={2} style={{ color: '#1890ff', marginBottom: '8px' }}>
+            🛍️ Fashion Store
+          </Title>
+          <Text type="secondary" style={{ fontSize: '16px' }}>
+            Chào mừng bạn trở lại!
+          </Text>
+        </div>
+
+        <Form 
+          form={form}
+          onFinish={onFinish} 
+          layout="vertical" 
+          size="large"
+          requiredMark={false}
+        >
           <Form.Item 
             name="username" 
-            label="Tên đăng nhập" 
-            rules={[{ required: true, message: 'Vui lòng nhập tên đăng nhập!' }]}
+            label="Tên đăng nhập"
+            rules={[
+              { required: true, message: 'Vui lòng nhập tên đăng nhập!' },
+              { min: 3, message: 'Tên đăng nhập phải có ít nhất 3 ký tự!' }
+            ]}
           >
             <Input 
-              prefix={<UserOutlined />} 
+              prefix={<UserOutlined style={{ color: '#bfbfbf' }} />} 
               placeholder="Nhập tên đăng nhập"
+              style={{ borderRadius: '8px' }}
             />
           </Form.Item>
+
           <Form.Item 
             name="password" 
-            label="Mật khẩu" 
-            rules={[{ required: true, message: 'Vui lòng nhập mật khẩu!' }]}
+            label="Mật khẩu"
+            rules={[
+              { required: true, message: 'Vui lòng nhập mật khẩu!' },
+              { min: 6, message: 'Mật khẩu phải có ít nhất 6 ký tự!' }
+            ]}
           >
             <Input.Password 
-              prefix={<LockOutlined />} 
+              prefix={<LockOutlined style={{ color: '#bfbfbf' }} />} 
               placeholder="Nhập mật khẩu"
+              iconRender={(visible) => (visible ? <EyeTwoTone /> : <EyeInvisibleOutlined />)}
+              style={{ borderRadius: '8px' }}
             />
           </Form.Item>
+
           <Form.Item>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <Checkbox>Ghi nhớ đăng nhập</Checkbox>
+              <Button type="link" style={{ padding: 0 }}>
+                Quên mật khẩu?
+              </Button>
+            </div>
+          </Form.Item>
+
+          <Form.Item style={{ marginBottom: '16px' }}>
             <Button 
               type="primary" 
               htmlType="submit" 
               loading={loading} 
               block
               style={{ 
-                height: '45px',
-                background: 'linear-gradient(90deg, #667eea 0%, #764ba2 100%)',
+                height: '50px', 
+                fontSize: '16px',
+                borderRadius: '8px',
+                background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
                 border: 'none'
               }}
             >
@@ -128,8 +178,21 @@ const LoginPage = () => {
             </Button>
           </Form.Item>
 
-          <div style={{ textAlign: 'center', marginTop: '16px' }}>
-            Chưa có tài khoản? <Link to="/register">Đăng ký ngay</Link>
+          <Divider plain>
+            <Text type="secondary">hoặc</Text>
+          </Divider>
+          
+          <div style={{ textAlign: 'center', marginTop: '20px' }}>
+            <Text type="secondary">Chưa có tài khoản? </Text>
+            <Link 
+              to="/register"
+              style={{ 
+                fontWeight: 'bold',
+                color: '#1890ff'
+              }}
+            >
+              Đăng ký ngay
+            </Link>
           </div>
         </Form>
       </Card>

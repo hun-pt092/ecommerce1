@@ -12,23 +12,44 @@ import {
   Typography,
   Divider,
   Tag,
-  Space
+  Space,
+  Carousel,
+  Rate,
+  Breadcrumb,
+  Tabs,
+  Badge,
+  Avatar,
+  Image,
+  Tooltip,
+  Grid
 } from 'antd';
 import { 
   ShoppingCartOutlined, 
   HeartOutlined, 
   StarFilled,
-  ArrowLeftOutlined
+  ArrowLeftOutlined,
+  ShareAltOutlined,
+  ShoppingOutlined,
+  SafetyCertificateOutlined,
+  TruckOutlined,
+  ReloadOutlined,
+  UserOutlined,
+  CheckCircleOutlined,
+  ExclamationCircleOutlined
 } from '@ant-design/icons';
 import apiClient from '../api/apiClient';
 import authAxios from '../api/AuthAxios';
 
 const { Title, Text, Paragraph } = Typography;
 const { Option } = Select;
+const { TabPane } = Tabs;
+const { useBreakpoint } = Grid;
 
 const ProductDetailPage = () => {
   const { id } = useParams();
   const navigate = useNavigate();
+  const screens = useBreakpoint();
+  
   const [product, setProduct] = useState(null);
   const [loading, setLoading] = useState(true);
   const [selectedVariant, setSelectedVariant] = useState(null);
@@ -36,8 +57,20 @@ const ProductDetailPage = () => {
   const [selectedColor, setSelectedColor] = useState(null);
   const [quantity, setQuantity] = useState(1);
   const [addingToCart, setAddingToCart] = useState(false);
+  const [isWishlisted, setIsWishlisted] = useState(false);
+  const [activeImageIndex, setActiveImageIndex] = useState(0);
+  const [carouselRef, setCarouselRef] = useState(null);
+
+  // Helper function to get full image URL
+  const getImageUrl = (imagePath) => {
+    if (!imagePath) return null;
+    if (imagePath.startsWith('http')) return imagePath;
+    return `http://localhost:8000${imagePath}`;
+  };
 
   useEffect(() => {
+    // Scroll to top when page loads or product ID changes
+    window.scrollTo(0, 0);
     fetchProduct();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
@@ -134,6 +167,43 @@ const ProductDetailPage = () => {
     return product?.discount_price && product?.discount_price < product?.price;
   };
 
+  const getDiscountPercentage = () => {
+    if (!hasDiscount()) return 0;
+    return Math.round((1 - product.discount_price / product.price) * 100);
+  };
+
+  const getStockStatus = () => {
+    if (!selectedVariant) return { status: 'unknown', text: 'Chọn phiên bản', color: 'default' };
+    if (selectedVariant.stock_quantity === 0) return { status: 'out', text: 'Hết hàng', color: 'error' };
+    if (selectedVariant.stock_quantity <= 5) return { status: 'low', text: `Còn ${selectedVariant.stock_quantity} sản phẩm`, color: 'warning' };
+    return { status: 'available', text: 'Còn hàng', color: 'success' };
+  };
+
+  const handleShare = () => {
+    if (navigator.share) {
+      navigator.share({
+        title: product.name,
+        text: product.short_description || product.description,
+        url: window.location.href,
+      });
+    } else {
+      navigator.clipboard.writeText(window.location.href);
+      message.success('Đã sao chép link sản phẩm');
+    }
+  };
+
+  const toggleWishlist = () => {
+    setIsWishlisted(!isWishlisted);
+    message.success(isWishlisted ? 'Đã xóa khỏi yêu thích' : 'Đã thêm vào yêu thích');
+  };
+
+  const handleThumbnailClick = (index) => {
+    setActiveImageIndex(index);
+    if (carouselRef) {
+      carouselRef.goTo(index);
+    }
+  };
+
   if (loading) {
     return (
       <div style={{ textAlign: 'center', marginTop: '100px' }}>
@@ -151,77 +221,200 @@ const ProductDetailPage = () => {
   }
 
   return (
-    <div style={{ padding: '20px', maxWidth: '1200px', margin: '0 auto' }}>
-      <Button 
-        icon={<ArrowLeftOutlined />} 
-        onClick={() => navigate('/')}
-        style={{ marginBottom: '20px' }}
-      >
-        Về trang chủ
-      </Button>
+    <div style={{ background: '#f5f5f5', minHeight: '100vh' }}>
+      <div style={{ padding: '20px', maxWidth: '1200px', margin: '0 auto' }}>
+        {/* Breadcrumb */}
+        <Breadcrumb style={{ marginBottom: '20px' }}>
+          <Breadcrumb.Item>
+            <Button type="link" onClick={() => navigate('/')} style={{ padding: 0 }}>
+              Trang chủ
+            </Button>
+          </Breadcrumb.Item>
+          <Breadcrumb.Item>{product?.category?.name}</Breadcrumb.Item>
+          <Breadcrumb.Item>{product?.name}</Breadcrumb.Item>
+        </Breadcrumb>
 
-      <Row gutter={[32, 32]}>
-        {/* Hình ảnh sản phẩm */}
-        <Col xs={24} md={12}>
-          <Card
-            cover={
-              <div 
-                style={{ 
-                  height: '400px', 
-                  background: 'linear-gradient(45deg, #f0f0f0, #e0e0e0)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  fontSize: '48px',
-                  color: '#999'
-                }}
-              >
-                📷
-              </div>
-            }
-            bodyStyle={{ padding: '16px' }}
-          >
-            <div style={{ textAlign: 'center' }}>
-              <Text type="secondary">Hình ảnh sản phẩm sẽ được cập nhật sau</Text>
-            </div>
-          </Card>
-        </Col>
+        <Row gutter={[32, 32]}>
+          {/* Hình ảnh sản phẩm */}
+          <Col xs={24} md={12}>
+            <Card 
+              bodyStyle={{ padding: 0 }}
+              style={{ borderRadius: '12px', overflow: 'hidden' }}
+            >
+              {product?.images && product.images.length > 0 ? (
+                <div>
+                  <Image.PreviewGroup>
+                    <Carousel 
+                      ref={setCarouselRef}
+                      arrows 
+                      beforeChange={(from, to) => setActiveImageIndex(to)}
+                      style={{ backgroundColor: '#fff' }}
+                    >
+                      {product.images.map((image, index) => (
+                        <div key={index}>
+                          <Image
+                            width="100%"
+                            height="500px"
+                            src={getImageUrl(image.image)}
+                            alt={image.alt_text || product.name}
+                            style={{ objectFit: 'cover' }}
+                            placeholder={
+                              <div style={{ 
+                                height: '500px', 
+                                background: '#f0f0f0',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center'
+                              }}>
+                                <Spin size="large" />
+                              </div>
+                            }
+                          />
+                        </div>
+                      ))}
+                    </Carousel>
+                  </Image.PreviewGroup>
+                  
+                  {/* Thumbnails */}
+                  {product.images.length > 1 && (
+                    <div style={{ 
+                      padding: '16px',
+                      display: 'flex',
+                      gap: '12px',
+                      overflowX: 'auto',
+                      scrollbarWidth: 'thin',
+                      WebkitOverflowScrolling: 'touch'
+                    }}>
+                      {product.images.map((image, index) => (
+                        <div
+                          key={index}
+                          style={{ 
+                            minWidth: '70px',
+                            height: '70px',
+                            border: activeImageIndex === index ? '3px solid #1890ff' : '2px solid #d9d9d9',
+                            borderRadius: '6px',
+                            overflow: 'hidden',
+                            cursor: 'pointer',
+                            transition: 'all 0.3s ease',
+                            opacity: activeImageIndex === index ? 1 : 0.7
+                          }}
+                          onClick={() => handleThumbnailClick(index)}
+                          onMouseEnter={(e) => {
+                            if (activeImageIndex !== index) {
+                              e.target.style.opacity = '0.9';
+                            }
+                          }}
+                          onMouseLeave={(e) => {
+                            if (activeImageIndex !== index) {
+                              e.target.style.opacity = '0.7';
+                            }
+                          }}
+                        >
+                          <img
+                            src={getImageUrl(image.image)}
+                            alt={`${product.name} ${index + 1}`}
+                            style={{ 
+                              width: '100%',
+                              height: '100%',
+                              objectFit: 'cover',
+                              transition: 'transform 0.3s ease'
+                            }}
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div 
+                  style={{ 
+                    height: '500px', 
+                    background: 'linear-gradient(45deg, #f0f0f0, #e0e0e0)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontSize: '48px',
+                    color: '#999',
+                    flexDirection: 'column'
+                  }}
+                >
+                  📷
+                  <Text type="secondary" style={{ marginTop: '16px', fontSize: '14px' }}>
+                    Hình ảnh sẽ được cập nhật sau
+                  </Text>
+                </div>
+              )}
+            </Card>
+          </Col>
 
         {/* Thông tin sản phẩm */}
         <Col xs={24} md={12}>
-          <div>
-            <Title level={2}>{product.name}</Title>
+          <Card style={{ borderRadius: '12px' }}>
+            <div style={{ marginBottom: '16px' }}>
+              <Space>
+                {product?.brand && (
+                  <Tag color="blue">{product.brand.name}</Tag>
+                )}
+                {product?.is_new && (
+                  <Tag color="green">Mới</Tag>
+                )}
+                {product?.is_featured && (
+                  <Tag color="gold">Nổi bật</Tag>
+                )}
+              </Space>
+            </div>
+
+            <Title level={2} style={{ marginBottom: '8px' }}>
+              {product.name}
+            </Title>
+            
+            {product?.sku && (
+              <Text type="secondary" style={{ fontSize: '12px' }}>
+                SKU: {product.sku}
+              </Text>
+            )}
+
+            {/* Rating placeholder */}
+            <div style={{ margin: '12px 0' }}>
+              <Space>
+                <Rate disabled defaultValue={4.5} allowHalf style={{ fontSize: '16px' }} />
+                <Text type="secondary">(0 đánh giá)</Text>
+              </Space>
+            </div>
             
             {/* Giá */}
-            <div style={{ marginBottom: '20px' }}>
+            <div style={{ marginBottom: '20px', padding: '16px', backgroundColor: '#f8f9fa', borderRadius: '8px' }}>
               {hasDiscount() ? (
-                <Space>
-                  <Text 
-                    style={{ 
-                      fontSize: '28px', 
-                      fontWeight: 'bold', 
-                      color: '#ff4d4f' 
-                    }}
-                  >
-                    {Number(getCurrentPrice()).toLocaleString()}₫
-                  </Text>
+                <Space direction="vertical" size="small">
+                  <Space align="center">
+                    <Text 
+                      style={{ 
+                        fontSize: '32px', 
+                        fontWeight: 'bold', 
+                        color: '#ff4d4f' 
+                      }}
+                    >
+                      {Number(getCurrentPrice()).toLocaleString()}₫
+                    </Text>
+                    <Badge count={`-${getDiscountPercentage()}%`} style={{ backgroundColor: '#ff4d4f' }} />
+                  </Space>
                   <Text 
                     delete 
                     style={{ 
-                      fontSize: '20px', 
+                      fontSize: '18px', 
                       color: '#999' 
                     }}
                   >
                     {Number(product.price).toLocaleString()}₫
                   </Text>
-                  <Tag color="red">
-                    -{Math.round((1 - product.discount_price / product.price) * 100)}%
-                  </Tag>
+                  <Text type="success" style={{ fontSize: '12px' }}>
+                    Tiết kiệm: {Number(product.price - product.discount_price).toLocaleString()}₫
+                  </Text>
                 </Space>
               ) : (
                 <Text 
                   style={{ 
-                    fontSize: '28px', 
+                    fontSize: '32px', 
                     fontWeight: 'bold', 
                     color: '#1890ff' 
                   }}
@@ -229,133 +422,219 @@ const ProductDetailPage = () => {
                   {Number(getCurrentPrice()).toLocaleString()}₫
                 </Text>
               )}
+              
+              {/* Stock status */}
+              <div style={{ marginTop: '12px' }}>
+                <Space>
+                  {getStockStatus().status === 'available' && <CheckCircleOutlined style={{ color: '#52c41a' }} />}
+                  {getStockStatus().status === 'low' && <ExclamationCircleOutlined style={{ color: '#faad14' }} />}
+                  {getStockStatus().status === 'out' && <ExclamationCircleOutlined style={{ color: '#ff4d4f' }} />}
+                  <Text type={getStockStatus().color}>
+                    {getStockStatus().text}
+                  </Text>
+                </Space>
+              </div>
             </div>
 
-            {/* Mô tả */}
-            {product.description && (
-              <>
-                <Title level={4}>Mô tả sản phẩm</Title>
-                <Paragraph>{product.description}</Paragraph>
-                <Divider />
-              </>
-            )}
-
             {/* Chọn variant */}
-            <div style={{ marginBottom: '20px' }}>
-              <Title level={4}>Tùy chọn</Title>
+            <div style={{ marginBottom: '24px' }}>
+              <Title level={4} style={{ marginBottom: '16px' }}>Tùy chọn sản phẩm</Title>
               
-              <div style={{ marginBottom: '16px' }}>
-                <Text strong>Kích cỡ:</Text>
-                <br />
-                <Select
-                  value={selectedSize}
-                  onChange={(size) => handleVariantChange(size, selectedColor)}
-                  style={{ width: '100%', marginTop: '8px' }}
-                  placeholder="Chọn kích cỡ"
-                >
-                  {getAvailableSizes().map(size => (
-                    <Option key={size} value={size}>{size}</Option>
-                  ))}
-                </Select>
-              </div>
-
-              <div style={{ marginBottom: '16px' }}>
-                <Text strong>Màu sắc:</Text>
-                <br />
-                <Select
-                  value={selectedColor}
-                  onChange={(color) => handleVariantChange(selectedSize, color)}
-                  style={{ width: '100%', marginTop: '8px' }}
-                  placeholder="Chọn màu sắc"
-                  disabled={!selectedSize}
-                >
-                  {getAvailableColors().map(color => (
-                    <Option key={color} value={color}>{color}</Option>
-                  ))}
-                </Select>
-              </div>
-
-              {selectedVariant && (
-                <div style={{ marginBottom: '16px' }}>
-                  <Text strong>Tồn kho: </Text>
-                  <Text type={selectedVariant.stock_quantity > 0 ? 'success' : 'danger'}>
-                    {selectedVariant.stock_quantity > 0 
-                      ? `${selectedVariant.stock_quantity} sản phẩm` 
-                      : 'Hết hàng'
-                    }
+              <Row gutter={[16, 16]}>
+                <Col span={12}>
+                  <Text strong style={{ display: 'block', marginBottom: '8px' }}>
+                    Kích cỡ:
                   </Text>
-                </div>
-              )}
+                  <Select
+                    value={selectedSize}
+                    onChange={(size) => handleVariantChange(size, selectedColor)}
+                    style={{ width: '100%' }}
+                    placeholder="Chọn kích cỡ"
+                    size="large"
+                  >
+                    {getAvailableSizes().map(size => (
+                      <Option key={size} value={size}>{size}</Option>
+                    ))}
+                  </Select>
+                </Col>
+
+                <Col span={12}>
+                  <Text strong style={{ display: 'block', marginBottom: '8px' }}>
+                    Màu sắc:
+                  </Text>
+                  <Select
+                    value={selectedColor}
+                    onChange={(color) => handleVariantChange(selectedSize, color)}
+                    style={{ width: '100%' }}
+                    placeholder="Chọn màu sắc"
+                    disabled={!selectedSize}
+                    size="large"
+                  >
+                    {getAvailableColors().map(color => (
+                      <Option key={color} value={color}>{color}</Option>
+                    ))}
+                  </Select>
+                </Col>
+              </Row>
             </div>
 
             {/* Số lượng */}
-            <div style={{ marginBottom: '20px' }}>
-              <Text strong>Số lượng:</Text>
-              <br />
+            <div style={{ marginBottom: '24px' }}>
+              <Text strong style={{ display: 'block', marginBottom: '8px' }}>
+                Số lượng:
+              </Text>
               
-              {/* Stock warning */}
-              {selectedVariant && selectedVariant.stock_quantity <= 5 && selectedVariant.stock_quantity > 0 && (
-                <div style={{ marginTop: '8px', marginBottom: '8px' }}>
-                  <Text type="warning" style={{ fontSize: '12px' }}>
-                    ⚠️ Chỉ còn {selectedVariant.stock_quantity} sản phẩm
+              <Space align="center">
+                <InputNumber
+                  min={1}
+                  max={selectedVariant?.stock_quantity || 1}
+                  value={quantity}
+                  onChange={setQuantity}
+                  size="large"
+                  style={{ width: '120px' }}
+                  disabled={!selectedVariant || selectedVariant.stock_quantity === 0}
+                />
+                {selectedVariant && (
+                  <Text type="secondary" style={{ fontSize: '12px' }}>
+                    (Tối đa: {selectedVariant.stock_quantity})
                   </Text>
-                </div>
-              )}
-              
-              <InputNumber
-                min={1}
-                max={selectedVariant?.stock_quantity || 1}
-                value={quantity}
-                onChange={setQuantity}
-                style={{ width: '100px', marginTop: '8px' }}
-                disabled={!selectedVariant || selectedVariant.stock_quantity === 0}
-              />
-              
-              {selectedVariant && (
-                <Text type="secondary" style={{ fontSize: '11px', display: 'block', marginTop: '4px' }}>
-                  Tối đa: {selectedVariant.stock_quantity}
-                </Text>
-              )}
+                )}
+              </Space>
             </div>
 
-            {/* Buttons */}
-            <Space style={{ width: '100%' }} direction="vertical" size="large">
-              <Button
-                type="primary"
-                size="large"
-                icon={<ShoppingCartOutlined />}
-                onClick={addToCart}
-                loading={addingToCart}
-                disabled={!selectedVariant || selectedVariant.stock_quantity === 0}
-                block
-                style={{ height: '50px' }}
-              >
-                Thêm vào giỏ hàng
-              </Button>
-              
-              <Button
-                size="large"
-                icon={<HeartOutlined />}
-                block
-                style={{ height: '50px' }}
-              >
-                Thêm vào yêu thích
-              </Button>
-            </Space>
-          </div>
+            {/* Action Buttons */}
+            <Row gutter={[12, 12]} style={{ marginBottom: '24px' }}>
+              <Col xs={24} sm={16}>
+                <Button
+                  type="primary"
+                  size="large"
+                  icon={<ShoppingCartOutlined />}
+                  onClick={addToCart}
+                  loading={addingToCart}
+                  disabled={!selectedVariant || selectedVariant.stock_quantity === 0}
+                  block
+                  style={{ height: '50px', borderRadius: '8px' }}
+                >
+                  Thêm vào giỏ hàng
+                </Button>
+              </Col>
+              <Col xs={12} sm={4}>
+                <Tooltip title={isWishlisted ? 'Bỏ yêu thích' : 'Yêu thích'}>
+                  <Button
+                    size="large"
+                    icon={<HeartOutlined style={{ color: isWishlisted ? '#ff4d4f' : undefined }} />}
+                    onClick={toggleWishlist}
+                    style={{ 
+                      height: '50px', 
+                      borderRadius: '8px',
+                      backgroundColor: isWishlisted ? '#fff2f0' : undefined,
+                      borderColor: isWishlisted ? '#ff4d4f' : undefined
+                    }}
+                  />
+                </Tooltip>
+              </Col>
+              <Col xs={12} sm={4}>
+                <Tooltip title="Chia sẻ">
+                  <Button
+                    size="large"
+                    icon={<ShareAltOutlined />}
+                    onClick={handleShare}
+                    style={{ height: '50px', borderRadius: '8px' }}
+                  />
+                </Tooltip>
+              </Col>
+            </Row>
+
+            {/* Product features */}
+            <div style={{ 
+              background: '#f8f9fa', 
+              padding: '16px', 
+              borderRadius: '8px',
+              marginBottom: '16px'
+            }}>
+              <Row gutter={[16, 8]}>
+                <Col span={24}>
+                  <Space>
+                    <TruckOutlined style={{ color: '#1890ff' }} />
+                    <Text style={{ fontSize: '12px' }}>Giao hàng miễn phí cho đơn từ 500k</Text>
+                  </Space>
+                </Col>
+                <Col span={24}>
+                  <Space>
+                    <SafetyCertificateOutlined style={{ color: '#52c41a' }} />
+                    <Text style={{ fontSize: '12px' }}>Bảo hành chính hãng</Text>
+                  </Space>
+                </Col>
+                <Col span={24}>
+                  <Space>
+                    <ReloadOutlined style={{ color: '#faad14' }} />
+                    <Text style={{ fontSize: '12px' }}>Đổi trả trong 7 ngày</Text>
+                  </Space>
+                </Col>
+              </Row>
+            </div>
+          </Card>
         </Col>
       </Row>
 
-      {/* Reviews section - placeholder */}
-      <Divider style={{ marginTop: '40px' }} />
-      <Title level={3}>Đánh giá sản phẩm</Title>
-      <Card>
-        <div style={{ textAlign: 'center', padding: '40px', color: '#999' }}>
-          <StarFilled style={{ fontSize: '48px', marginBottom: '16px' }} />
-          <br />
-          Tính năng đánh giá sẽ được cập nhật sau
-        </div>
-      </Card>
+      {/* Product Details Tabs */}
+      <Row style={{ marginTop: '32px' }}>
+        <Col span={24}>
+          <Tabs defaultActiveKey="1" size="large" style={{ backgroundColor: '#fff', borderRadius: '12px' }}>
+            <TabPane tab="Mô tả sản phẩm" key="1">
+              <div style={{ padding: '24px' }}>
+                {product?.description ? (
+                  <Paragraph style={{ fontSize: '16px', lineHeight: '1.6' }}>
+                    {product.description}
+                  </Paragraph>
+                ) : (
+                  <Text type="secondary">Thông tin mô tả sản phẩm sẽ được cập nhật sau.</Text>
+                )}
+                
+                {product?.material && (
+                  <div style={{ marginTop: '16px' }}>
+                    <Text strong>Chất liệu: </Text>
+                    <Text>{product.material}</Text>
+                  </div>
+                )}
+              </div>
+            </TabPane>
+            
+            <TabPane tab="Thông số kỹ thuật" key="2">
+              <div style={{ padding: '24px' }}>
+                <Row gutter={[24, 16]}>
+                  <Col span={12}>
+                    <Text strong>Danh mục:</Text> {product?.category?.name || 'N/A'}
+                  </Col>
+                  <Col span={12}>
+                    <Text strong>Thương hiệu:</Text> {product?.brand?.name || 'N/A'}
+                  </Col>
+                  <Col span={12}>
+                    <Text strong>SKU:</Text> {product?.sku || 'N/A'}
+                  </Col>
+                  <Col span={12}>
+                    <Text strong>Chất liệu:</Text> {product?.material || 'N/A'}
+                  </Col>
+                </Row>
+              </div>
+            </TabPane>
+            
+            <TabPane tab="Đánh giá (0)" key="3">
+              <div style={{ padding: '24px', textAlign: 'center' }}>
+                <Avatar size={64} icon={<UserOutlined />} style={{ marginBottom: '16px' }} />
+                <Title level={4}>Chưa có đánh giá nào</Title>
+                <Text type="secondary">Hãy là người đầu tiên đánh giá sản phẩm này!</Text>
+                <br />
+                <Button type="primary" style={{ marginTop: '16px' }} disabled>
+                  Viết đánh giá
+                </Button>
+              </div>
+            </TabPane>
+          </Tabs>
+        </Col>
+      </Row>
+      
+      </div>
     </div>
   );
 };

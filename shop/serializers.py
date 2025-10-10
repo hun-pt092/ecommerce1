@@ -117,15 +117,17 @@ class AdminProductSerializer(serializers.ModelSerializer):
 
 
 #-----------------------------gio hang-----------------------------------------------
-# Để hiển thị thông tin ngắn của variant trong giỏ
-class ProductVariantShortSerializer(serializers.ModelSerializer):
+# Để hiển thị thông tin đầy đủ của variant và product trong giỏ
+class ProductVariantCartSerializer(serializers.ModelSerializer):
+    product = ProductSerializer(read_only=True)
+    
     class Meta:
         model = ProductVariant
-        fields = ['id', 'size', 'color']
+        fields = ['id', 'size', 'color', 'stock_quantity', 'product']
 
 # Cart item
 class CartItemSerializer(serializers.ModelSerializer):
-    product_variant = ProductVariantShortSerializer(read_only=True)
+    product_variant = ProductVariantCartSerializer(read_only=True)
     product_variant_id = serializers.PrimaryKeyRelatedField(
         queryset=ProductVariant.objects.all(),
         source='product_variant',

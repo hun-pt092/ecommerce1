@@ -9,8 +9,9 @@ import RegisterPage from './pages/RegisterPage';
 import ProductDetailPage from './pages/ProductDetailPage';
 import CartPage from './pages/CartPage';
 import OrdersPage from './pages/OrdersPage';
-import DebugPage from './pages/DebugPage';
-import TestConnectionPage from './pages/TestConnectionPage';
+import CheckoutPage from './pages/checkout/CheckoutPage';
+//import DebugPage from './pages/DebugPage';
+//import TestConnectionPage from './pages/TestConnectionPage';
 
 
 // Admin pages
@@ -51,9 +52,10 @@ function App() {
               <Route path="/" element={<HomePage />} />
               <Route path="/products/:id" element={<ProductDetailPage />} />
               <Route path="/cart" element={<CartPage />} />
+              <Route path="/checkout" element={<CheckoutPage />} />
               <Route path="/orders" element={<OrdersPage />} />
-              <Route path="/debug" element={<DebugPage />} />
-              <Route path="/test" element={<TestConnectionPage />} />
+            
+              
 
             </Routes>
           </Layout>

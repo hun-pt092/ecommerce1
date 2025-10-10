@@ -30,6 +30,8 @@ const OrdersPage = () => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    // Scroll to top when page loads
+    window.scrollTo(0, 0);
     fetchOrders();
   }, []);
 

@@ -39,17 +39,20 @@ const CartPage = () => {
   const [checkoutLoading, setCheckoutLoading] = useState(false);
   const [form] = Form.useForm();
 
+  // Helper function to get full image URL
+  const getImageUrl = (imagePath) => {
+    if (!imagePath) return null;
+    if (imagePath.startsWith('http')) return imagePath;
+    return `http://localhost:8000${imagePath}`;
+  };
+
   useEffect(() => {
+    // Scroll to top when page loads
+    window.scrollTo(0, 0);
     fetchCart();
   }, []);
 
-  // Debug effect để log cart changes
-  useEffect(() => {
-    console.log('=== CART STATE UPDATED ===');
-    console.log('Cart:', cart);
-    console.log('Items count:', cart?.items?.length || 0);
-    console.log('Items:', cart?.items);
-  }, [cart]);
+
 
   const fetchCart = async () => {
     const token = localStorage.getItem('access_token');
@@ -64,7 +67,7 @@ const CartPage = () => {
       setCart(response.data);
     } catch (error) {
       message.error('Không thể tải giỏ hàng');
-      console.error(error);
+      console.error('Cart fetch error:', error);
     } finally {
       setLoading(false);
     }
@@ -119,18 +122,12 @@ const CartPage = () => {
     try {
       const itemToRemove = cart.items[itemIndex];
       
-      console.log('=== REMOVING ITEM ===');
-      console.log('Item to remove:', itemToRemove);
-      console.log('Current cart items:', cart.items.length);
-      
       // Sử dụng DELETE method để xóa item hoàn toàn
-      const response = await authAxios.delete('cart/', {
+      await authAxios.delete('cart/', {
         data: {
           product_variant_id: itemToRemove.product_variant.id
         }
       });
-      
-      console.log('Remove response:', response.data);
       
       // Fetch lại cart từ server để đảm bảo sync
       await fetchCart();
@@ -150,16 +147,32 @@ const CartPage = () => {
   };
 
   const calculateItemTotal = (item) => {
-    // Giả sử giá được lưu trong product (cần cập nhật API để trả về giá)
-    const price = item.product_variant?.product?.price || 0;
+    const product = item.product_variant?.product;
+    if (!product) return 0;
+    
+    const price = product.discount_price || product.price || 0;
     return price * item.quantity;
   };
 
-  const calculateTotal = () => {
+  const calculateSubTotal = () => {
     if (!cart || !cart.items) return 0;
     return cart.items.reduce((total, item) => {
       return total + calculateItemTotal(item);
     }, 0);
+  };
+
+  const calculateShipping = () => {
+    const subtotal = calculateSubTotal();
+    return subtotal >= 500000 ? 0 : 30000; // Free shipping over 500k
+  };
+
+  const calculateTotal = () => {
+    return calculateSubTotal() + calculateShipping();
+  };
+
+  const getTotalItems = () => {
+    if (!cart || !cart.items) return 0;
+    return cart.items.reduce((total, item) => total + item.quantity, 0);
   };
 
   const handleCheckout = () => {
@@ -168,7 +181,8 @@ const CartPage = () => {
       return;
     }
     
-    setCheckoutModalVisible(true);
+    // Navigate to checkout page
+    navigate('/checkout');
   };
 
   const onCheckoutSubmit = async (values) => {
@@ -258,37 +272,96 @@ const CartPage = () => {
                   <Row gutter={[16, 16]} align="middle">
                     {/* Product Image */}
                     <Col xs={24} sm={6} md={4}>
-                      <div
-                        style={{
-                          width: '80px',
-                          height: '80px',
-                          background: 'linear-gradient(45deg, #f0f0f0, #e0e0e0)',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          borderRadius: '8px',
-                          fontSize: '24px',
-                          color: '#999'
-                        }}
-                      >
-                        📷
-                      </div>
+                      {item.product_variant?.product?.images && item.product_variant.product.images.length > 0 ? (
+                        <Image
+                          width={80}
+                          height={80}
+                          src={getImageUrl(item.product_variant.product.images[0].image)}
+                          alt={item.product_variant.product.name || 'Product image'}
+                          style={{ 
+                            objectFit: 'cover',
+                            borderRadius: '8px'
+                          }}
+                          placeholder={
+                            <div style={{
+                              width: '80px',
+                              height: '80px',
+                              background: '#f0f0f0',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              borderRadius: '8px'
+                            }}>
+                              <Spin size="small" />
+                            </div>
+                          }
+                          fallback="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMIAAADDCAYAAADQvc6UAAABRWlDQ1BJQ0MgUHJvZmlsZQAAKJFjYGASSSwoyGFhYGDIzSspCnJ3UoiIjFJgf8LAwSDCIMogwMCcmFxc4BgQ4ANUwgCjUcG3awyMIPqyLsis7PPOq3QdDFcvjV3jOD1boQVTPQrgSkktTgbSf4A4LbmgqISBgTEFyFYuLykAsTuAbJEioKOA7DkgdjqEvQHEToKwj4DVhAQ5A9k3gGyB5IxEoBmML4BsnSQk8XQkNtReEOBxcfXxUQg1Mjc0dyHgXNJBSWpFCYh2zi+oLMpMzyhRcASGUqqCZ16yno6CkYGRAQMDKMwhqj/fAIcloxgHQqxAjIHBEugw5sUIsSQpBobtQPdLciLEVJYzMPBHMDBsayhILEqEO4DxG0txmrERhM29nYGBddr//5/DGRjYNRkY/l7////39v///y4Dmn+LgeHANwDrkl1AuO+pmgAAADhlWElmTU0AKgAAAAgAAYdpAAQAAAABAAAAGgAAAAAAAqACAAQAAAABAAAAwqADAAQAAAABAAAAwwAAAAD9b/HnAAAHlklEQVR4Ae3dP3Ik1RnG4W+FgYxN4BMghMgBBBIHcAFXQIbzaQy4wjEcQLfAAdwAJ3AAF8AJXAAJtFpNFhYEEjAlYGhFRNPm+e4zdvdDO46r7+v7Lr8N1f7yLrjCCEhwdgABelFiFKAU5SgwipKsXhQgTcELXAAE6X9fPjUwQU6RJCdNh1OkjFOkGWfXSA=="
+                        />
+                      ) : (
+                        <div
+                          style={{
+                            width: '80px',
+                            height: '80px',
+                            background: 'linear-gradient(45deg, #f0f0f0, #e0e0e0)',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            borderRadius: '8px',
+                            fontSize: '24px',
+                            color: '#999'
+                          }}
+                        >
+                          📷
+                        </div>
+                      )}
                     </Col>
 
                     {/* Product Info */}
                     <Col xs={24} sm={18} md={10}>
                       <div>
                         <Title level={5} style={{ margin: 0, marginBottom: '4px' }}>
-                          Sản phẩm #{item.product_variant.id}
+                          {item.product_variant?.product?.name || `Sản phẩm #${item.product_variant.id}`}
                         </Title>
-                        <Text type="secondary">
-                          Kích cỡ: {item.product_variant.size} | 
-                          Màu: {item.product_variant.color}
+                        <Text type="secondary" style={{ display: 'block', marginBottom: '4px' }}>
+                          Kích cỡ: {item.product_variant.size} | Màu: {item.product_variant.color}
                         </Text>
-                        <br />
-                        <Text strong style={{ color: '#1890ff' }}>
-                          150,000₫ {/* Placeholder - cần API trả về giá */}
-                        </Text>
+                        <div>
+                          {(() => {
+                            const product = item.product_variant?.product;
+                            
+                            if (!product) {
+                              return (
+                                <Text type="secondary" style={{ fontSize: '14px' }}>
+                                  Đang tải giá...
+                                </Text>
+                              );
+                            }
+                            
+                            if (product.discount_price) {
+                              return (
+                                <Space>
+                                  <Text strong style={{ color: '#f5222d', fontSize: '16px' }}>
+                                    {Number(product.discount_price).toLocaleString()}₫
+                                  </Text>
+                                  <Text delete type="secondary" style={{ fontSize: '14px' }}>
+                                    {Number(product.price).toLocaleString()}₫
+                                  </Text>
+                                </Space>
+                              );
+                            } else {
+                              return (
+                                <Text strong style={{ color: '#1890ff', fontSize: '16px' }}>
+                                  {Number(product.price).toLocaleString()}₫
+                                </Text>
+                              );
+                            }
+                          })()}
+                        </div>
+                        <div style={{ marginTop: '4px' }}>
+                          <Text type="secondary" style={{ fontSize: '12px' }}>
+                            Tồn kho: {item.product_variant?.stock_quantity || 0}
+                          </Text>
+                        </div>
                       </div>
                     </Col>
 
@@ -348,7 +421,7 @@ const CartPage = () => {
                     <Col xs={12} sm={12} md={4}>
                       <div style={{ textAlign: 'right' }}>
                         <Text strong style={{ fontSize: '16px', color: '#1890ff' }}>
-                          {(150000 * item.quantity).toLocaleString()}₫
+                          {calculateItemTotal(item).toLocaleString()}₫
                         </Text>
                         <br />
                         <Popconfirm
@@ -379,24 +452,67 @@ const CartPage = () => {
 
           {/* Order Summary */}
           <Col xs={24} lg={8}>
-            <Card title="Tóm tắt đơn hàng" style={{ position: 'sticky', top: '20px' }}>
+            <Card title={`Tóm tắt đơn hàng (${getTotalItems()} sản phẩm)`} style={{ position: 'sticky', top: '20px' }}>
+
+              
               <div style={{ marginBottom: '20px' }}>
                 <Row justify="space-between" style={{ marginBottom: '8px' }}>
                   <Text>Tạm tính:</Text>
-                  <Text>{(150000 * cart.items.reduce((sum, item) => sum + item.quantity, 0)).toLocaleString()}₫</Text>
+                  <Text style={{ color: calculateSubTotal() === 0 ? '#ff4d4f' : undefined }}>
+                    {calculateSubTotal().toLocaleString()}₫
+                    {calculateSubTotal() === 0 && cart?.items?.length > 0 && (
+                      <Text type="secondary" style={{ fontSize: '12px', marginLeft: '4px' }}>
+                        (Lỗi dữ liệu)
+                      </Text>
+                    )}
+                  </Text>
                 </Row>
                 <Row justify="space-between" style={{ marginBottom: '8px' }}>
                   <Text>Phí vận chuyển:</Text>
-                  <Text>30,000₫</Text>
+                  <Text style={{ color: calculateShipping() === 0 ? '#52c41a' : undefined }}>
+                    {calculateShipping() === 0 ? 'Miễn phí' : `${calculateShipping().toLocaleString()}₫`}
+                  </Text>
                 </Row>
+                {calculateSubTotal() < 500000 && (
+                  <Row justify="space-between" style={{ marginBottom: '8px' }}>
+                    <Text type="secondary" style={{ fontSize: '12px' }}>
+                      Mua thêm {(500000 - calculateSubTotal()).toLocaleString()}₫ để được miễn phí ship
+                    </Text>
+                  </Row>
+                )}
                 <Divider style={{ margin: '12px 0' }} />
                 <Row justify="space-between" style={{ marginBottom: '16px' }}>
                   <Title level={4} style={{ margin: 0 }}>Tổng cộng:</Title>
                   <Title level={4} style={{ margin: 0, color: '#ff4d4f' }}>
-                    {(150000 * cart.items.reduce((sum, item) => sum + item.quantity, 0) + 30000).toLocaleString()}₫
+                    {calculateTotal().toLocaleString()}₫
                   </Title>
                 </Row>
               </div>
+
+              {/* Savings info */}
+              {(() => {
+                const totalSavings = cart.items.reduce((total, item) => {
+                  const product = item.product_variant?.product;
+                  if (product?.discount_price) {
+                    return total + (product.price - product.discount_price) * item.quantity;
+                  }
+                  return total;
+                }, 0);
+                
+                return totalSavings > 0 && (
+                  <div style={{ 
+                    background: '#f6ffed', 
+                    border: '1px solid #b7eb8f',
+                    borderRadius: '6px',
+                    padding: '8px 12px',
+                    marginBottom: '16px'
+                  }}>
+                    <Text style={{ color: '#52c41a', fontSize: '12px' }}>
+                      💰 Bạn đã tiết kiệm được: {totalSavings.toLocaleString()}₫
+                    </Text>
+                  </div>
+                );
+              })()}
 
               <Button
                 type="primary"

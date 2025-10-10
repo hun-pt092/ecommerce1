@@ -106,7 +106,10 @@ const Navigation = () => {
       key: '/',
       label: 'Trang chủ',
       icon: <HomeOutlined />,
-      onClick: () => navigate('/')
+      onClick: () => {
+        navigate('/');
+        window.scrollTo(0, 0);
+      }
     },
     // TODO: Add more menu items like categories
   ];
@@ -138,7 +141,10 @@ const Navigation = () => {
             color: '#1890ff',
             cursor: 'pointer'
           }}
-          onClick={() => navigate('/')}
+          onClick={() => {
+            navigate('/');
+            window.scrollTo(0, 0);
+          }}
         >
           🛍️ Fashion Store
         </div>

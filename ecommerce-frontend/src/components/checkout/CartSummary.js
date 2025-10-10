@@ -1,0 +1,207 @@
+import React from 'react';
+import { 
+  Card, 
+  Row, 
+  Col, 
+  Button, 
+  Typography, 
+  Image, 
+  Divider,
+  Space,
+  Tag
+} from 'antd';
+import { 
+  EditOutlined, 
+  ArrowRightOutlined,
+  ShoppingOutlined
+} from '@ant-design/icons';
+
+const { Title, Text } = Typography;
+
+const CartSummary = ({ cartData, onNext, onEdit }) => {
+  // Helper function to get full image URL
+  const getImageUrl = (imagePath) => {
+    if (!imagePath) return null;
+    if (imagePath.startsWith('http')) return imagePath;
+    return `http://localhost:8000${imagePath}`;
+  };
+
+  const calculateItemTotal = (item) => {
+    const price = item.product_variant?.product?.discount_price || 
+                  item.product_variant?.product?.price || 0;
+    return price * item.quantity;
+  };
+
+  const calculateSubTotal = () => {
+    if (!cartData?.items) return 0;
+    return cartData.items.reduce((sum, item) => sum + calculateItemTotal(item), 0);
+  };
+
+  const shippingFee = 30000; // 30k shipping fee
+  const totalAmount = calculateSubTotal() + shippingFee;
+
+  if (!cartData || !cartData.items || cartData.items.length === 0) {
+    return (
+      <Card>
+        <div style={{ textAlign: 'center', padding: '40px 20px' }}>
+          <ShoppingOutlined style={{ fontSize: '48px', color: '#bfbfbf', marginBottom: '16px' }} />
+          <Title level={4} type="secondary">Giỏ hàng trống</Title>
+          <Text type="secondary">Vui lòng thêm sản phẩm vào giỏ hàng trước khi thanh toán</Text>
+        </div>
+      </Card>
+    );
+  }
+
+  return (
+    <Row gutter={[24, 24]}>
+      {/* Cart Items */}
+      <Col xs={24} lg={16}>
+        <Card 
+          title={
+            <Space>
+              <ShoppingOutlined />
+              <span>Sản phẩm trong giỏ hàng ({cartData.items.length})</span>
+            </Space>
+          }
+          extra={
+            <Button 
+              type="link" 
+              icon={<EditOutlined />}
+              onClick={onEdit}
+            >
+              Chỉnh sửa
+            </Button>
+          }
+        >
+          <div style={{ maxHeight: '400px', overflowY: 'auto' }}>
+            {cartData.items.map((item, index) => (
+              <div key={item.id}>
+                <Row gutter={[16, 16]} align="middle">
+                  <Col xs={6} sm={4}>
+                    <div style={{ 
+                      width: '60px', 
+                      height: '60px',
+                      overflow: 'hidden',
+                      borderRadius: '8px',
+                      border: '1px solid #f0f0f0'
+                    }}>
+                      {item.product_variant?.product?.images?.[0] ? (
+                        <Image
+                          src={getImageUrl(item.product_variant.product.images[0].image)}
+                          alt={item.product_variant.product.name}
+                          style={{ 
+                            width: '100%', 
+                            height: '100%', 
+                            objectFit: 'cover' 
+                          }}
+                          preview={false}
+                        />
+                      ) : (
+                        <div style={{
+                          width: '100%',
+                          height: '100%',
+                          background: '#f5f5f5',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          fontSize: '24px'
+                        }}>
+                          👕
+                        </div>
+                      )}
+                    </div>
+                  </Col>
+                  
+                  <Col xs={18} sm={12}>
+                    <div>
+                      <Title level={5} style={{ margin: 0, marginBottom: '4px' }}>
+                        {item.product_variant?.product?.name || 'Sản phẩm không xác định'}
+                      </Title>
+                      {item.product_variant && (
+                        <Text type="secondary" style={{ fontSize: '12px' }}>
+                          Phân loại: {item.product_variant.size} - {item.product_variant.color}
+                        </Text>
+                      )}
+                      {item.product_variant?.product?.category && (
+                        <div style={{ marginTop: '4px' }}>
+                          <Tag size="small" color="blue">
+                            {item.product_variant.product.category.name}
+                          </Tag>
+                        </div>
+                      )}
+                    </div>
+                  </Col>
+                  
+                  <Col xs={24} sm={8} style={{ textAlign: 'right' }}>
+                    <div>
+                      <Text strong style={{ fontSize: '16px', color: '#f5222d' }}>
+                        {calculateItemTotal(item).toLocaleString()}₫
+                      </Text>
+                      <br />
+                      <Text type="secondary" style={{ fontSize: '12px' }}>
+                        {(item.product_variant?.product?.discount_price || 
+                          item.product_variant?.product?.price || 0).toLocaleString()}₫ x {item.quantity}
+                      </Text>
+                    </div>
+                  </Col>
+                </Row>
+                
+                {index < cartData.items.length - 1 && (
+                  <Divider style={{ margin: '16px 0' }} />
+                )}
+              </div>
+            ))}
+          </div>
+        </Card>
+      </Col>
+
+      {/* Order Summary */}
+      <Col xs={24} lg={8}>
+        <Card title="Tóm tắt đơn hàng">
+          <div style={{ marginBottom: '16px' }}>
+            <Row justify="space-between">
+              <Text>Tạm tính ({cartData.items.length} sản phẩm):</Text>
+              <Text strong>{calculateSubTotal().toLocaleString()}₫</Text>
+            </Row>
+          </div>
+          
+          <div style={{ marginBottom: '16px' }}>
+            <Row justify="space-between">
+              <Text>Phí vận chuyển:</Text>
+              <Text strong>{shippingFee.toLocaleString()}₫</Text>
+            </Row>
+          </div>
+          
+          <Divider style={{ margin: '16px 0' }} />
+          
+          <div style={{ marginBottom: '24px' }}>
+            <Row justify="space-between">
+              <Title level={4} style={{ margin: 0 }}>Tổng cộng:</Title>
+              <Title level={4} style={{ margin: 0, color: '#f5222d' }}>
+                {totalAmount.toLocaleString()}₫
+              </Title>
+            </Row>
+          </div>
+          
+          <Button 
+            type="primary" 
+            size="large" 
+            block
+            icon={<ArrowRightOutlined />}
+            onClick={onNext}
+          >
+            Tiếp tục thanh toán
+          </Button>
+          
+          <div style={{ textAlign: 'center', marginTop: '12px' }}>
+            <Text type="secondary" style={{ fontSize: '12px' }}>
+              Bằng cách tiếp tục, bạn đồng ý với điều khoản sử dụng
+            </Text>
+          </div>
+        </Card>
+      </Col>
+    </Row>
+  );
+};
+
+export default CartSummary;
