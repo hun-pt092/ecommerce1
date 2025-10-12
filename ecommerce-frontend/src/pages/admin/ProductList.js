@@ -140,12 +140,16 @@ const ProductList = () => {
     setLoading(true);
     try {
       const response = await authAxios.get('/admin/products/');
+      // Handle pagination format
+      const productsData = response.data.results || response.data || [];
+      
       // Process data để thêm main_image
-      const processedData = response.data.map(product => ({
+      const processedData = Array.isArray(productsData) ? productsData.map(product => ({
         ...product,
         main_image: product.images?.find(img => img.is_main)?.image || 
                    product.images?.[0]?.image || null
-      }));
+      })) : [];
+      
       setProducts(processedData);
     } catch (error) {
       message.error('Không thể tải danh sách sản phẩm');

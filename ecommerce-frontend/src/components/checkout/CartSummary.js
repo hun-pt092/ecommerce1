@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { 
   Card, 
   Row, 
@@ -18,7 +18,19 @@ import {
 
 const { Title, Text } = Typography;
 
-const CartSummary = ({ cartData, onNext, onEdit }) => {
+const CartSummary = ({ cartData, onNext, onEdit, isBuyNow }) => {
+  // Debug cart data
+  console.log('=== CartSummary RENDER START ===');
+  console.log('CartSummary cartData:', cartData);
+  console.log('CartSummary isBuyNow:', isBuyNow);
+  console.log('CartSummary timestamp:', new Date().toISOString());
+  
+  // Helper function to format price
+  const formatPrice = (price) => {
+    const numPrice = parseFloat(price) || 0;
+    return numPrice.toLocaleString('vi-VN') + '₫';
+  };
+  
   // Helper function to get full image URL
   const getImageUrl = (imagePath) => {
     if (!imagePath) return null;
@@ -27,18 +39,54 @@ const CartSummary = ({ cartData, onNext, onEdit }) => {
   };
 
   const calculateItemTotal = (item) => {
-    const price = item.product_variant?.product?.discount_price || 
-                  item.product_variant?.product?.price || 0;
+    // Debug item structure
+    console.log('calculateItemTotal - full item:', JSON.stringify(item, null, 2));
+    
+    // Try multiple paths to get price (API cart vs temp cart)
+    let price = 0;
+    
+    if (item.product_variant?.product?.discount_price) {
+      price = item.product_variant.product.discount_price;
+    } else if (item.product_variant?.product?.price) {
+      price = item.product_variant.product.price;
+    } else if (item.product?.discount_price) {
+      // Alternative path for temp cart
+      price = item.product.discount_price;
+    } else if (item.product?.price) {
+      // Alternative path for temp cart
+      price = item.product.price;
+    }
+    
+    console.log('calculateItemTotal - extracted price:', price, 'quantity:', item.quantity, 'total:', price * item.quantity);
     return price * item.quantity;
   };
 
   const calculateSubTotal = () => {
     if (!cartData?.items) return 0;
-    return cartData.items.reduce((sum, item) => sum + calculateItemTotal(item), 0);
+    const subTotal = cartData.items.reduce((sum, item) => sum + calculateItemTotal(item), 0);
+    console.log('calculateSubTotal result:', subTotal);
+    return subTotal;
   };
 
-  const shippingFee = 30000; // 30k shipping fee
-  const totalAmount = calculateSubTotal() + shippingFee;
+  // Force re-render state
+  const [renderKey, setRenderKey] = useState(0);
+  
+  const subTotal = useMemo(() => {
+    const result = calculateSubTotal();
+    console.log('useMemo - subTotal calculated:', result);
+    return result;
+  }, [cartData, renderKey]);
+  
+  const shippingFee = subTotal >= 500000 ? 0 : 30000; // Miễn phí ship cho đơn >= 500k
+  const totalAmount = subTotal + shippingFee;
+  
+  // Force re-render when cartData changes
+  useEffect(() => {
+    if (cartData && cartData.items && cartData.items.length > 0) {
+      console.log('🔄 Force re-render triggered by cartData change');
+      setRenderKey(prev => prev + 1);
+    }
+  }, [cartData]);
 
   if (!cartData || !cartData.items || cartData.items.length === 0) {
     return (
@@ -60,7 +108,7 @@ const CartSummary = ({ cartData, onNext, onEdit }) => {
           title={
             <Space>
               <ShoppingOutlined />
-              <span>Sản phẩm trong giỏ hàng ({cartData.items.length})</span>
+              <span>{isBuyNow ? 'Sản phẩm mua ngay' : `Sản phẩm trong giỏ hàng (${cartData.items.length})`}</span>
             </Space>
           }
           extra={
@@ -69,7 +117,7 @@ const CartSummary = ({ cartData, onNext, onEdit }) => {
               icon={<EditOutlined />}
               onClick={onEdit}
             >
-              Chỉnh sửa
+              {isBuyNow ? 'Quay lại' : 'Chỉnh sửa'}
             </Button>
           }
         >
@@ -161,15 +209,51 @@ const CartSummary = ({ cartData, onNext, onEdit }) => {
           <div style={{ marginBottom: '16px' }}>
             <Row justify="space-between">
               <Text>Tạm tính ({cartData.items.length} sản phẩm):</Text>
-              <Text strong>{calculateSubTotal().toLocaleString()}₫</Text>
+              <Text 
+                strong 
+                id="cart-subtotal-display"
+                style={{ 
+                  color: '#000', 
+                  fontSize: '16px',
+                  backgroundColor: 'yellow',
+                  padding: '2px 4px',
+                  borderRadius: '3px'
+                }}
+              >
+                {(() => {
+                  const finalPrice = formatPrice(subTotal);
+                  console.log('🔥 FINAL RENDER:', {
+                    subTotal,
+                    finalPrice,
+                    timestamp: new Date().toISOString(),
+                    cartDataExists: !!cartData,
+                    cartItemsLength: cartData?.items?.length || 0,
+                    renderKey
+                  });
+                  // Add DOM manipulation debug
+                  setTimeout(() => {
+                    const element = document.getElementById('cart-subtotal-display');
+                    console.log('💡 DOM Element content:', element?.textContent);
+                    console.log('💡 DOM Element HTML:', element?.innerHTML);
+                  }, 100);
+                  return finalPrice;
+                })()}
+              </Text>
             </Row>
           </div>
           
           <div style={{ marginBottom: '16px' }}>
             <Row justify="space-between">
               <Text>Phí vận chuyển:</Text>
-              <Text strong>{shippingFee.toLocaleString()}₫</Text>
+              <Text strong style={{ color: shippingFee === 0 ? '#52c41a' : undefined }}>
+                {shippingFee === 0 ? 'Miễn phí' : formatPrice(shippingFee)}
+              </Text>
             </Row>
+            {shippingFee === 0 && (
+              <Text type="success" style={{ fontSize: '12px', textAlign: 'right', display: 'block' }}>
+                🎉 Bạn được miễn phí vận chuyển!
+              </Text>
+            )}
           </div>
           
           <Divider style={{ margin: '16px 0' }} />
@@ -178,7 +262,7 @@ const CartSummary = ({ cartData, onNext, onEdit }) => {
             <Row justify="space-between">
               <Title level={4} style={{ margin: 0 }}>Tổng cộng:</Title>
               <Title level={4} style={{ margin: 0, color: '#f5222d' }}>
-                {totalAmount.toLocaleString()}₫
+                {formatPrice(totalAmount)}
               </Title>
             </Row>
           </div>
@@ -203,5 +287,9 @@ const CartSummary = ({ cartData, onNext, onEdit }) => {
     </Row>
   );
 };
+
+// Add component display name for debugging
+CartSummary.displayName = 'CartSummary';
+console.log('=== CartSummary COMPONENT DEFINED ===');
 
 export default CartSummary;

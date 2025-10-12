@@ -96,9 +96,12 @@ const AddProduct = () => {
       console.log('Categories loaded:', categoriesRes.data.length);
       console.log('Brands loaded:', brandsRes.data.length);
       
-      // Set categories và brands NGAY LẬP TỨC
-      setCategories(categoriesRes.data);
-      setBrands(brandsRes.data);
+      // Set categories và brands NGAY LẬP TỨC - ensure arrays
+      const categoriesData = categoriesRes.data.results || categoriesRes.data || [];
+      const brandsData = brandsRes.data.results || brandsRes.data || [];
+      
+      setCategories(Array.isArray(categoriesData) ? categoriesData : []);
+      setBrands(Array.isArray(brandsData) ? brandsData : []);
 
       // Wait a bit để đảm bảo state được update
       await new Promise(resolve => setTimeout(resolve, 100));
@@ -392,7 +395,7 @@ const AddProduct = () => {
                     rules={[{ required: true, message: 'Vui lòng chọn danh mục' }]}
                   >
                     <Select placeholder="Chọn danh mục">
-                      {categories.map(cat => (
+                      {Array.isArray(categories) && categories.map(cat => (
                         <Option key={cat.id} value={cat.id}>{cat.name}</Option>
                       ))}
                     </Select>
@@ -405,7 +408,7 @@ const AddProduct = () => {
                     name="brand"
                   >
                     <Select placeholder="Chọn thương hiệu" allowClear>
-                      {brands.map(brand => (
+                      {Array.isArray(brands) && brands.map(brand => (
                         <Option key={brand.id} value={brand.id}>{brand.name}</Option>
                       ))}
                     </Select>

@@ -30,17 +30,94 @@ const PaymentForm = ({ cartData, shippingAddress, onSubmit, onPrevious, loading 
 
   // Calculate totals
   const calculateSubTotal = () => {
-    if (!cartData?.items) return 0;
+    if (!cartData?.items) {
+      console.log('No cart data or items');
+      return 0;
+    }
+    
+    console.log('=== PaymentForm calculateSubTotal Debug ===');
+    console.log('cartData:', cartData);
+    console.log('cartData.items:', cartData.items);
+    
     return cartData.items.reduce((sum, item) => {
-      const price = item.product_variant?.product?.discount_price || 
-                    item.product_variant?.product?.price || 0;
-      return sum + (price * item.quantity);
+      console.log('Processing item:', item);
+      
+      // Try multiple paths to get price with better fallback logic
+      let price = 0;
+      
+      // Priority 1: Discount price from various sources
+      if (item.product_variant?.product?.discount_price) {
+        price = parseFloat(item.product_variant.product.discount_price);
+        console.log('✓ Using product_variant.product.discount_price:', price);
+      } else if (item.product?.discount_price) {
+        price = parseFloat(item.product.discount_price);
+        console.log('✓ Using product.discount_price:', price);
+      }
+      // Priority 2: Regular price from various sources
+      else if (item.product_variant?.product?.price) {
+        price = parseFloat(item.product_variant.product.price);
+        console.log('✓ Using product_variant.product.price:', price);
+      } else if (item.product?.price) {
+        price = parseFloat(item.product.price);
+        console.log('✓ Using product.price:', price);
+      }
+      // Priority 3: Direct item price properties
+      else if (item.discount_price) {
+        price = parseFloat(item.discount_price);
+        console.log('✓ Using item.discount_price:', price);
+      } else if (item.price) {
+        price = parseFloat(item.price);
+        console.log('✓ Using item.price:', price);
+      } else if (item.product_variant?.price) {
+        price = parseFloat(item.product_variant.price);
+        console.log('✓ Using product_variant.price:', price);
+      }
+      // Fallback: Deep search for any price
+      else {
+        console.log('❌ No standard price found, trying fallback...');
+        console.log('Item keys:', Object.keys(item));
+        console.log('Item product:', item.product);
+        console.log('Item product_variant:', item.product_variant);
+        
+        // Try to extract price from any nested structure
+        const productData = item.product_variant?.product || item.product;
+        if (productData) {
+          const foundPrice = productData.discount_price || productData.price;
+          if (foundPrice !== undefined && foundPrice !== null) {
+            price = parseFloat(foundPrice);
+            console.log('✓ Fallback price found:', price);
+          } else {
+            console.error('❌ No price found in productData:', productData);
+          }
+        } else {
+          console.error('❌ No product data found for item:', item);
+        }
+      }
+      
+      // Ensure price is a valid number
+      if (isNaN(price) || price < 0) {
+        console.error('❌ Invalid price detected:', price, 'for item:', item);
+        price = 0;
+      }
+      
+      const itemName = item.product?.name || item.product_variant?.product?.name || 'Unknown Product';
+      const itemTotal = price * (item.quantity || 1);
+      console.log(`📊 Item: ${itemName}, Price: ${price}₫, Quantity: ${item.quantity}, Total: ${itemTotal}₫`);
+      
+      return sum + itemTotal;
     }, 0);
   };
 
-  const shippingFee = 30000;
   const subTotal = calculateSubTotal();
+  const shippingFee = subTotal >= 500000 ? 0 : 30000;
   const totalAmount = subTotal + shippingFee;
+
+  // Debug final calculations
+  console.log('=== PaymentForm Final Calculations ===');
+  console.log('SubTotal:', subTotal);
+  console.log('ShippingFee:', shippingFee);
+  console.log('TotalAmount:', totalAmount);
+  console.log('CartData:', cartData);
 
   const handleSubmit = (values) => {
     console.log('PaymentForm handleSubmit called with:', values);
@@ -275,8 +352,15 @@ const PaymentForm = ({ cartData, shippingAddress, onSubmit, onPrevious, loading 
             
             <Row justify="space-between" style={{ marginBottom: '8px' }}>
               <Text>Phí vận chuyển:</Text>
-              <Text strong>{shippingFee.toLocaleString()}₫</Text>
+              <Text strong style={{ color: shippingFee === 0 ? '#52c41a' : undefined }}>
+                {shippingFee === 0 ? 'Miễn phí' : `${shippingFee.toLocaleString()}₫`}
+              </Text>
             </Row>
+            {shippingFee === 0 && (
+              <Text type="success" style={{ fontSize: '12px', textAlign: 'right', display: 'block', marginBottom: '8px' }}>
+                🎉 Miễn phí vận chuyển cho đơn ≥ 500k
+              </Text>
+            )}
           </div>
           
           <Divider />

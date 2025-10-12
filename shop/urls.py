@@ -1,6 +1,7 @@
 from django.urls import path
 from .views import (
     CartView, RegisterView, ProductListView, ProductDetailView,
+    CategoryListView, BrandListView,  # Public views
     OrderCreateView, OrderListView, OrderDetailView, 
     AdminOrderListView, AdminOrderStatusUpdateView, OrderCancelView,
     CreateOrderFromCartView, UserOrderListView, UserOrderDetailView, OrderStatusUpdateView,
@@ -27,6 +28,10 @@ urlpatterns = [
     path('products/', ProductListView.as_view(), name='product_list'),
     path('products/<int:pk>/', ProductDetailView.as_view(), name='product_detail'),
     
+    # Categories & Brands (Public API)
+    path('categories/', CategoryListView.as_view(), name='category_list'),
+    path('brands/', BrandListView.as_view(), name='brand_list'),
+    
     # Cart
     path('cart/', CartView.as_view(), name='cart'),
     
@@ -40,6 +45,7 @@ urlpatterns = [
     
     # Orders - Admin endpoints
     path('admin/orders/', AdminOrderListView.as_view(), name='admin_order_list'),
+    path('admin/orders/statistics/', AdminOrderStatsView.as_view(), name='admin_order_stats'),
     path('admin/orders/<int:pk>/status/', AdminOrderStatusUpdateView.as_view(), name='admin_order_status_update'),
     path('orders/<int:pk>/update-status/', OrderStatusUpdateView.as_view(), name='order_status_update'),
     
@@ -59,16 +65,16 @@ urlpatterns = [
     path('admin/check-admin/', AdminCheckView.as_view(), name='admin_check'),
     
     # Admin - Dashboard & Statistics
-    path('api/dashboard/statistics/', AdminDashboardStatsView.as_view(), name='admin_dashboard_stats'),
-    path('api/orders/statistics/', AdminOrderStatsView.as_view(), name='admin_order_stats'),
+    path('dashboard/statistics/', AdminDashboardStatsView.as_view(), name='admin_dashboard_stats'),
+    path('orders/statistics/', AdminOrderStatsView.as_view(), name='admin_order_stats'),
     
     # Admin - User Management
-    path('api/users/', AdminUserListView.as_view(), name='admin_user_list'),
-    path('api/users/statistics/', AdminUserStatsView.as_view(), name='admin_user_stats'),
-    path('api/users/<int:pk>/', AdminUserDetailView.as_view(), name='admin_user_detail'),
-    path('api/users/<int:pk>/status/', AdminUserStatusUpdateView.as_view(), name='admin_user_status'),
+    path('users/', AdminUserListView.as_view(), name='admin_user_list'),
+    path('users/statistics/', AdminUserStatsView.as_view(), name='admin_user_stats'),
+    path('users/<int:pk>/', AdminUserDetailView.as_view(), name='admin_user_detail'),
+    path('users/<int:pk>/status/', AdminUserStatusUpdateView.as_view(), name='admin_user_status'),
     
     # Admin - Orders Management (using existing AdminOrderListView)
-    path('api/orders/', AdminOrderListView.as_view(), name='admin_orders_api'),
+    path('orders/', AdminOrderListView.as_view(), name='admin_orders_api'),
 ]
 

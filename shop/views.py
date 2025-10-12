@@ -4,10 +4,12 @@ from rest_framework import generics, permissions
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from .models import Product, ProductVariant, User, Order, OrderItem, Category, Brand, ProductImage
+from .pagination import ProductPagination, OrderPagination, AdminPagination, StandardResultsSetPagination
 from .serializers import (
     RegisterSerializer, ProductSerializer, OrderSerializer, 
     OrderCreateSerializer, OrderStatusUpdateSerializer,
-    OrderItemSerializer, UserSerializer
+    OrderItemSerializer, UserSerializer,
+    CategorySerializer, BrandSerializer
 )
 from rest_framework_simplejwt.views import TokenObtainPairView
 
@@ -56,14 +58,27 @@ class RegisterView(generics.CreateAPIView):
 
 # Danh sách sản phẩm
 class ProductListView(generics.ListAPIView):
-    queryset = Product.objects.all()
+    queryset = Product.objects.filter(is_active=True).select_related('category', 'brand').prefetch_related('images', 'variants')
     serializer_class = ProductSerializer
     permission_classes = (permissions.AllowAny,)
+    pagination_class = ProductPagination
 
 # Chi tiết sản phẩm
 class ProductDetailView(generics.RetrieveAPIView):
     queryset = Product.objects.all()
     serializer_class = ProductSerializer
+    permission_classes = (permissions.AllowAny,)
+
+# Public Categories List (for filtering)
+class CategoryListView(generics.ListAPIView):
+    queryset = Category.objects.all()
+    serializer_class = CategorySerializer
+    permission_classes = (permissions.AllowAny,)
+
+# Public Brands List (for filtering)  
+class BrandListView(generics.ListAPIView):
+    queryset = Brand.objects.all()
+    serializer_class = BrandSerializer
     permission_classes = (permissions.AllowAny,)
 
 #------------------------------them gio hang----------------------------------------
@@ -228,9 +243,10 @@ class OrderCreateView(generics.CreateAPIView):
 class OrderListView(generics.ListAPIView):
     serializer_class = OrderSerializer
     permission_classes = [IsAuthenticated]
+    pagination_class = OrderPagination
     
     def get_queryset(self):
-        return Order.objects.filter(user=self.request.user)
+        return Order.objects.filter(user=self.request.user).select_related('user').prefetch_related('items__product_variant__product').order_by('-created_at')
 
 # Get order details
 class OrderDetailView(generics.RetrieveAPIView):
@@ -245,9 +261,10 @@ class AdminOrderListView(generics.ListAPIView):
     queryset = Order.objects.all()
     serializer_class = OrderSerializer
     permission_classes = [IsAdminUser]
+    pagination_class = AdminPagination
     
     def get_queryset(self):
-        return Order.objects.all()
+        return Order.objects.all().select_related('user').prefetch_related('items__product_variant__product').order_by('-created_at')
 
 # Admin: Update order status
 class AdminOrderStatusUpdateView(generics.UpdateAPIView):
@@ -388,9 +405,10 @@ class CreateOrderFromCartView(APIView):
 class UserOrderListView(generics.ListAPIView):
     serializer_class = OrderSerializer
     permission_classes = [IsAuthenticated]
+    pagination_class = OrderPagination
     
     def get_queryset(self):
-        return Order.objects.filter(user=self.request.user).order_by('-created_at')
+        return Order.objects.filter(user=self.request.user).select_related('user').prefetch_related('items__product_variant__product').order_by('-created_at')
 
 
 # Order detail for user
@@ -405,6 +423,52 @@ class UserOrderDetailView(generics.RetrieveAPIView):
 # Update order status (admin only)
 class OrderStatusUpdateView(APIView):
     permission_classes = [IsAuthenticated]
+    
+    def patch(self, request, pk):
+        # Check if user is admin
+        if not (request.user.is_admin or request.user.is_superuser):
+            return Response(
+                {"error": "Permission denied. Admin access required."}, 
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        try:
+            order = Order.objects.get(pk=pk)
+            
+            # Update status if provided
+            if 'status' in request.data:
+                if request.data['status'] not in dict(Order.STATUS_CHOICES):
+                    return Response(
+                        {"error": "Invalid status"}, 
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+                order.status = request.data['status']
+            
+            # Update payment status if provided
+            if 'payment_status' in request.data:
+                if request.data['payment_status'] not in dict(Order.PAYMENT_STATUS_CHOICES):
+                    return Response(
+                        {"error": "Invalid payment status"}, 
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+                order.payment_status = request.data['payment_status']
+            
+            order.save()
+            
+            return Response({
+                "message": "Order status updated successfully",
+                "order": {
+                    "id": order.id,
+                    "status": order.status,
+                    "payment_status": order.payment_status
+                }
+            })
+            
+        except Order.DoesNotExist:
+            return Response(
+                {"error": "Order not found"}, 
+                status=status.HTTP_404_NOT_FOUND
+            )
     
     def put(self, request, pk):
         # Check if user is admin
@@ -504,11 +568,12 @@ class AdminProductListView(generics.ListCreateAPIView):
     queryset = Product.objects.all()
     serializer_class = AdminProductSerializer
     permission_classes = [IsAuthenticated]
+    pagination_class = AdminPagination
     
     def get_queryset(self):
         if not (self.request.user.is_admin or self.request.user.is_superuser):
             return Product.objects.none()
-        return Product.objects.all().select_related('category', 'brand').prefetch_related('variants', 'images')
+        return Product.objects.all().select_related('category', 'brand').prefetch_related('variants', 'images').order_by('-created_at')
     
     def create(self, request, *args, **kwargs):
         # Debug logging
@@ -824,6 +889,7 @@ class AdminUserStatsView(APIView):
 class AdminUserListView(generics.ListAPIView):
     permission_classes = [IsAdminUser]
     serializer_class = UserSerializer
+    pagination_class = AdminPagination
     
     def get_queryset(self):
         return User.objects.order_by('-date_joined')

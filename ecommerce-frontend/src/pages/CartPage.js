@@ -311,7 +311,7 @@ const CartPage = () => {
                             color: '#999'
                           }}
                         >
-                          📷
+                          👕
                         </div>
                       )}
                     </Col>

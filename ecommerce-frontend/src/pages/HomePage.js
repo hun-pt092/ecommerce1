@@ -46,8 +46,12 @@ function HomePage() {
         apiClient.get('categories/').catch(() => ({ data: [] })) // Fallback if categories endpoint doesn't exist
       ]);
       
-      setProducts(productsRes.data);
-      setCategories(categoriesRes.data);
+      // Handle pagination format - extract results if present
+      const productsData = productsRes.data.results ? productsRes.data.results : productsRes.data;
+      const categoriesData = categoriesRes.data.results ? categoriesRes.data.results : categoriesRes.data;
+      
+      setProducts(Array.isArray(productsData) ? productsData : []);
+      setCategories(Array.isArray(categoriesData) ? categoriesData : []);
     } catch (error) {
       console.error('Error fetching data:', error);
       message.error('Không thể tải dữ liệu sản phẩm');
@@ -58,6 +62,11 @@ function HomePage() {
 
   // Filter and sort products
   const filteredAndSortedProducts = useMemo(() => {
+    // Ensure products is an array
+    if (!Array.isArray(products)) {
+      return [];
+    }
+    
     let filtered = products;
 
     // Filter by search text
@@ -75,7 +84,11 @@ function HomePage() {
       );
     }
 
-    // Sort products
+    // Sort products - ensure filtered is array before spreading
+    if (!Array.isArray(filtered)) {
+      filtered = [];
+    }
+    
     const sorted = [...filtered].sort((a, b) => {
       switch (sortBy) {
         case 'price-low':
@@ -245,7 +258,7 @@ function HomePage() {
                   placeholder="Danh mục"
                 >
                   <Option value="all">Tất cả danh mục</Option>
-                  {categories.map(category => (
+                  {Array.isArray(categories) && categories.map(category => (
                     <Option key={category.id} value={category.id.toString()}>
                       {category.name}
                     </Option>

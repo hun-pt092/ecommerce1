@@ -74,7 +74,7 @@ const UserManagement = () => {
       if (filters.is_active !== '') params.append('is_active', filters.is_active);
       if (filters.is_staff !== '') params.append('is_staff', filters.is_staff);
 
-      const response = await apiClient.get(`/api/users/?${params.toString()}`);
+      const response = await apiClient.get(`/users/?${params.toString()}`);
       setUsers(response.data.results || response.data || []);
     } catch (error) {
       console.error('Error fetching users:', error);
@@ -86,7 +86,7 @@ const UserManagement = () => {
 
   const fetchStatistics = async () => {
     try {
-      const response = await apiClient.get('/api/users/statistics/');
+      const response = await apiClient.get('/users/statistics/');
       setStatistics(response.data);
     } catch (error) {
       console.error('Error fetching statistics:', error);
@@ -117,7 +117,7 @@ const UserManagement = () => {
   const handleSave = async (values) => {
     try {
       if (editingUser) {
-        await apiClient.put(`/api/users/${editingUser.id}/`, values);
+        await apiClient.put(`/users/${editingUser.id}/`, values);
         message.success('Cập nhật người dùng thành công');
       } else {
         await apiClient.post('/api/users/', values);
@@ -134,7 +134,7 @@ const UserManagement = () => {
 
   const handleToggleStatus = async (userId, currentStatus) => {
     try {
-      await apiClient.patch(`/api/users/${userId}/`, {
+      await apiClient.patch(`/users/${userId}/`, {
         is_active: !currentStatus
       });
       message.success(`${!currentStatus ? 'Kích hoạt' : 'Vô hiệu hóa'} người dùng thành công`);
@@ -379,16 +379,6 @@ const UserManagement = () => {
             <UserOutlined />
             <span>Danh sách người dùng ({users.length})</span>
           </Space>
-        }
-        extra={
-          <Button 
-            type="primary" 
-            icon={<PlusOutlined />} 
-            onClick={handleAdd}
-            size="middle"
-          >
-            Thêm mới
-          </Button>
         }
       >
         <Table

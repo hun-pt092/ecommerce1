@@ -56,7 +56,7 @@ const OrderManagement = () => {
   // Status options
   const statusOptions = [
     { value: 'pending', label: 'Chờ xử lý', color: 'orange' },
-    { value: 'confirmed', label: 'Đã xác nhận', color: 'blue' },
+    { value: 'processing', label: 'Đã xác nhận', color: 'blue' },
     { value: 'shipped', label: 'Đang giao', color: 'purple' },
     { value: 'delivered', label: 'Đã giao', color: 'green' },
     { value: 'cancelled', label: 'Đã hủy', color: 'red' },
@@ -64,8 +64,9 @@ const OrderManagement = () => {
 
   const paymentStatusOptions = [
     { value: 'pending', label: 'Chờ thanh toán', color: 'orange' },
-    { value: 'completed', label: 'Đã thanh toán', color: 'green' },
+    { value: 'paid', label: 'Đã thanh toán', color: 'green' },
     { value: 'failed', label: 'Thất bại', color: 'red' },
+    { value: 'refunded', label: 'Đã hoàn tiền', color: 'blue' },
   ];
 
   const fetchOrdersCallback = useCallback(() => {
@@ -84,9 +85,12 @@ const OrderManagement = () => {
       if (filters.status) params.append('status', filters.status);
       if (filters.payment_status) params.append('payment_status', filters.payment_status);
       if (filters.search) params.append('search', filters.search);
+      params.append('page_size', '100'); // Đảm bảo lấy đủ tất cả đơn hàng
 
-      const response = await apiClient.get(`/api/orders/?${params.toString()}`);
-      setOrders(response.data.results || response.data || []);
+      const response = await apiClient.get(`/admin/orders/?${params.toString()}`);
+      const ordersData = response.data.results || response.data || [];
+      console.log('Total orders loaded:', ordersData.length); // Debug log
+      setOrders(Array.isArray(ordersData) ? ordersData : []);
     } catch (error) {
       console.error('Error fetching orders:', error);
       message.error('Lỗi khi tải danh sách đơn hàng');
@@ -97,10 +101,27 @@ const OrderManagement = () => {
 
   const fetchStatistics = async () => {
     try {
-      const response = await apiClient.get('/api/orders/statistics/');
-      setStatistics(response.data);
+      const response = await apiClient.get('/admin/orders/statistics/');
+      const data = response.data;
+      setStatistics({
+        total: data.total_orders || 0,
+        pending: data.status_breakdown?.pending || 0,
+        confirmed: data.status_breakdown?.processing || 0,
+        shipped: data.status_breakdown?.shipped || 0,
+        delivered: data.status_breakdown?.delivered || 0,
+        cancelled: data.status_breakdown?.cancelled || 0,
+      });
     } catch (error) {
       console.error('Error fetching statistics:', error);
+      // Set default values if API fails
+      setStatistics({
+        total: 0,
+        pending: 0,
+        confirmed: 0,
+        shipped: 0,
+        delivered: 0,
+        cancelled: 0,
+      });
     }
   };
 
@@ -121,7 +142,7 @@ const OrderManagement = () => {
 
   const handleStatusUpdate = async (values) => {
     try {
-      await apiClient.patch(`/api/orders/${selectedOrder.id}/`, values);
+      await apiClient.patch(`/admin/orders/${selectedOrder.id}/status/`, values);
       message.success('Cập nhật trạng thái thành công');
       setStatusModalVisible(false);
       fetchOrders();
@@ -144,21 +165,77 @@ const OrderManagement = () => {
 
   const columns = [
     {
-      title: 'Mã đơn hàng',
+      title: 'Đơn hàng #',
       dataIndex: 'id',
       key: 'id',
       render: (id) => `#${id}`,
+      width: 90,
+    },
+    {
+      title: 'Sản phẩm / Mặt hàng',
+      key: 'products',
+      width: 280,
+      render: (_, record) => {
+        const items = record.items || [];
+        if (!Array.isArray(items) || items.length === 0) {
+          return <span style={{ color: '#999' }}>Không có sản phẩm</span>;
+        }
+        
+        return (
+          <div>
+            {items.slice(0, 2).map((item, index) => (
+              <div key={index} style={{ marginBottom: '6px', borderBottom: index === 0 && items.length > 1 ? '1px solid #f0f0f0' : 'none', paddingBottom: '4px' }}>
+                <div style={{ fontWeight: 600, color: '#1890ff', fontSize: '13px' }}>
+                  {item.product_variant?.product_name || 'Sản phẩm không xác định'}
+                </div>
+                <div style={{ fontSize: '11px', color: '#666', marginTop: '2px' }}>
+                  <span style={{ background: '#f6f6f6', padding: '2px 6px', borderRadius: '4px', marginRight: '8px' }}>
+                    SL: {item.quantity}
+                  </span>
+                  {item.product_variant?.size && (
+                    <span style={{ background: '#e6f7ff', color: '#1890ff', padding: '2px 6px', borderRadius: '4px', marginRight: '8px', fontSize: '10px' }}>
+                      {item.product_variant.size}
+                    </span>
+                  )}
+                  {item.product_variant?.color && (
+                    <span style={{ background: '#f6ffed', color: '#52c41a', padding: '2px 6px', borderRadius: '4px', marginRight: '8px', fontSize: '10px' }}>
+                      {item.product_variant.color}
+                    </span>
+                  )}
+                  <span style={{ color: '#52c41a', fontWeight: 500 }}>
+                    {Number(item.price_per_item || 0).toLocaleString()} VND
+                  </span>
+                </div>
+              </div>
+            ))}
+            {items.length > 2 && (
+              <div style={{ fontSize: '12px', color: '#1890ff', fontStyle: 'italic', marginTop: '4px' }}>
+                <Button type="link" size="small" style={{ padding: 0, height: 'auto' }}>
+                  +{items.length - 2} sản phẩm khác →
+                </Button>
+              </div>
+            )}
+          </div>
+        );
+      },
     },
     {
       title: 'Khách hàng',
-      dataIndex: ['user', 'username'],
       key: 'customer',
-      render: (username, record) => (
+      width: 160,
+      render: (_, record) => (
         <div>
-          <div>{username}</div>
-          <div style={{ fontSize: '12px', color: '#666' }}>
-            {record.user?.email}
+          <div style={{ fontWeight: 600, color: '#1890ff', fontSize: '13px' }}>
+            @{record.user?.username || 'N/A'}
           </div>
+          <div style={{ fontSize: '11px', color: '#666', marginTop: '2px' }}>
+            {record.user?.email || 'Không có email'}
+          </div>
+          {record.user?.first_name || record.user?.last_name ? (
+            <div style={{ fontSize: '11px', color: '#52c41a', marginTop: '1px' }}>
+              {record.user?.first_name} {record.user?.last_name}
+            </div>
+          ) : null}
         </div>
       ),
     },
@@ -206,24 +283,49 @@ const OrderManagement = () => {
     {
       title: 'Thao tác',
       key: 'action',
-      render: (_, record) => (
-        <Space size="middle">
-          <Button
-            type="link"
-            icon={<EyeOutlined />}
-            onClick={() => handleViewOrder(record)}
-          >
-            Xem
-          </Button>
-          <Button
-            type="link"
-            icon={<EditOutlined />}
-            onClick={() => handleUpdateStatus(record)}
-          >
-            Cập nhật
-          </Button>
-        </Space>
-      ),
+      width: 200,
+      fixed: 'right',
+      render: (_, record) => {
+        const isCompleted = record.status === 'delivered' || record.status === 'cancelled';
+        const isPending = record.status === 'pending';
+        const isConfirmed = record.status === 'confirmed';
+        
+        return (
+          <Space size="small" direction="vertical">
+            <Space size="small">
+              <Button
+                type="primary"
+                size="small"
+                icon={<EyeOutlined />}
+                onClick={() => handleViewOrder(record)}
+                style={{ background: '#1890ff' }}
+              >
+                Xem
+              </Button>
+              {!isCompleted && (
+                <Button
+                  type="default"
+                  size="small"
+                  icon={<EditOutlined />}
+                  onClick={() => handleUpdateStatus(record)}
+                  style={{ 
+                    background: isPending ? '#faad14' : isConfirmed ? '#52c41a' : '#d9d9d9',
+                    borderColor: isPending ? '#faad14' : isConfirmed ? '#52c41a' : '#d9d9d9',
+                    color: 'white'
+                  }}
+                >
+                  {isPending ? 'Xử lý' : isConfirmed ? 'Giao hàng' : 'Cập nhật'}
+                </Button>
+              )}
+            </Space>
+            {isCompleted && (
+              <Tag color={record.status === 'delivered' ? 'green' : 'red'} style={{ margin: 0 }}>
+                {record.status === 'delivered' ? 'Hoàn thành' : 'Đã hủy'}
+              </Tag>
+            )}
+          </Space>
+        );
+      },
     },
   ];
 
@@ -350,15 +452,17 @@ const OrderManagement = () => {
       <Card>
         <Table
           columns={columns}
-          dataSource={orders}
+          dataSource={Array.isArray(orders) ? orders : []}
           loading={loading}
           rowKey="id"
+          scroll={{ x: 1200 }}
           pagination={{
             pageSize: 10,
             showSizeChanger: true,
             showQuickJumper: true,
             showTotal: (total, range) =>
               `${range[0]}-${range[1]} của ${total} đơn hàng`,
+            pageSizeOptions: ['10', '20', '50'],
           }}
         />
       </Card>
@@ -416,36 +520,69 @@ const OrderManagement = () => {
 
             {/* Order Items */}
             <Title level={4} style={{ marginTop: 24 }}>
-              Sản phẩm đã đặt
+              Danh sách sản phẩm ({(selectedOrder.order_items || []).length} sản phẩm)
             </Title>
             <Table
-              dataSource={selectedOrder.items || []}
+              dataSource={Array.isArray(selectedOrder.order_items) ? selectedOrder.order_items : []}
+              pagination={false}
+              size="small"
               columns={[
                 {
-                  title: 'Sản phẩm',
-                  dataIndex: ['product', 'name'],
-                  key: 'product_name',
+                  title: 'Hình ảnh',
+                  key: 'image',
+                  width: 80,
+                  render: (_, record) => (
+                    <img
+                      src={record.product?.image || '/images/no-image.png'}
+                      alt={record.product?.name || 'Product'}
+                      style={{ width: 50, height: 50, objectFit: 'cover', borderRadius: 4 }}
+                      onError={(e) => {
+                        e.target.src = '/images/no-image.png';
+                      }}
+                    />
+                  ),
                 },
                 {
-                  title: 'Giá',
+                  title: 'Tên sản phẩm',
+                  key: 'product_name',
+                  render: (_, record) => (
+                    <div>
+                      <div style={{ fontWeight: 500 }}>
+                        {record.product?.name || 'Sản phẩm không xác định'}
+                      </div>
+                      <div style={{ fontSize: '12px', color: '#666' }}>
+                        Mã SP: #{record.product?.id || 'N/A'}
+                      </div>
+                    </div>
+                  ),
+                },
+                {
+                  title: 'Đơn giá',
                   dataIndex: 'price',
                   key: 'price',
-                  render: (price) => `${Number(price).toLocaleString()} VND`,
+                  width: 120,
+                  render: (price) => `${Number(price || 0).toLocaleString()} VND`,
                 },
                 {
                   title: 'Số lượng',
                   dataIndex: 'quantity',
                   key: 'quantity',
+                  width: 80,
+                  align: 'center',
                 },
                 {
                   title: 'Thành tiền',
                   key: 'total',
-                  render: (_, record) =>
-                    `${(Number(record.price) * Number(record.quantity)).toLocaleString()} VND`,
+                  width: 120,
+                  align: 'right',
+                  render: (_, record) => (
+                    <strong style={{ color: '#f5222d' }}>
+                      {((Number(record.price) || 0) * (Number(record.quantity) || 0)).toLocaleString()} VND
+                    </strong>
+                  ),
                 },
               ]}
-              pagination={false}
-              size="small"
+              rowKey={(record, index) => record.id || index}
             />
           </div>
         )}

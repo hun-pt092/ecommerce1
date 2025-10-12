@@ -188,17 +188,30 @@ class OrderItemSerializer(serializers.ModelSerializer):
 class OrderSerializer(serializers.ModelSerializer):
     items = OrderItemSerializer(many=True, read_only=True)
     user_name = serializers.CharField(source='user.username', read_only=True)
+    user_email = serializers.CharField(source='user.email', read_only=True)
     total_items = serializers.SerializerMethodField()
+    user = serializers.SerializerMethodField()
     
     class Meta:
         model = Order
         fields = [
-            'id', 'user', 'user_name', 'total_price', 'status', 'payment_status',
+            'id', 'user', 'user_name', 'user_email', 'total_price', 'status', 'payment_status',
             'shipping_name', 'shipping_address', 'shipping_city', 
             'shipping_postal_code', 'shipping_country', 'phone_number',
             'notes', 'created_at', 'updated_at', 'items', 'total_items'
         ]
-        read_only_fields = ['user', 'created_at', 'updated_at']
+        read_only_fields = ['created_at', 'updated_at']
+    
+    def get_user(self, obj):
+        if obj.user:
+            return {
+                'id': obj.user.id,
+                'username': obj.user.username,
+                'email': obj.user.email,
+                'first_name': obj.user.first_name,
+                'last_name': obj.user.last_name,
+            }
+        return None
     
     def get_total_items(self, obj):
         return obj.get_total_items()

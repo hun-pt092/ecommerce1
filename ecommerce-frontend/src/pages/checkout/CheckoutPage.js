@@ -12,7 +12,7 @@ import {
   CreditCardOutlined,
   CheckCircleOutlined
 } from '@ant-design/icons';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import authAxios from '../../api/AuthAxios';
 import CartSummary from '../../components/checkout/CartSummary';
 import AddressForm from '../../components/checkout/AddressForm';
@@ -28,13 +28,33 @@ const CheckoutPage = () => {
   const [cartData, setCartData] = useState(null);
   const [shippingAddress, setShippingAddress] = useState(null);
   const [orderData, setOrderData] = useState(null);
+  const [isBuyNow, setIsBuyNow] = useState(false);
   const navigate = useNavigate();
+  const location = useLocation();
 
   const fetchCartData = useCallback(async () => {
     setLoading(true);
     try {
-      const response = await authAxios.get('cart/');
-      setCartData(response.data);
+      // Kiểm tra xem có phải buyNow không
+      const urlParams = new URLSearchParams(location.search);
+      const buyNowParam = urlParams.get('buyNow');
+      
+      if (buyNowParam === 'true') {
+        // Sử dụng temp cart data từ sessionStorage
+        const tempCartData = sessionStorage.getItem('temp_cart_data');
+        if (tempCartData) {
+          setCartData(JSON.parse(tempCartData));
+          setIsBuyNow(true);
+        } else {
+          message.error('Không tìm thấy thông tin sản phẩm');
+          navigate('/');
+        }
+      } else {
+        // Lấy cart data từ API như bình thường
+        const response = await authAxios.get('cart/');
+        setCartData(response.data);
+        setIsBuyNow(false);
+      }
     } catch (error) {
       console.error('Error fetching cart:', error);
       message.error('Không thể tải thông tin giỏ hàng');
@@ -42,7 +62,7 @@ const CheckoutPage = () => {
     } finally {
       setLoading(false);
     }
-  }, [navigate]);
+  }, [navigate, location.search]);
 
   useEffect(() => {
     // Scroll to top when component mounts
@@ -100,11 +120,12 @@ const CheckoutPage = () => {
   const processOrder = async (paymentData) => {
     console.log('processOrder called with:', paymentData);
     console.log('shippingAddress:', shippingAddress);
-    console.log('shippingAddress structure:', JSON.stringify(shippingAddress, null, 2));
+    console.log('isBuyNow:', isBuyNow);
     
     setLoading(true);
     try {
-      const orderPayload = {
+      let orderEndpoint = 'orders/create/';
+      let orderPayload = {
         shipping_name: shippingAddress.full_name,
         shipping_address: shippingAddress.full_address,
         shipping_city: shippingAddress.ward_name + ', ' + shippingAddress.district_name + ', ' + shippingAddress.province_name,
@@ -114,12 +135,53 @@ const CheckoutPage = () => {
         notes: paymentData.notes || ''
       };
 
-      console.log('Sending order payload:', orderPayload);
-      console.log('About to call: orders/create/');
-      const response = await authAxios.post('orders/create/', orderPayload);
-      console.log('Order response:', response.data);
-      
-      setOrderData(response.data);
+      if (isBuyNow) {
+        // Với Buy Now, tạm thời backup cart hiện tại
+        let originalCart = null;
+        try {
+          const currentCartResponse = await authAxios.get('cart/');
+          originalCart = currentCartResponse.data;
+        } catch (e) {
+          console.log('No existing cart to backup');
+        }
+
+        // Tạo temporary cart chỉ cho order này
+        await authAxios.post('cart/', {
+          items: cartData.items.map(item => ({
+            product_variant_id: item.product_variant.id,
+            quantity: item.quantity
+          }))
+        });
+
+        // Tạo order
+        const response = await authAxios.post(orderEndpoint, orderPayload);
+        
+        // Khôi phục lại cart ban đầu sau khi tạo order thành công
+        if (originalCart && originalCart.items && originalCart.items.length > 0) {
+          await authAxios.post('cart/', {
+            items: originalCart.items.map(item => ({
+              product_variant_id: item.product_variant.id,
+              quantity: item.quantity
+            }))
+          });
+        } else {
+          // Nếu không có cart ban đầu, xóa cart tạm
+          const emptyCart = await authAxios.get('cart/');
+          if (emptyCart.data.items) {
+            await authAxios.post('cart/', { items: [] });
+          }
+        }
+
+        // Xóa temp cart data
+        sessionStorage.removeItem('temp_cart_data');
+        
+        setOrderData(response.data);
+      } else {
+        // Checkout bình thường từ cart
+        const response = await authAxios.post(orderEndpoint, orderPayload);
+        setOrderData(response.data);
+      }
+
       handleNext();
       message.success('Đặt hàng thành công!');
     } catch (error) {
@@ -136,9 +198,11 @@ const CheckoutPage = () => {
       case 0:
         return (
           <CartSummary 
+            key={`cart-${isBuyNow ? 'buynow' : 'normal'}-${cartData?.items?.length || 0}-${Date.now()}`}
             cartData={cartData}
             onNext={handleNext}
-            onEdit={() => navigate('/cart')}
+            onEdit={() => isBuyNow ? navigate(-1) : navigate('/cart')}
+            isBuyNow={isBuyNow}
           />
         );
       case 1:

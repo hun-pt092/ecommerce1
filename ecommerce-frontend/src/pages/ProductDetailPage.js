@@ -57,6 +57,7 @@ const ProductDetailPage = () => {
   const [selectedColor, setSelectedColor] = useState(null);
   const [quantity, setQuantity] = useState(1);
   const [addingToCart, setAddingToCart] = useState(false);
+  const [buyingNow, setBuyingNow] = useState(false);
   const [isWishlisted, setIsWishlisted] = useState(false);
   const [activeImageIndex, setActiveImageIndex] = useState(0);
   const [carouselRef, setCarouselRef] = useState(null);
@@ -143,6 +144,63 @@ const ProductDetailPage = () => {
     } finally {
       setAddingToCart(false);
     }
+  };
+
+  const buyNow = async () => {
+    if (!selectedVariant) {
+      message.warning('Vui lòng chọn kích cỡ và màu sắc');
+      return;
+    }
+
+    const token = localStorage.getItem('access_token');
+    if (!token) {
+      message.warning('Vui lòng đăng nhập để mua hàng');
+      navigate('/login');
+      return;
+    }
+
+    // Tạo temporary cart data với cấu trúc đúng và ensure giá được lưu
+    const finalPrice = product.discount_price || product.price;
+    const tempCartData = {
+      items: [{
+        id: `temp_${selectedVariant.id}`,
+        product_variant: {
+          id: selectedVariant.id,
+          size: selectedVariant.size,
+          color: selectedVariant.color,
+          stock_quantity: selectedVariant.stock_quantity,
+          product: {
+            ...product,
+            // Đảm bảo giá được lưu chính xác với type conversion
+            price: parseFloat(product.price) || 0,
+            discount_price: product.discount_price ? parseFloat(product.discount_price) : null
+          }
+        },
+        // Thêm product trực tiếp cho trường hợp fallback
+        product: {
+          ...product,
+          price: parseFloat(product.price) || 0,
+          discount_price: product.discount_price ? parseFloat(product.discount_price) : null
+        },
+        quantity: parseInt(quantity) || 1,
+        // Thêm price trực tiếp vào item để dễ dàng truy cập
+        price: parseFloat(finalPrice) || 0,
+        discount_price: product.discount_price ? parseFloat(product.discount_price) : null
+      }]
+    };
+    
+    console.log('=== BuyNow Temp Cart Data Debug ===');
+    console.log('Original product:', product);
+    console.log('Selected variant:', selectedVariant);
+    console.log('Final price used:', finalPrice);
+    console.log('Temp cart data:', tempCartData);
+    console.log('Item price check:', tempCartData.items[0].price);
+
+    // Lưu temporary cart data vào sessionStorage
+    sessionStorage.setItem('temp_cart_data', JSON.stringify(tempCartData));
+    
+    // Chuyển thẳng đến trang checkout với flag buyNow
+    navigate('/checkout?buyNow=true');
   };
 
   const getAvailableSizes = () => {
@@ -338,7 +396,7 @@ const ProductDetailPage = () => {
                     flexDirection: 'column'
                   }}
                 >
-                  📷
+                  👕
                   <Text type="secondary" style={{ marginTop: '16px', fontSize: '14px' }}>
                     Hình ảnh sẽ được cập nhật sau
                   </Text>
@@ -503,10 +561,9 @@ const ProductDetailPage = () => {
             </div>
 
             {/* Action Buttons */}
-            <Row gutter={[12, 12]} style={{ marginBottom: '24px' }}>
-              <Col xs={24} sm={16}>
+            <Row gutter={[8, 12]} style={{ marginBottom: '24px' }}>
+              <Col xs={12} sm={8}>
                 <Button
-                  type="primary"
                   size="large"
                   icon={<ShoppingCartOutlined />}
                   onClick={addToCart}
@@ -515,7 +572,21 @@ const ProductDetailPage = () => {
                   block
                   style={{ height: '50px', borderRadius: '8px' }}
                 >
-                  Thêm vào giỏ hàng
+                  Thêm vào giỏ
+                </Button>
+              </Col>
+              <Col xs={12} sm={8}>
+                <Button
+                  type="primary"
+                  size="large"
+                  icon={<ShoppingOutlined />}
+                  onClick={buyNow}
+                  loading={buyingNow}
+                  disabled={!selectedVariant || selectedVariant.stock_quantity === 0}
+                  block
+                  style={{ height: '50px', borderRadius: '8px' }}
+                >
+                  Mua ngay
                 </Button>
               </Col>
               <Col xs={12} sm={4}>

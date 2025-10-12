@@ -122,7 +122,14 @@ const OrderConfirmation = ({ orderData, onContinueShopping, onViewOrders }) => {
               
               <Row justify="space-between" align="middle" style={{ marginBottom: '8px' }}>
                 <Text strong>Phương thức thanh toán:</Text>
-                <Text>{getPaymentMethodText(orderData?.payment_method)}</Text>
+                <Text>{getPaymentMethodText('cod')}</Text>
+              </Row>
+              
+              <Row justify="space-between" align="middle" style={{ marginBottom: '8px' }}>
+                <Text strong>Trạng thái thanh toán:</Text>
+                <Tag color={orderData?.payment_status === 'paid' ? 'green' : 'orange'}>
+                  {orderData?.payment_status === 'paid' ? 'Đã thanh toán' : 'Chưa thanh toán'}
+                </Tag>
               </Row>
             </div>
 
@@ -133,24 +140,70 @@ const OrderConfirmation = ({ orderData, onContinueShopping, onViewOrders }) => {
                 <DollarOutlined /> Thông tin thanh toán
               </Title>
               
-              <Row justify="space-between" style={{ marginBottom: '8px' }}>
-                <Text>Tạm tính:</Text>
-                <Text>{(orderData?.subtotal || 0).toLocaleString()}₫</Text>
-              </Row>
-              
-              <Row justify="space-between" style={{ marginBottom: '8px' }}>
-                <Text>Phí vận chuyển:</Text>
-                <Text>{(orderData?.shipping_fee || 30000).toLocaleString()}₫</Text>
-              </Row>
-              
-              <Divider style={{ margin: '12px 0' }} />
-              
-              <Row justify="space-between">
-                <Title level={4} style={{ margin: 0 }}>Tổng cộng:</Title>
-                <Title level={4} style={{ margin: 0, color: '#f5222d' }}>
-                  {(orderData?.total_amount || 0).toLocaleString()}₫
-                </Title>
-              </Row>
+              {/* Calculate subtotal and shipping fee */}
+              {(() => {
+                const totalPrice = orderData?.total_price || 0;
+                const shippingFee = totalPrice >= 500000 ? 0 : 30000;
+                const subTotal = totalPrice - shippingFee;
+                
+                return (
+                  <>
+                    <Row justify="space-between" style={{ marginBottom: '8px' }}>
+                      <Text>Tạm tính ({orderData?.items?.length || 0} sản phẩm):</Text>
+                      <Text>{subTotal.toLocaleString()}₫</Text>
+                    </Row>
+                    
+                    <Row justify="space-between" style={{ marginBottom: '8px' }}>
+                      <Text>Phí vận chuyển:</Text>
+                      <Text style={{ color: shippingFee === 0 ? '#52c41a' : undefined }}>
+                        {shippingFee === 0 ? 'Miễn phí' : `${shippingFee.toLocaleString()}₫`}
+                      </Text>
+                    </Row>
+                    
+                    <Divider style={{ margin: '12px 0' }} />
+                    
+                    <Row justify="space-between">
+                      <Title level={4} style={{ margin: 0 }}>Tổng cộng:</Title>
+                      <Title level={4} style={{ margin: 0, color: '#f5222d' }}>
+                        {totalPrice.toLocaleString()}₫
+                      </Title>
+                    </Row>
+                  </>
+                );
+              })()}
+            </div>
+
+            <Divider />
+
+            {/* Products List */}
+            <div>
+              <Title level={5} style={{ marginBottom: '12px' }}>
+                Sản phẩm đã đặt:
+              </Title>
+              {orderData?.items?.map((item, index) => (
+                <div key={index} style={{ 
+                  display: 'flex', 
+                  justifyContent: 'space-between', 
+                  alignItems: 'center',
+                  padding: '8px 0',
+                  borderBottom: index < orderData.items.length - 1 ? '1px solid #f0f0f0' : 'none'
+                }}>
+                  <div>
+                    <Text strong>
+                      {item.product_variant?.product_name || 'Sản phẩm'}
+                    </Text>
+                    <br/>
+                    <Text type="secondary" style={{ fontSize: '12px' }}>
+                      Size: {item.product_variant?.size} | 
+                      Color: {item.product_variant?.color} | 
+                      SL: {item.quantity}
+                    </Text>
+                  </div>
+                  <Text strong>
+                    {(item.price_per_item * item.quantity).toLocaleString()}₫
+                  </Text>
+                </div>
+              ))}
             </div>
           </Card>
         </Col>
@@ -163,13 +216,15 @@ const OrderConfirmation = ({ orderData, onContinueShopping, onViewOrders }) => {
                 <HomeOutlined /> Địa chỉ giao hàng:
               </Title>
               <Text strong style={{ display: 'block', marginBottom: '4px' }}>
-                {orderData?.shipping_address?.full_name}
+                {orderData?.shipping_name}
               </Text>
               <Text style={{ display: 'block', marginBottom: '4px' }}>
-                <PhoneOutlined /> {orderData?.shipping_address?.phone_number}
+                <PhoneOutlined /> {orderData?.phone_number}
               </Text>
               <Text type="secondary" style={{ fontSize: '13px', lineHeight: '1.4' }}>
-                {orderData?.shipping_address?.full_address}
+                {orderData?.shipping_address}
+                {orderData?.shipping_city && <><br/>{orderData.shipping_city}</>}
+                {orderData?.shipping_country && <><br/>{orderData.shipping_country}</>}
               </Text>
             </div>
 

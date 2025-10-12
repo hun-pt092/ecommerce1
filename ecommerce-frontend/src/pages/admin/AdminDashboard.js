@@ -39,9 +39,9 @@ const AdminDashboard = () => {
     try {
       // Fetch statistics
       const [statsResponse, ordersResponse, usersResponse] = await Promise.all([
-        apiClient.get('/api/dashboard/statistics/'),
-        apiClient.get('/api/orders/?limit=5&ordering=-created_at'),
-        apiClient.get('/api/users/?limit=5&ordering=-date_joined'),
+        apiClient.get('/dashboard/statistics/'),
+        apiClient.get('/admin/orders/?limit=4&ordering=-created_at'),
+        apiClient.get('/users/?limit=4&ordering=-date_joined'),
       ]);
 
       const data = statsResponse.data;
@@ -56,19 +56,32 @@ const AdminDashboard = () => {
         ordersToday: data.today_orders || 0,
         usersToday: data.today_users || 0,
       });
-      setRecentOrders(ordersResponse.data.results || ordersResponse.data || []);
-      setRecentUsers(usersResponse.data.results || usersResponse.data || []);
+      // Ensure arrays for Table components
+      const ordersData = ordersResponse.data.results || ordersResponse.data || [];
+      const usersData = usersResponse.data.results || usersResponse.data || [];
+      
+      console.log('Orders data length:', ordersData.length);
+      console.log('Users data length:', usersData.length);
+      
+      setRecentOrders(Array.isArray(ordersData) ? ordersData.slice(0, 6) : []);
+      setRecentUsers(Array.isArray(usersData) ? usersData.slice(0, 3) : []);
     } catch (error) {
       console.error('Error fetching dashboard data:', error);
       // Set default values if API calls fail
       setStatistics({
         products: 0,
+        productTypes: 0,
         orders: 0,
         users: 0,
         revenue: 0,
+        monthlyRevenue: 0,
+        monthlyOrders: 0,
         ordersToday: 0,
         usersToday: 0,
       });
+      // Eupnsure empty arrays for Tables
+      setRecentOrders([]);
+      setRecentUsers([]);
     } finally {
       setLoading(false);
     }
@@ -294,7 +307,7 @@ const AdminDashboard = () => {
           >
             <Table
               columns={recentOrderColumns}
-              dataSource={recentOrders}
+              dataSource={recentOrders.slice(0, 5)}
               loading={loading}
               rowKey="id"
               size="small"
@@ -319,7 +332,7 @@ const AdminDashboard = () => {
           >
             <List
               loading={loading}
-              dataSource={recentUsers}
+              dataSource={recentUsers.slice(0, 3)}
               locale={{ emptyText: 'Chưa có khách hàng mới' }}
               renderItem={user => (
                 <List.Item>
@@ -361,51 +374,7 @@ const AdminDashboard = () => {
       </Row>
 
       {/* Quick Actions */}
-      <Row gutter={[16, 16]} style={{ marginTop: 24 }}>
-        <Col span={24}>
-          <Card title="Thao tác nhanh">
-            <Row gutter={[16, 16]}>
-              <Col xs={24} sm={8} lg={6}>
-                <Button
-                  type="primary"
-                  block
-                  icon={<ShoppingOutlined />}
-                  onClick={() => navigate('/admin/products/add')}
-                >
-                  Thêm sản phẩm
-                </Button>
-              </Col>
-              <Col xs={24} sm={8} lg={6}>
-                <Button
-                  block
-                  icon={<OrderedListOutlined />}
-                  onClick={() => navigate('/admin/orders')}
-                >
-                  Quản lý đơn hàng
-                </Button>
-              </Col>
-              <Col xs={24} sm={8} lg={6}>
-                <Button
-                  block
-                  icon={<UserOutlined />}
-                  onClick={() => navigate('/admin/users')}
-                >
-                  Quản lý khách hàng
-                </Button>
-              </Col>
-              <Col xs={24} sm={8} lg={6}>
-                <Button
-                  block
-                  icon={<ShoppingOutlined />}
-                  onClick={() => navigate('/admin/products/list')}
-                >
-                  Danh sách sản phẩm
-                </Button>
-              </Col>
-            </Row>
-          </Card>
-        </Col>
-      </Row>
+     
     </div>
   );
 };
