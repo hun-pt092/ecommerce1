@@ -1,6 +1,6 @@
 
 from django.contrib import admin
-from .models import User, Category, Brand, Product, ProductImage, ProductVariant, Order, OrderItem
+from .models import User, Category, Brand, Product, ProductImage, ProductVariant, Order, OrderItem, Review, Wishlist
 
 # Custom admin cho User
 @admin.register(User)
@@ -104,3 +104,23 @@ class OrderItemAdmin(admin.ModelAdmin):
     list_display = ['order', 'product_variant', 'quantity', 'price_per_item']
     list_filter = ['order__status', 'product_variant__product__category']
     search_fields = ['order__id', 'product_variant__product__name']
+
+# Custom admin cho Review
+@admin.register(Review)
+class ReviewAdmin(admin.ModelAdmin):
+    list_display = ['product', 'user', 'rating', 'created_at', 'comment_preview']
+    list_filter = ['rating', 'created_at', 'product__category']
+    search_fields = ['product__name', 'user__username', 'comment']
+    readonly_fields = ['created_at']
+    
+    def comment_preview(self, obj):
+        return obj.comment[:50] + "..." if len(obj.comment) > 50 else obj.comment
+    comment_preview.short_description = 'Comment Preview'
+
+# Custom admin cho Wishlist
+@admin.register(Wishlist)
+class WishlistAdmin(admin.ModelAdmin):
+    list_display = ['user', 'product', 'created_at']
+    list_filter = ['created_at', 'product__category']
+    search_fields = ['user__username', 'product__name']
+    readonly_fields = ['created_at']

@@ -17,6 +17,7 @@ import {
   Form,
   Input
 } from 'antd';
+import { useTheme } from '../contexts/ThemeContext';
 import { 
   ShoppingCartOutlined, 
   DeleteOutlined,
@@ -38,6 +39,7 @@ const CartPage = () => {
   const [checkoutModalVisible, setCheckoutModalVisible] = useState(false);
   const [checkoutLoading, setCheckoutLoading] = useState(false);
   const [form] = Form.useForm();
+  const { theme } = useTheme();
 
   // Helper function to get full image URL
   const getImageUrl = (imagePath) => {
@@ -234,7 +236,14 @@ const CartPage = () => {
   const isEmpty = !cart || !cart.items || cart.items.length === 0;
 
   return (
-    <div style={{ padding: '20px', maxWidth: '1200px', margin: '0 auto' }}>
+    <div style={{ 
+      padding: '20px', 
+      maxWidth: '1200px', 
+      margin: '0 auto',
+      backgroundColor: theme.backgroundColor,
+      color: theme.textColor,
+      minHeight: '100vh'
+    }}>
       <Button 
         icon={<ArrowLeftOutlined />} 
         onClick={() => navigate('/')}
@@ -243,16 +252,16 @@ const CartPage = () => {
         Tiếp tục mua sắm
       </Button>
 
-      <Title level={2} style={{ marginBottom: '30px' }}>
+      <Title level={2} style={{ marginBottom: '30px', color: theme.textColor }}>
         <ShoppingCartOutlined /> Giỏ hàng của bạn
       </Title>
 
       {isEmpty ? (
-        <Card>
+        <Card style={{ backgroundColor: theme.cardBackground, borderColor: theme.borderColor }}>
           <Empty
             image={Empty.PRESENTED_IMAGE_SIMPLE}
             description={
-              <span>
+              <span style={{ color: theme.textColor }}>
                 Giỏ hàng của bạn đang trống
               </span>
             }
@@ -266,7 +275,11 @@ const CartPage = () => {
         <Row gutter={[24, 24]}>
           {/* Cart Items */}
           <Col xs={24} lg={16}>
-            <Card title={`Sản phẩm trong giỏ (${cart.items.length})`}>
+            <Card 
+              title={`Sản phẩm trong giỏ (${cart.items.length})`}
+              style={{ backgroundColor: theme.cardBackground, borderColor: theme.borderColor }}
+              headStyle={{ color: theme.textColor, borderBottomColor: theme.borderColor }}
+            >
               {cart.items.map((item, index) => (
                 <div key={index}>
                   <Row gutter={[16, 16]} align="middle">
@@ -319,10 +332,10 @@ const CartPage = () => {
                     {/* Product Info */}
                     <Col xs={24} sm={18} md={10}>
                       <div>
-                        <Title level={5} style={{ margin: 0, marginBottom: '4px' }}>
+                        <Title level={5} style={{ margin: 0, marginBottom: '4px', color: theme.textColor }}>
                           {item.product_variant?.product?.name || `Sản phẩm #${item.product_variant.id}`}
                         </Title>
-                        <Text type="secondary" style={{ display: 'block', marginBottom: '4px' }}>
+                        <Text type="secondary" style={{ display: 'block', marginBottom: '4px', color: theme.secondaryText }}>
                           Kích cỡ: {item.product_variant.size} | Màu: {item.product_variant.color}
                         </Text>
                         <div>
@@ -331,7 +344,7 @@ const CartPage = () => {
                             
                             if (!product) {
                               return (
-                                <Text type="secondary" style={{ fontSize: '14px' }}>
+                                <Text type="secondary" style={{ fontSize: '14px', color: theme.secondaryText }}>
                                   Đang tải giá...
                                 </Text>
                               );
@@ -343,7 +356,7 @@ const CartPage = () => {
                                   <Text strong style={{ color: '#f5222d', fontSize: '16px' }}>
                                     {Number(product.discount_price).toLocaleString()}₫
                                   </Text>
-                                  <Text delete type="secondary" style={{ fontSize: '14px' }}>
+                                  <Text delete type="secondary" style={{ fontSize: '14px', color: theme.secondaryText }}>
                                     {Number(product.price).toLocaleString()}₫
                                   </Text>
                                 </Space>
@@ -358,7 +371,7 @@ const CartPage = () => {
                           })()}
                         </div>
                         <div style={{ marginTop: '4px' }}>
-                          <Text type="secondary" style={{ fontSize: '12px' }}>
+                          <Text type="secondary" style={{ fontSize: '12px', color: theme.secondaryText }}>
                             Tồn kho: {item.product_variant?.stock_quantity || 0}
                           </Text>
                         </div>
@@ -370,7 +383,7 @@ const CartPage = () => {
                       {/* Stock warning */}
                       {item.product_variant && item.product_variant.stock_quantity <= 5 && (
                         <div style={{ marginBottom: '8px' }}>
-                          <Text type="warning" style={{ fontSize: '12px' }}>
+                          <Text type="warning" style={{ fontSize: '12px', color: '#faad14' }}>
                             ⚠️ Chỉ còn {item.product_variant.stock_quantity} sản phẩm
                           </Text>
                         </div>
@@ -410,7 +423,7 @@ const CartPage = () => {
                       {/* Stock info */}
                       {item.product_variant && (
                         <div style={{ marginTop: '4px' }}>
-                          <Text type="secondary" style={{ fontSize: '11px' }}>
+                          <Text type="secondary" style={{ fontSize: '11px', color: theme.secondaryText }}>
                             Tồn kho: {item.product_variant.stock_quantity}
                           </Text>
                         </div>
@@ -420,7 +433,7 @@ const CartPage = () => {
                     {/* Total & Delete */}
                     <Col xs={12} sm={12} md={4}>
                       <div style={{ textAlign: 'right' }}>
-                        <Text strong style={{ fontSize: '16px', color: '#1890ff' }}>
+                        <Text strong style={{ fontSize: '16px', color: theme.textColor }}>
                           {calculateItemTotal(item).toLocaleString()}₫
                         </Text>
                         <br />
@@ -452,37 +465,46 @@ const CartPage = () => {
 
           {/* Order Summary */}
           <Col xs={24} lg={8}>
-            <Card title={`Tóm tắt đơn hàng (${getTotalItems()} sản phẩm)`} style={{ position: 'sticky', top: '20px' }}>
+            <Card 
+              title={`Tóm tắt đơn hàng (${getTotalItems()} sản phẩm)`} 
+              style={{ 
+                position: 'sticky', 
+                top: '20px',
+                backgroundColor: theme.cardBackground,
+                borderColor: theme.borderColor
+              }}
+              headStyle={{ color: theme.textColor, borderBottomColor: theme.borderColor }}
+            >
 
               
               <div style={{ marginBottom: '20px' }}>
                 <Row justify="space-between" style={{ marginBottom: '8px' }}>
-                  <Text>Tạm tính:</Text>
-                  <Text style={{ color: calculateSubTotal() === 0 ? '#ff4d4f' : undefined }}>
+                  <Text style={{ color: theme.textColor }}>Tạm tính:</Text>
+                  <Text style={{ color: calculateSubTotal() === 0 ? '#ff4d4f' : theme.textColor }}>
                     {calculateSubTotal().toLocaleString()}₫
                     {calculateSubTotal() === 0 && cart?.items?.length > 0 && (
-                      <Text type="secondary" style={{ fontSize: '12px', marginLeft: '4px' }}>
+                      <Text type="secondary" style={{ fontSize: '12px', marginLeft: '4px', color: theme.secondaryText }}>
                         (Lỗi dữ liệu)
                       </Text>
                     )}
                   </Text>
                 </Row>
                 <Row justify="space-between" style={{ marginBottom: '8px' }}>
-                  <Text>Phí vận chuyển:</Text>
-                  <Text style={{ color: calculateShipping() === 0 ? '#52c41a' : undefined }}>
+                  <Text style={{ color: theme.textColor }}>Phí vận chuyển:</Text>
+                  <Text style={{ color: calculateShipping() === 0 ? '#52c41a' : theme.textColor }}>
                     {calculateShipping() === 0 ? 'Miễn phí' : `${calculateShipping().toLocaleString()}₫`}
                   </Text>
                 </Row>
                 {calculateSubTotal() < 500000 && (
                   <Row justify="space-between" style={{ marginBottom: '8px' }}>
-                    <Text type="secondary" style={{ fontSize: '12px' }}>
+                    <Text type="secondary" style={{ fontSize: '12px', color: theme.secondaryText }}>
                       Mua thêm {(500000 - calculateSubTotal()).toLocaleString()}₫ để được miễn phí ship
                     </Text>
                   </Row>
                 )}
                 <Divider style={{ margin: '12px 0' }} />
                 <Row justify="space-between" style={{ marginBottom: '16px' }}>
-                  <Title level={4} style={{ margin: 0 }}>Tổng cộng:</Title>
+                  <Title level={4} style={{ margin: 0, color: theme.textColor }}>Tổng cộng:</Title>
                   <Title level={4} style={{ margin: 0, color: '#ff4d4f' }}>
                     {calculateTotal().toLocaleString()}₫
                   </Title>

@@ -39,6 +39,10 @@ import {
 } from '@ant-design/icons';
 import apiClient from '../api/apiClient';
 import authAxios from '../api/AuthAxios';
+import { useTheme } from '../contexts/ThemeContext';
+import WishlistButton from '../components/WishlistButton';
+import ReviewForm from '../components/ReviewForm';
+import ReviewList from '../components/ReviewList';
 
 const { Title, Text, Paragraph } = Typography;
 const { Option } = Select;
@@ -49,6 +53,7 @@ const ProductDetailPage = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const screens = useBreakpoint();
+  const { theme } = useTheme();
   
   const [product, setProduct] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -58,9 +63,9 @@ const ProductDetailPage = () => {
   const [quantity, setQuantity] = useState(1);
   const [addingToCart, setAddingToCart] = useState(false);
   const [buyingNow, setBuyingNow] = useState(false);
-  const [isWishlisted, setIsWishlisted] = useState(false);
   const [activeImageIndex, setActiveImageIndex] = useState(0);
   const [carouselRef, setCarouselRef] = useState(null);
+  const [reviewRefresh, setReviewRefresh] = useState(0);
 
   // Helper function to get full image URL
   const getImageUrl = (imagePath) => {
@@ -250,11 +255,6 @@ const ProductDetailPage = () => {
     }
   };
 
-  const toggleWishlist = () => {
-    setIsWishlisted(!isWishlisted);
-    message.success(isWishlisted ? 'Đã xóa khỏi yêu thích' : 'Đã thêm vào yêu thích');
-  };
-
   const handleThumbnailClick = (index) => {
     setActiveImageIndex(index);
     if (carouselRef) {
@@ -279,17 +279,21 @@ const ProductDetailPage = () => {
   }
 
   return (
-    <div style={{ background: '#f5f5f5', minHeight: '100vh' }}>
+    <div style={{ 
+      backgroundColor: theme.backgroundColor, 
+      minHeight: '100vh',
+      color: theme.textColor
+    }}>
       <div style={{ padding: '20px', maxWidth: '1200px', margin: '0 auto' }}>
         {/* Breadcrumb */}
         <Breadcrumb style={{ marginBottom: '20px' }}>
           <Breadcrumb.Item>
-            <Button type="link" onClick={() => navigate('/')} style={{ padding: 0 }}>
+            <Button type="link" onClick={() => navigate('/')} style={{ padding: 0, color: theme.textColor }}>
               Trang chủ
             </Button>
           </Breadcrumb.Item>
-          <Breadcrumb.Item>{product?.category?.name}</Breadcrumb.Item>
-          <Breadcrumb.Item>{product?.name}</Breadcrumb.Item>
+          <Breadcrumb.Item style={{ color: theme.textColor }}>{product?.category?.name}</Breadcrumb.Item>
+          <Breadcrumb.Item style={{ color: theme.textColor }}>{product?.name}</Breadcrumb.Item>
         </Breadcrumb>
 
         <Row gutter={[32, 32]}>
@@ -297,7 +301,12 @@ const ProductDetailPage = () => {
           <Col xs={24} md={12}>
             <Card 
               bodyStyle={{ padding: 0 }}
-              style={{ borderRadius: '12px', overflow: 'hidden' }}
+              style={{ 
+                borderRadius: '12px', 
+                overflow: 'hidden',
+                backgroundColor: theme.cardBackground,
+                borderColor: theme.borderColor
+              }}
             >
               {product?.images && product.images.length > 0 ? (
                 <div>
@@ -407,7 +416,11 @@ const ProductDetailPage = () => {
 
         {/* Thông tin sản phẩm */}
         <Col xs={24} md={12}>
-          <Card style={{ borderRadius: '12px' }}>
+          <Card style={{ 
+            borderRadius: '12px',
+            backgroundColor: theme.cardBackground,
+            borderColor: theme.borderColor
+          }}>
             <div style={{ marginBottom: '16px' }}>
               <Space>
                 {product?.brand && (
@@ -422,12 +435,12 @@ const ProductDetailPage = () => {
               </Space>
             </div>
 
-            <Title level={2} style={{ marginBottom: '8px' }}>
+            <Title level={2} style={{ marginBottom: '8px', color: theme.textColor }}>
               {product.name}
             </Title>
             
             {product?.sku && (
-              <Text type="secondary" style={{ fontSize: '12px' }}>
+              <Text type="secondary" style={{ fontSize: '12px', color: theme.secondaryText }}>
                 SKU: {product.sku}
               </Text>
             )}
@@ -436,7 +449,7 @@ const ProductDetailPage = () => {
             <div style={{ margin: '12px 0' }}>
               <Space>
                 <Rate disabled defaultValue={4.5} allowHalf style={{ fontSize: '16px' }} />
-                <Text type="secondary">(0 đánh giá)</Text>
+                <Text type="secondary" style={{ color: theme.secondaryText }}>(0 đánh giá)</Text>
               </Space>
             </div>
             
@@ -496,11 +509,11 @@ const ProductDetailPage = () => {
 
             {/* Chọn variant */}
             <div style={{ marginBottom: '24px' }}>
-              <Title level={4} style={{ marginBottom: '16px' }}>Tùy chọn sản phẩm</Title>
+              <Title level={4} style={{ marginBottom: '16px', color: theme.textColor }}>Tùy chọn sản phẩm</Title>
               
               <Row gutter={[16, 16]}>
                 <Col span={12}>
-                  <Text strong style={{ display: 'block', marginBottom: '8px' }}>
+                  <Text strong style={{ display: 'block', marginBottom: '8px', color: theme.textColor }}>
                     Kích cỡ:
                   </Text>
                   <Select
@@ -517,7 +530,7 @@ const ProductDetailPage = () => {
                 </Col>
 
                 <Col span={12}>
-                  <Text strong style={{ display: 'block', marginBottom: '8px' }}>
+                  <Text strong style={{ display: 'block', marginBottom: '8px', color: theme.textColor }}>
                     Màu sắc:
                   </Text>
                   <Select
@@ -538,7 +551,7 @@ const ProductDetailPage = () => {
 
             {/* Số lượng */}
             <div style={{ marginBottom: '24px' }}>
-              <Text strong style={{ display: 'block', marginBottom: '8px' }}>
+              <Text strong style={{ display: 'block', marginBottom: '8px', color: theme.textColor }}>
                 Số lượng:
               </Text>
               
@@ -553,7 +566,7 @@ const ProductDetailPage = () => {
                   disabled={!selectedVariant || selectedVariant.stock_quantity === 0}
                 />
                 {selectedVariant && (
-                  <Text type="secondary" style={{ fontSize: '12px' }}>
+                  <Text type="secondary" style={{ fontSize: '12px', color: theme.secondaryText }}>
                     (Tối đa: {selectedVariant.stock_quantity})
                   </Text>
                 )}
@@ -590,19 +603,15 @@ const ProductDetailPage = () => {
                 </Button>
               </Col>
               <Col xs={12} sm={4}>
-                <Tooltip title={isWishlisted ? 'Bỏ yêu thích' : 'Yêu thích'}>
-                  <Button
-                    size="large"
-                    icon={<HeartOutlined style={{ color: isWishlisted ? '#ff4d4f' : undefined }} />}
-                    onClick={toggleWishlist}
-                    style={{ 
-                      height: '50px', 
-                      borderRadius: '8px',
-                      backgroundColor: isWishlisted ? '#fff2f0' : undefined,
-                      borderColor: isWishlisted ? '#ff4d4f' : undefined
-                    }}
-                  />
-                </Tooltip>
+                <WishlistButton 
+                  productId={product.id} 
+                  size="large"
+                  style={{ 
+                    width: '100%', 
+                    height: '50px', 
+                    borderRadius: '8px'
+                  }}
+                />
               </Col>
               <Col xs={12} sm={4}>
                 <Tooltip title="Chia sẻ">
@@ -690,15 +699,18 @@ const ProductDetailPage = () => {
               </div>
             </TabPane>
             
-            <TabPane tab="Đánh giá (0)" key="3">
-              <div style={{ padding: '24px', textAlign: 'center' }}>
-                <Avatar size={64} icon={<UserOutlined />} style={{ marginBottom: '16px' }} />
-                <Title level={4}>Chưa có đánh giá nào</Title>
-                <Text type="secondary">Hãy là người đầu tiên đánh giá sản phẩm này!</Text>
-                <br />
-                <Button type="primary" style={{ marginTop: '16px' }} disabled>
-                  Viết đánh giá
-                </Button>
+            <TabPane tab="Đánh giá" key="3">
+              <div style={{ padding: '24px' }}>
+                <div style={{ marginBottom: '32px' }}>
+                  <ReviewForm 
+                    productId={product.id} 
+                    onReviewSubmitted={() => setReviewRefresh(prev => prev + 1)}
+                  />
+                </div>
+                <ReviewList 
+                  productId={product.id} 
+                  refresh={reviewRefresh}
+                />
               </div>
             </TabPane>
           </Tabs>

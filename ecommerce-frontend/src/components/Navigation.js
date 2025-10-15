@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Layout, Menu, Badge, Button, Space, Dropdown, Avatar, Modal, Descriptions, Tag } from 'antd';
+import { Layout, Menu, Badge, Button, Space, Dropdown, Avatar, Modal, Descriptions, Tag, Form, Input, message, Typography } from 'antd';
 import { 
   HomeOutlined, 
   ShoppingCartOutlined, 
@@ -9,14 +9,22 @@ import {
   UserAddOutlined,
   MailOutlined,
   PhoneOutlined,
-  CalendarOutlined
+  CalendarOutlined,
+  HeartOutlined,
+  StarFilled,
+  EditOutlined,
+  SaveOutlined,
+  CloseOutlined
 } from '@ant-design/icons';
 import { useNavigate, useLocation } from 'react-router-dom';
 import authAxios from '../api/AuthAxios';
 import { format } from 'date-fns';
 import { vi } from 'date-fns/locale';
+import { useTheme } from '../contexts/ThemeContext';
+import ThemeToggle from './ThemeToggle';
 
 const { Header } = Layout;
+const { Text } = Typography;
 
 const Navigation = () => {
   const navigate = useNavigate();
@@ -25,6 +33,10 @@ const Navigation = () => {
   const [cartItemCount, setCartItemCount] = useState(0);
   const [userInfo, setUserInfo] = useState(null);
   const [profileModalVisible, setProfileModalVisible] = useState(false);
+  const [isEditMode, setIsEditMode] = useState(false);
+  const [updateLoading, setUpdateLoading] = useState(false);
+  const [form] = Form.useForm();
+  const { theme } = useTheme();
 
   useEffect(() => {
     // Check if user is logged in
@@ -73,6 +85,36 @@ const Navigation = () => {
     navigate('/');
   };
 
+  const handleEditProfile = () => {
+    setIsEditMode(true);
+    form.setFieldsValue({
+      first_name: userInfo?.first_name || '',
+      last_name: userInfo?.last_name || '',
+      email: userInfo?.email || '',
+    });
+  };
+
+  const handleCancelEdit = () => {
+    setIsEditMode(false);
+    form.resetFields();
+  };
+
+  const handleUpdateProfile = async (values) => {
+    setUpdateLoading(true);
+    try {
+      const response = await authAxios.put('user/', values);
+      setUserInfo(response.data);
+      message.success('Cập nhật thông tin thành công!');
+      setIsEditMode(false);
+      form.resetFields();
+    } catch (error) {
+      console.error('Error updating profile:', error);
+      message.error(error.response?.data?.message || 'Có lỗi xảy ra khi cập nhật thông tin!');
+    } finally {
+      setUpdateLoading(false);
+    }
+  };
+
   const userMenuItems = [
     {
       key: 'profile',
@@ -83,11 +125,28 @@ const Navigation = () => {
       }
     },
     {
+      key: 'wishlist',
+      label: 'Sản phẩm yêu thích',
+      icon: <HeartOutlined />,
+      onClick: () => {
+        navigate('/wishlist');
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      }
+    },
+    {
       key: 'orders',
       label: 'Đơn hàng của tôi',
       icon: <ShoppingCartOutlined />,
       onClick: () => {
         navigate('/orders');
+      }
+    },
+    {
+      key: 'reviews',
+      label: 'Đánh giá của tôi',
+      icon: <StarFilled />,
+      onClick: () => {
+        navigate('/my-reviews');
       }
     },
     {
@@ -103,15 +162,41 @@ const Navigation = () => {
 
   const menuItems = [
     {
-      key: '/',
-      label: 'Trang chủ',
-      icon: <HomeOutlined />,
+      key: '/products',
+      label: 'Sản phẩm',
+      icon: <ShoppingCartOutlined />,
       onClick: () => {
         navigate('/');
-        window.scrollTo(0, 0);
+        // Scroll to featured products section
+        setTimeout(() => {
+          const featuredSection = document.getElementById('featured-products');
+          if (featuredSection) {
+            featuredSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          } else {
+            // If section doesn't exist, scroll to search/filter area
+            window.scrollTo({ top: 300, behavior: 'smooth' });
+          }
+        }, 100);
       }
     },
-    // TODO: Add more menu items like categories
+    {
+      key: '/about',
+      label: 'Giới thiệu',
+      icon: <UserOutlined />,
+      onClick: () => {
+        navigate('/about');
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      }
+    },
+    {
+      key: '/contact',
+      label: 'Liên hệ',
+      icon: <PhoneOutlined />,
+      onClick: () => {
+        navigate('/contact');
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      }
+    }
   ];
 
   return (
@@ -164,6 +249,20 @@ const Navigation = () => {
 
         {/* Right Side Actions */}
         <Space size="middle">
+          {/* Wishlist */}
+          {isLoggedIn && (
+            <Button
+              type="text"
+              icon={<HeartOutlined style={{ fontSize: '20px' }} />}
+              onClick={() => {
+                navigate('/wishlist');
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+              }}
+              style={{ display: 'flex', alignItems: 'center' }}
+              title="Sản phẩm yêu thích"
+            />
+          )}
+
           {/* Cart */}
           <Badge count={cartItemCount} showZero={false}>
             <Button
@@ -173,6 +272,9 @@ const Navigation = () => {
               style={{ display: 'flex', alignItems: 'center' }}
             />
           </Badge>
+
+          {/* Theme Toggle */}
+          <ThemeToggle />
 
           {/* User Actions */}
           {isLoggedIn ? (
@@ -229,122 +331,229 @@ const Navigation = () => {
       {/* Profile Modal */}
       <Modal
         title={
-          <div style={{ display: 'flex', alignItems: 'center' }}>
-            <Avatar size="large" icon={<UserOutlined />} style={{ marginRight: 12 }} />
-            <div>
-              <div style={{ fontSize: '18px', fontWeight: 'bold' }}>
-                Thông tin cá nhân
-              </div>
-              <div style={{ fontSize: '14px', color: '#8c8c8c', fontWeight: 'normal' }}>
-                {userInfo?.first_name ? 
-                  `${userInfo.first_name} ${userInfo.last_name || ''}`.trim() : 
-                  userInfo?.username || 'User'
-                }
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <div style={{ display: 'flex', alignItems: 'center' }}>
+              <Avatar size="large" icon={<UserOutlined />} style={{ marginRight: 12 }} />
+              <div>
+                <div style={{ fontSize: '18px', fontWeight: 'bold' }}>
+                  {isEditMode ? 'Chỉnh sửa thông tin' : 'Thông tin cá nhân'}
+                </div>
+                <div style={{ fontSize: '14px', color: '#8c8c8c', fontWeight: 'normal' }}>
+                  {userInfo?.first_name ? 
+                    `${userInfo.first_name} ${userInfo.last_name || ''}`.trim() : 
+                    userInfo?.username || 'User'
+                  }
+                </div>
               </div>
             </div>
           </div>
         }
         open={profileModalVisible}
-        onCancel={() => setProfileModalVisible(false)}
-        footer={[
-          <Button key="close" onClick={() => setProfileModalVisible(false)}>
-            Đóng
-          </Button>
-        ]}
+        onCancel={() => {
+          setProfileModalVisible(false);
+          setIsEditMode(false);
+          form.resetFields();
+        }}
+        footer={
+          isEditMode ? [
+            <Button 
+              key="cancel" 
+              icon={<CloseOutlined />}
+              onClick={handleCancelEdit}
+            >
+              Hủy
+            </Button>,
+            <Button 
+              key="save" 
+              type="primary" 
+              icon={<SaveOutlined />}
+              loading={updateLoading}
+              onClick={() => form.submit()}
+            >
+              Lưu thay đổi
+            </Button>
+          ] : [
+            <Button 
+              key="edit" 
+              type="primary" 
+              icon={<EditOutlined />}
+              onClick={handleEditProfile}
+            >
+              Chỉnh sửa
+            </Button>,
+            <Button 
+              key="close" 
+              onClick={() => setProfileModalVisible(false)}
+            >
+              Đóng
+            </Button>
+          ]
+        }
         width={600}
       >
         {userInfo && (
-          <Descriptions bordered column={1} size="middle">
-            <Descriptions.Item 
-              label={
-                <span>
-                  <UserOutlined style={{ marginRight: 8 }} />
-                  Tên đăng nhập
-                </span>
-              }
+          isEditMode ? (
+            <Form
+              form={form}
+              layout="vertical"
+              onFinish={handleUpdateProfile}
+              autoComplete="off"
             >
-              <Tag color="blue">{userInfo.username}</Tag>
-            </Descriptions.Item>
-            
-            <Descriptions.Item 
-              label={
-                <span>
-                  <UserOutlined style={{ marginRight: 8 }} />
-                  Họ tên
-                </span>
-              }
-            >
-              {userInfo.first_name || userInfo.last_name ? 
-                `${userInfo.first_name || ''} ${userInfo.last_name || ''}`.trim() : 
-                <span style={{ color: '#8c8c8c' }}>Chưa cập nhật</span>
-              }
-            </Descriptions.Item>
+              <Form.Item
+                label="Họ"
+                name="first_name"
+                rules={[
+                  { required: true, message: 'Vui lòng nhập họ!' },
+                  { min: 1, message: 'Họ phải có ít nhất 1 ký tự!' }
+                ]}
+              >
+                <Input 
+                  prefix={<UserOutlined />}
+                  placeholder="Nhập họ"
+                  size="large"
+                />
+              </Form.Item>
 
-            <Descriptions.Item 
-              label={
-                <span>
-                  <MailOutlined style={{ marginRight: 8 }} />
-                  Email
-                </span>
-              }
-            >
-              {userInfo.email || <span style={{ color: '#8c8c8c' }}>Chưa cập nhật</span>}
-            </Descriptions.Item>
+              <Form.Item
+                label="Tên"
+                name="last_name"
+                rules={[
+                  { required: true, message: 'Vui lòng nhập tên!' },
+                  { min: 1, message: 'Tên phải có ít nhất 1 ký tự!' }
+                ]}
+              >
+                <Input 
+                  prefix={<UserOutlined />}
+                  placeholder="Nhập tên"
+                  size="large"
+                />
+              </Form.Item>
 
-            <Descriptions.Item 
-              label={
-                <span>
-                  <UserOutlined style={{ marginRight: 8 }} />
-                  Vai trò
-                </span>
-              }
-            >
-              <Tag color={userInfo.is_staff ? 'red' : 'green'}>
-                {userInfo.is_staff ? 'Quản trị viên' : 'Khách hàng'}
-              </Tag>
-            </Descriptions.Item>
+              <Form.Item
+                label="Email"
+                name="email"
+                rules={[
+                  { required: true, message: 'Vui lòng nhập email!' },
+                  { type: 'email', message: 'Email không hợp lệ!' }
+                ]}
+              >
+                <Input 
+                  prefix={<MailOutlined />}
+                  placeholder="example@email.com"
+                  size="large"
+                />
+              </Form.Item>
 
-            <Descriptions.Item 
-              label={
-                <span>
-                  <CalendarOutlined style={{ marginRight: 8 }} />
-                  Ngày tham gia
-                </span>
-              }
-            >
-              {userInfo.date_joined ? 
-                format(new Date(userInfo.date_joined), 'dd/MM/yyyy HH:mm', { locale: vi }) :
-                <span style={{ color: '#8c8c8c' }}>Không xác định</span>
-              }
-            </Descriptions.Item>
+              <div style={{ 
+                background: '#f0f2f5', 
+                padding: '12px', 
+                borderRadius: '8px',
+                marginTop: '16px'
+              }}>
+                <div style={{ marginBottom: '8px' }}>
+                  <Text strong>Tên đăng nhập:</Text> <Tag color="blue">{userInfo.username}</Tag>
+                </div>
+                <div>
+                  <Text strong>Vai trò:</Text> 
+                  <Tag color={userInfo.is_staff ? 'red' : 'green'} style={{ marginLeft: '8px' }}>
+                    {userInfo.is_staff ? 'Quản trị viên' : 'Khách hàng'}
+                  </Tag>
+                </div>
+              </div>
+            </Form>
+          ) : (
+            <Descriptions bordered column={1} size="middle">
+              <Descriptions.Item 
+                label={
+                  <span>
+                    <UserOutlined style={{ marginRight: 8 }} />
+                    Tên đăng nhập
+                  </span>
+                }
+              >
+                <Tag color="blue">{userInfo.username}</Tag>
+              </Descriptions.Item>
+              
+              <Descriptions.Item 
+                label={
+                  <span>
+                    <UserOutlined style={{ marginRight: 8 }} />
+                    Họ tên
+                  </span>
+                }
+              >
+                {userInfo.first_name || userInfo.last_name ? 
+                  `${userInfo.first_name || ''} ${userInfo.last_name || ''}`.trim() : 
+                  <span style={{ color: '#8c8c8c' }}>Chưa cập nhật</span>
+                }
+              </Descriptions.Item>
 
-            <Descriptions.Item 
-              label={
-                <span>
-                  <UserOutlined style={{ marginRight: 8 }} />
-                  Trạng thái tài khoản
-                </span>
-              }
-            >
-              <Tag color={userInfo.is_active ? 'success' : 'error'}>
-                {userInfo.is_active ? 'Hoạt động' : 'Bị khóa'}
-              </Tag>
-            </Descriptions.Item>
+              <Descriptions.Item 
+                label={
+                  <span>
+                    <MailOutlined style={{ marginRight: 8 }} />
+                    Email
+                  </span>
+                }
+              >
+                {userInfo.email || <span style={{ color: '#8c8c8c' }}>Chưa cập nhật</span>}
+              </Descriptions.Item>
 
-            <Descriptions.Item 
-              label={
-                <span>
-                  <CalendarOutlined style={{ marginRight: 8 }} />
-                  Đăng nhập lần cuối
-                </span>
-              }
-            >
-              {userInfo.last_login ? 
-                format(new Date(userInfo.last_login), 'dd/MM/yyyy HH:mm', { locale: vi }) :
-                <span style={{ color: '#8c8c8c' }}>Chưa có thông tin</span>
-              }
-            </Descriptions.Item>
-          </Descriptions>
+              <Descriptions.Item 
+                label={
+                  <span>
+                    <UserOutlined style={{ marginRight: 8 }} />
+                    Vai trò
+                  </span>
+                }
+              >
+                <Tag color={userInfo.is_staff ? 'red' : 'green'}>
+                  {userInfo.is_staff ? 'Quản trị viên' : 'Khách hàng'}
+                </Tag>
+              </Descriptions.Item>
+
+              <Descriptions.Item 
+                label={
+                  <span>
+                    <CalendarOutlined style={{ marginRight: 8 }} />
+                    Ngày tham gia
+                  </span>
+                }
+              >
+                {userInfo.date_joined ? 
+                  format(new Date(userInfo.date_joined), 'dd/MM/yyyy HH:mm', { locale: vi }) :
+                  <span style={{ color: '#8c8c8c' }}>Không xác định</span>
+                }
+              </Descriptions.Item>
+
+              <Descriptions.Item 
+                label={
+                  <span>
+                    <UserOutlined style={{ marginRight: 8 }} />
+                    Trạng thái tài khoản
+                  </span>
+                }
+              >
+                <Tag color={userInfo.is_active ? 'success' : 'error'}>
+                  {userInfo.is_active ? 'Hoạt động' : 'Bị khóa'}
+                </Tag>
+              </Descriptions.Item>
+
+              <Descriptions.Item 
+                label={
+                  <span>
+                    <CalendarOutlined style={{ marginRight: 8 }} />
+                    Đăng nhập lần cuối
+                  </span>
+                }
+              >
+                {userInfo.last_login ? 
+                  format(new Date(userInfo.last_login), 'dd/MM/yyyy HH:mm', { locale: vi }) :
+                  <span style={{ color: '#8c8c8c' }}>Chưa có thông tin</span>
+                }
+              </Descriptions.Item>
+            </Descriptions>
+          )
         )}
       </Modal>
     </Header>

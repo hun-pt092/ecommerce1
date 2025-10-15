@@ -3,13 +3,14 @@
 from rest_framework import generics, permissions
 from rest_framework.views import APIView
 from rest_framework.response import Response
-from .models import Product, ProductVariant, User, Order, OrderItem, Category, Brand, ProductImage
+from .models import Product, ProductVariant, User, Order, OrderItem, Category, Brand, ProductImage, Review, Wishlist
 from .pagination import ProductPagination, OrderPagination, AdminPagination, StandardResultsSetPagination
 from .serializers import (
     RegisterSerializer, ProductSerializer, OrderSerializer, 
     OrderCreateSerializer, OrderStatusUpdateSerializer,
     OrderItemSerializer, UserSerializer,
-    CategorySerializer, BrandSerializer
+    CategorySerializer, BrandSerializer, ReviewSerializer, 
+    WishlistSerializer, WishlistItemSerializer
 )
 from rest_framework_simplejwt.views import TokenObtainPairView
 
@@ -25,6 +26,13 @@ class CurrentUserView(APIView):
     def get(self, request):
         serializer = UserSerializer(request.user)
         return Response(serializer.data)
+    
+    def put(self, request):
+        serializer = UserSerializer(request.user, data=request.data, partial=True)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
 from rest_framework.views import APIView
@@ -937,3 +945,145 @@ class AdminUserStatusUpdateView(APIView):
             
         except User.DoesNotExist:
             return Response({'error': 'User not found'}, status=404)
+
+#-----------------------------Review Management-----------------------------------------------
+
+# Review List for Product
+class ProductReviewListView(generics.ListAPIView):
+    serializer_class = ReviewSerializer
+    permission_classes = [permissions.AllowAny]
+    pagination_class = StandardResultsSetPagination
+    
+    def get_queryset(self):
+        product_id = self.kwargs['product_id']
+        return Review.objects.filter(product_id=product_id).select_related('user', 'product')
+
+# Create Review
+class ReviewCreateView(generics.CreateAPIView):
+    serializer_class = ReviewSerializer
+    permission_classes = [permissions.IsAuthenticated]
+    
+    def perform_create(self, serializer):
+        serializer.save(user=self.request.user)
+
+# User's Reviews
+class UserReviewListView(generics.ListAPIView):
+    serializer_class = ReviewSerializer
+    permission_classes = [permissions.IsAuthenticated]
+    pagination_class = StandardResultsSetPagination
+    
+    def get_queryset(self):
+        return Review.objects.filter(user=self.request.user).select_related('product')
+
+# Update/Delete Review (user can only edit their own reviews)
+class ReviewDetailView(generics.RetrieveUpdateDestroyAPIView):
+    serializer_class = ReviewSerializer
+    permission_classes = [permissions.IsAuthenticated]
+    
+    def get_queryset(self):
+        return Review.objects.filter(user=self.request.user)
+
+#-----------------------------Wishlist Management-----------------------------------------------
+
+# User's Wishlist
+class WishlistView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+    
+    def get(self, request):
+        """Get user's wishlist"""
+        wishlist_items = Wishlist.objects.filter(user=request.user).select_related('product')
+        serializer = WishlistItemSerializer(wishlist_items, many=True)
+        return Response(serializer.data)
+    
+    def post(self, request):
+        """Add product to wishlist"""
+        serializer = WishlistSerializer(data=request.data, context={'request': request})
+        if serializer.is_valid():
+            try:
+                serializer.save()
+                return Response(serializer.data, status=status.HTTP_201_CREATED)
+            except Exception as e:
+                # Handle unique constraint violation
+                if "UNIQUE constraint failed" in str(e):
+                    return Response(
+                        {"error": "Product already in wishlist"}, 
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+                return Response(
+                    {"error": str(e)}, 
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+# Remove from wishlist
+class WishlistItemView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+    
+    def delete(self, request, product_id):
+        """Remove product from wishlist"""
+        try:
+            wishlist_item = Wishlist.objects.get(
+                user=request.user, 
+                product_id=product_id
+            )
+            wishlist_item.delete()
+            return Response(
+                {"message": "Product removed from wishlist"}, 
+                status=status.HTTP_200_OK
+            )
+        except Wishlist.DoesNotExist:
+            return Response(
+                {"error": "Product not found in wishlist"}, 
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+# Check if product is in wishlist
+class WishlistCheckView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+    
+    def get(self, request, product_id):
+        """Check if product is in user's wishlist"""
+        is_in_wishlist = Wishlist.objects.filter(
+            user=request.user, 
+            product_id=product_id
+        ).exists()
+        return Response({"is_in_wishlist": is_in_wishlist})
+
+# Product stats (including reviews and wishlist count)
+class ProductStatsView(APIView):
+    permission_classes = [permissions.AllowAny]
+    
+    def get(self, request, product_id):
+        """Get product statistics"""
+        try:
+            product = Product.objects.get(id=product_id)
+            reviews = Review.objects.filter(product=product)
+            
+            # Calculate average rating
+            total_reviews = reviews.count()
+            avg_rating = 0
+            if total_reviews > 0:
+                total_rating = sum(review.rating for review in reviews)
+                avg_rating = total_rating / total_reviews
+            
+            # Count wishlist
+            wishlist_count = Wishlist.objects.filter(product=product).count()
+            
+            # Rating breakdown (1-5 stars)
+            rating_breakdown = {}
+            for i in range(1, 6):
+                rating_breakdown[f"star_{i}"] = reviews.filter(rating=i).count()
+            
+            return Response({
+                "product_id": product_id,
+                "total_reviews": total_reviews,
+                "average_rating": round(avg_rating, 1),
+                "wishlist_count": wishlist_count,
+                "rating_breakdown": rating_breakdown
+            })
+            
+        except Product.DoesNotExist:
+            return Response(
+                {"error": "Product not found"}, 
+                status=status.HTTP_404_NOT_FOUND
+            )

@@ -307,7 +307,7 @@ const AdminDashboard = () => {
           >
             <Table
               columns={recentOrderColumns}
-              dataSource={recentOrders.slice(0, 5)}
+              dataSource={recentOrders.slice(0, 6)}
               loading={loading}
               rowKey="id"
               size="small"

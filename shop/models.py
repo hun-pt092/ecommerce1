@@ -169,9 +169,31 @@ class OrderItem(models.Model):
 class Review(models.Model):
     product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name='reviews')
     user = models.ForeignKey(User, on_delete=models.CASCADE)
+    order = models.ForeignKey(Order, on_delete=models.CASCADE, null=True, blank=True)  # Liên kết với đơn hàng để kiểm tra đã mua chưa
     rating = models.PositiveSmallIntegerField()  # 1-5
     comment = models.TextField(blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
+    
+    def __str__(self):
+        return f"Review by {self.user.username} for {self.product.name} - {self.rating} stars"
+    
+    class Meta:
+        # Một user chỉ có thể review một sản phẩm một lần
+        unique_together = ('product', 'user')
+        ordering = ['-created_at']
+
+class Wishlist(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='wishlist')
+    product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name='wishlisted_by')
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    def __str__(self):
+        return f"{self.user.username} - {self.product.name}"
+    
+    class Meta:
+        # Một user chỉ có thể thêm một sản phẩm vào wishlist một lần
+        unique_together = ('user', 'product')
+        ordering = ['-created_at']
 
 class Cart(models.Model):
     user = models.ForeignKey(User, null=True, blank=True, on_delete=models.CASCADE)

@@ -10,6 +10,7 @@ const LoginPage = () => {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   const [form] = Form.useForm();
+  const [errorMessage, setErrorMessage] = useState('');
 
   useEffect(() => {
     // Scroll to top when page loads
@@ -23,6 +24,7 @@ const LoginPage = () => {
 
   const onFinish = async (values) => {
     setLoading(true);
+    setErrorMessage(''); // Clear previous error
     try {
       const response = await axios.post('http://localhost:8000/api/token/', {
         username: values.username,
@@ -56,30 +58,24 @@ const LoginPage = () => {
       }
     } catch (err) {
       console.error('Login error:', err);
-      if (err.response) {
-        // Server trả về response với status code khác 2xx
-        if (err.response.status === 401) {
-          message.error('Sai tên đăng nhập hoặc mật khẩu!');
-        } else if (err.response.data) {
-          // Hiển thị lỗi cụ thể từ server
-          const errorData = err.response.data;
-          if (errorData.detail) {
-            message.error(errorData.detail);
-          } else if (errorData.non_field_errors) {
-            message.error(errorData.non_field_errors[0]);
-          } else {
-            message.error('Đăng nhập thất bại. Vui lòng thử lại.');
-          }
-        } else {
-          message.error('Lỗi kết nối đến server');
-        }
+      console.error('Error response:', err.response);
+      console.error('Error data:', err.response?.data);
+      
+      // Hiển thị thông báo lỗi
+      let errorMsg = '';
+      if (err.response && err.response.status === 401) {
+        errorMsg = 'Sai tên đăng nhập hoặc mật khẩu!';
+      } else if (err.response && err.response.data && err.response.data.detail) {
+        errorMsg = err.response.data.detail;
       } else if (err.request) {
-        // Request được gửi nhưng không nhận được response
-        message.error('Không thể kết nối đến server. Vui lòng kiểm tra kết nối.');
+        errorMsg = 'Không thể kết nối đến server. Vui lòng thử lại.';
       } else {
-        // Lỗi khác
-        message.error('Có lỗi xảy ra. Vui lòng thử lại.');
+        errorMsg = 'Đăng nhập thất bại. Vui lòng thử lại.';
       }
+      
+      // Cả hai cách hiển thị lỗi
+      setErrorMessage(errorMsg);
+      message.error(errorMsg);
     }
     setLoading(false);
   };
@@ -113,6 +109,19 @@ const LoginPage = () => {
           </Text>
         </div>
 
+        {errorMessage && (
+          <div style={{ 
+            backgroundColor: '#fff2f0', 
+            border: '1px solid #ffccc7', 
+            borderRadius: '6px', 
+            padding: '12px 16px', 
+            marginBottom: '20px',
+            color: '#ff4d4f'
+          }}>
+             {errorMessage}
+          </div>
+        )}
+
         <Form 
           form={form}
           onFinish={onFinish} 
@@ -125,7 +134,7 @@ const LoginPage = () => {
             label="Tên đăng nhập"
             rules={[
               { required: true, message: 'Vui lòng nhập tên đăng nhập!' },
-              { min: 3, message: 'Tên đăng nhập phải có ít nhất 3 ký tự!' }
+              
             ]}
           >
             <Input 

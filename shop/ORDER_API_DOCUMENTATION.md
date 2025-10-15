@@ -19,7 +19,7 @@ Content-Type: application/json
 {
   "shipping_name": "Nguyễn Văn A",
   "shipping_address": "123 Đường ABC, Quận 1",
-  "shipping_city": "TP.HCM", 
+  "shipping_city": "TP.HaNoi", 
   "shipping_postal_code": "70000",
   "shipping_country": "Vietnam",
   "phone_number": "0909123456",
@@ -38,7 +38,7 @@ Content-Type: application/json
   "payment_status": "pending",
   "shipping_name": "Nguyễn Văn A",
   "shipping_address": "123 Đường ABC, Quận 1",
-  "shipping_city": "TP.HCM",
+  "shipping_city": "TP.HaNoi",
   "shipping_postal_code": "70000",
   "shipping_country": "Vietnam",
   "phone_number": "0909123456",

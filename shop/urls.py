@@ -12,7 +12,10 @@ from .views import (
     # Admin dashboard and management
     AdminDashboardStatsView, AdminOrderStatsView, AdminUserStatsView,
     AdminUserListView, AdminUserDetailView, AdminUserStatusUpdateView,
-    CurrentUserView
+    CurrentUserView,
+    # Review and Wishlist views
+    ProductReviewListView, ReviewCreateView, UserReviewListView, ReviewDetailView,
+    WishlistView, WishlistItemView, WishlistCheckView, ProductStatsView
 )
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 
@@ -76,5 +79,17 @@ urlpatterns = [
     
     # Admin - Orders Management (using existing AdminOrderListView)
     path('orders/', AdminOrderListView.as_view(), name='admin_orders_api'),
+    
+    # Reviews
+    path('products/<int:product_id>/reviews/', ProductReviewListView.as_view(), name='product_reviews'),
+    path('products/<int:product_id>/stats/', ProductStatsView.as_view(), name='product_stats'),
+    path('reviews/create/', ReviewCreateView.as_view(), name='review_create'),
+    path('reviews/my-reviews/', UserReviewListView.as_view(), name='user_reviews'),
+    path('reviews/<int:pk>/', ReviewDetailView.as_view(), name='review_detail'),
+    
+    # Wishlist
+    path('wishlist/', WishlistView.as_view(), name='wishlist'),
+    path('wishlist/<int:product_id>/', WishlistItemView.as_view(), name='wishlist_item'),
+    path('wishlist/check/<int:product_id>/', WishlistCheckView.as_view(), name='wishlist_check'),
 ]
 

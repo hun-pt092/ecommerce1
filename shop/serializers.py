@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import User, Product, ProductVariant, Order, OrderItem, Category, Brand, ProductImage
+from .models import User, Product, ProductVariant, Order, OrderItem, Category, Brand, ProductImage, Review, Wishlist
 from django.contrib.auth.password_validation import validate_password
 from rest_framework.validators import UniqueValidator
 
@@ -302,3 +302,85 @@ class UserSerializer(serializers.ModelSerializer):
         fields = ('id', 'username', 'email', 'first_name', 'last_name', 
                  'is_active', 'is_admin', 'is_staff', 'date_joined', 'last_login')
         read_only_fields = ('id', 'date_joined', 'last_login')
+
+#-----------------------------Review Management-----------------------------------------------
+
+# Review serializer
+class ReviewSerializer(serializers.ModelSerializer):
+    user_name = serializers.CharField(source='user.username', read_only=True)
+    user_first_name = serializers.CharField(source='user.first_name', read_only=True)
+    user_last_name = serializers.CharField(source='user.last_name', read_only=True)
+    product_name = serializers.CharField(source='product.name', read_only=True)
+    
+    class Meta:
+        model = Review
+        fields = [
+            'id', 'product', 'user', 'order', 'rating', 'comment', 
+            'created_at', 'user_name', 'user_first_name', 'user_last_name',
+            'product_name'
+        ]
+        read_only_fields = ['user', 'created_at']
+    
+    def validate_rating(self, value):
+        if value < 1 or value > 5:
+            raise serializers.ValidationError("Rating must be between 1 and 5")
+        return value
+    
+    def validate(self, attrs):
+        # Kiểm tra xem user đã mua sản phẩm này chưa
+        user = self.context['request'].user
+        product = attrs['product']
+        
+        # Kiểm tra xem user đã có đơn hàng chứa sản phẩm này và đã delivered chưa
+        has_purchased = OrderItem.objects.filter(
+            order__user=user,
+            product_variant__product=product,
+            order__status='delivered'
+        ).exists()
+        
+        if not has_purchased:
+            raise serializers.ValidationError("You can only review products you have purchased and received")
+        
+        return attrs
+    
+    def create(self, validated_data):
+        validated_data['user'] = self.context['request'].user
+        return super().create(validated_data)
+
+#-----------------------------Wishlist Management-----------------------------------------------
+
+# Wishlist serializer
+class WishlistSerializer(serializers.ModelSerializer):
+    product = ProductSerializer(read_only=True)
+    product_id = serializers.PrimaryKeyRelatedField(
+        queryset=Product.objects.all(),
+        source='product',
+        write_only=True
+    )
+    
+    class Meta:
+        model = Wishlist
+        fields = ['id', 'product', 'product_id', 'created_at']
+        read_only_fields = ['user', 'created_at']
+    
+    def create(self, validated_data):
+        validated_data['user'] = self.context['request'].user
+        return super().create(validated_data)
+
+# Wishlist item serializer (để hiển thị đầy đủ thông tin)
+class WishlistItemSerializer(serializers.ModelSerializer):
+    product = ProductSerializer(read_only=True)  # Trả về full product object
+    product_name = serializers.CharField(source='product.name', read_only=True)
+    product_price = serializers.DecimalField(source='product.price', max_digits=10, decimal_places=2, read_only=True)
+    product_discount_price = serializers.DecimalField(source='product.discount_price', max_digits=10, decimal_places=2, read_only=True)
+    product_main_image = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = Wishlist
+        fields = [
+            'id', 'product', 'product_name', 'product_price', 
+            'product_discount_price', 'product_main_image', 'created_at'
+        ]
+    
+    def get_product_main_image(self, obj):
+        return obj.product.get_main_image()

@@ -13,6 +13,7 @@ import {
   Col,
   message
 } from 'antd';
+import { useTheme } from '../contexts/ThemeContext';
 import { 
   ShoppingOutlined,
   CalendarOutlined,
@@ -28,6 +29,7 @@ const OrdersPage = () => {
   const navigate = useNavigate();
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
+  const { theme } = useTheme();
 
   useEffect(() => {
     // Scroll to top when page loads
@@ -118,19 +120,29 @@ const OrdersPage = () => {
   }
 
   return (
-    <div>
-      <Title level={2}>Đơn hàng của bạn</Title>
+    <div style={{ 
+      backgroundColor: theme.backgroundColor,
+      color: theme.textColor,
+      minHeight: '100vh',
+      padding: '20px'
+    }}>
+      <Title level={2} style={{ color: theme.textColor }}>Đơn hàng của bạn</Title>
       
       <List
         itemLayout="vertical"
         dataSource={Array.isArray(orders) ? orders : []}
         renderItem={(order) => (
           <Card 
-            style={{ marginBottom: '16px' }}
+            style={{ 
+              marginBottom: '16px',
+              backgroundColor: theme.cardBackground,
+              borderColor: theme.borderColor
+            }}
+            headStyle={{ color: theme.textColor, borderBottomColor: theme.borderColor }}
             title={
               <Space>
-                <ShoppingOutlined />
-                <Text strong>Đơn hàng #{order.id}</Text>
+                <ShoppingOutlined style={{ color: theme.textColor }} />
+                <Text strong style={{ color: theme.textColor }}>Đơn hàng #{order.id}</Text>
               </Space>
             }
             extra={
@@ -148,11 +160,11 @@ const OrdersPage = () => {
               <Col xs={24} sm={12} md={8}>
                 <Space direction="vertical" size="small">
                   <Space>
-                    <CalendarOutlined />
-                    <Text type="secondary">Thời gian đặt:</Text>
+                    <CalendarOutlined style={{ color: theme.textColor }} />
+                    <Text type="secondary" style={{ color: theme.secondaryText }}>Thời gian đặt:</Text>
                   </Space>
-                  <Text>{new Date(order.created_at).toLocaleDateString('vi-VN')}</Text>
-                  <Text type="secondary" style={{ fontSize: '12px' }}>
+                  <Text style={{ color: theme.textColor }}>{new Date(order.created_at).toLocaleDateString('vi-VN')}</Text>
+                  <Text type="secondary" style={{ fontSize: '12px', color: theme.secondaryText }}>
                     {new Date(order.created_at).toLocaleTimeString('vi-VN', {
                       hour: '2-digit',
                       minute: '2-digit',
@@ -165,13 +177,13 @@ const OrdersPage = () => {
               <Col xs={24} sm={12} md={8}>
                 <Space direction="vertical" size="small">
                   <Space>
-                    <DollarOutlined />
-                    <Text type="secondary">Tổng tiền:</Text>
+                    <DollarOutlined style={{ color: theme.textColor }} />
+                    <Text type="secondary" style={{ color: theme.secondaryText }}>Tổng tiền:</Text>
                   </Space>
                   <Text strong style={{ color: '#ff4d4f', fontSize: '16px' }}>
                     {parseFloat(order.total_price).toLocaleString('vi-VN')}₫
                   </Text>
-                  <Text type="secondary" style={{ fontSize: '12px' }}>
+                  <Text type="secondary" style={{ fontSize: '12px', color: theme.secondaryText }}>
                     ({order.total_items || order.items?.length || 0} sản phẩm)
                   </Text>
                 </Space>
@@ -180,10 +192,10 @@ const OrdersPage = () => {
               <Col xs={24} sm={12} md={8}>
                 <Space direction="vertical" size="small">
                   <Space>
-                    <UserOutlined />
-                    <Text type="secondary">Người nhận:</Text>
+                    <UserOutlined style={{ color: theme.textColor }} />
+                    <Text type="secondary" style={{ color: theme.secondaryText }}>Người nhận:</Text>
                   </Space>
-                  <Text>{order.shipping_name}</Text>
+                  <Text style={{ color: theme.textColor }}>{order.shipping_name}</Text>
                 </Space>
               </Col>
             </Row>
@@ -192,31 +204,31 @@ const OrdersPage = () => {
             {order.items && order.items.length > 0 && (
               <>
                 <Divider />
-                <Text strong>Sản phẩm đã đặt:</Text>
+                <Text strong style={{ color: theme.textColor }}>Sản phẩm đã đặt:</Text>
                 <List
                   dataSource={order.items}
                   renderItem={(item) => (
                     <List.Item style={{ padding: '8px 0' }}>
                       <List.Item.Meta
                         title={
-                          <Space>
-                            <Text>{item.product_variant?.product_name || 'Sản phẩm'}</Text>
-                            <Text type="secondary">
+                          <Space direction="vertical">
+                            <Text style={{ color: theme.textColor }}>{item.product_variant?.product_name || 'Sản phẩm'}</Text>
+                            <Text type="secondary" style={{ color: theme.secondaryText }}>
                               ({item.product_variant?.color} - {item.product_variant?.size})
                             </Text>
                           </Space>
                         }
                         description={
                           <Space>
-                            <Text>Số lượng: {item.quantity}</Text>
-                            <Text>•</Text>
-                            <Text>
+                            <Text style={{ color: theme.textColor }}>Số lượng: {item.quantity}</Text>
+                            <Text style={{ color: theme.textColor }}>•</Text>
+                            <Text style={{ color: theme.textColor }}>
                               Đơn giá: {parseFloat(item.price_per_item).toLocaleString('vi-VN')}₫
                             </Text>
                           </Space>
                         }
                       />
-                      <Text strong>
+                      <Text strong style={{ color: theme.textColor }}>
                         {(parseFloat(item.price_per_item) * item.quantity).toLocaleString('vi-VN')}₫
                       </Text>
                     </List.Item>
@@ -258,7 +270,7 @@ const OrdersPage = () => {
 
             {/* Order Timeline */}
             <Divider />
-            <Text strong>⏰ Thông tin thời gian:</Text>
+            <Text strong style={{ color: theme.textColor}} >⏰ Thông tin thời gian:</Text>
             <div style={{ marginTop: '8px', padding: '12px', backgroundColor: '#f0f5ff', borderRadius: '6px', border: '1px solid #adc6ff' }}>
               <Row gutter={[16, 8]}>
                 <Col xs={24} sm={12}>
@@ -328,7 +340,7 @@ const OrdersPage = () => {
 
             {/* Shipping Address */}
             <Divider />
-            <Text strong>📍 Thông tin giao hàng:</Text>
+            <Text strong style={{ color: theme.textColor }}>📍 Thông tin giao hàng:</Text>
             <div style={{ marginTop: '8px', padding: '12px', backgroundColor: '#f6ffed', borderRadius: '6px', border: '1px solid #b7eb8f' }}>
               <Text strong style={{ display: 'block', marginBottom: '4px' }}>
                 {order.shipping_name}
@@ -348,7 +360,7 @@ const OrdersPage = () => {
             {order.status !== 'delivered' && order.status !== 'cancelled' && (
               <>
                 <Divider />
-                <Text strong>🚚 Dự kiến giao hàng:</Text>
+                <Text strong style={{ color: theme.textColor}}>🚚 Dự kiến giao hàng:</Text>
                 <div style={{ marginTop: '8px', padding: '12px', backgroundColor: '#fff7e6', borderRadius: '6px', border: '1px solid #ffd591' }}>
                   {(() => {
                     const orderDate = new Date(order.created_at);

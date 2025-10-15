@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Form, Input, Button, message, Card, Typography, Divider } from 'antd';
-import { UserOutlined, LockOutlined, MailOutlined, EyeInvisibleOutlined, EyeTwoTone } from '@ant-design/icons';
+import { Form, Input, Button, message, Card, Typography, Divider, Checkbox, Modal } from 'antd';
+import { UserOutlined, LockOutlined, MailOutlined, EyeInvisibleOutlined, EyeTwoTone, FileTextOutlined } from '@ant-design/icons';
 import axios from 'axios';
 import { useNavigate, Link } from 'react-router-dom';
 
@@ -10,6 +10,7 @@ const RegisterPage = () => {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   const [form] = Form.useForm();
+  const [isTermsModalVisible, setIsTermsModalVisible] = useState(false);
 
   useEffect(() => {
     // Scroll to top when page loads
@@ -157,7 +158,7 @@ const RegisterPage = () => {
             label="Mật khẩu" 
             rules={[
               { required: true, message: 'Vui lòng nhập mật khẩu!' },
-              { min: 8, message: 'Mật khẩu phải có ít nhất 8 ký tự!' }
+              { min: 6, message: 'Mật khẩu phải có ít nhất 6 ký tự!' }
             ]}
           >
             <Input.Password 
@@ -188,6 +189,30 @@ const RegisterPage = () => {
             />
           </Form.Item>
 
+          <Form.Item 
+            name="agree_terms" 
+            valuePropName="checked"
+            rules={[
+              { 
+                required: true, 
+                transform: (value) => value || undefined,
+                type: 'boolean', 
+                message: 'Bạn phải đồng ý với điều khoản để tiếp tục!' 
+              }
+            ]}
+          >
+            <Checkbox>
+              Tôi đồng ý với{' '}
+              <Button 
+                type="link" 
+                style={{ padding: 0, fontSize: 'inherit' }}
+                onClick={() => setIsTermsModalVisible(true)}
+              >
+                Điều khoản dịch vụ và Chính sách bảo mật
+              </Button>
+            </Checkbox>
+          </Form.Item>
+
           <Form.Item>
             <Button 
               type="primary" 
@@ -209,6 +234,94 @@ const RegisterPage = () => {
           </div>
         </Form>
       </Card>
+
+      {/* Terms of Service Modal */}
+      <Modal
+        title={
+          <span>
+            <FileTextOutlined style={{ marginRight: '8px' }} />
+            Điều khoản dịch vụ và Chính sách bảo mật
+          </span>
+        }
+        visible={isTermsModalVisible}
+        onOk={() => setIsTermsModalVisible(false)}
+        onCancel={() => setIsTermsModalVisible(false)}
+        width={800}
+        okText="Đã hiểu"
+        cancelText="Đóng"
+        bodyStyle={{ maxHeight: '500px', overflowY: 'auto' }}
+      >
+        <div style={{ lineHeight: '1.8' }}>
+          <Typography.Title level={4} style={{ color: '#1890ff', marginTop: '20px' }}>
+            📋 Điều khoản sử dụng
+          </Typography.Title>
+          
+          <Typography.Paragraph>
+            <Typography.Text strong>1. Chấp nhận điều khoản:</Typography.Text><br />
+            Khi sử dụng Fashion Store, bạn đồng ý tuân thủ tất cả các điều khoản và điều kiện được nêu trong tài liệu này.
+          </Typography.Paragraph>
+
+          <Typography.Paragraph>
+            <Typography.Text strong>2. Tài khoản người dùng:</Typography.Text><br />
+            • Bạn có trách nhiệm bảo mật thông tin tài khoản<br />
+            • Không chia sẻ tài khoản với người khác<br />
+            • Thông báo ngay khi phát hiện tài khoản bị xâm phạm
+          </Typography.Paragraph>
+
+          <Typography.Paragraph>
+            <Typography.Text strong>3. Quyền và nghĩa vụ:</Typography.Text><br />
+            • Cung cấp thông tin chính xác khi đăng ký<br />
+            • Không sử dụng dịch vụ cho mục đích bất hợp pháp<br />
+            • Tôn trọng quyền sở hữu trí tuệ của Fashion Store
+          </Typography.Paragraph>
+
+          <Typography.Title level={4} style={{ color: '#52c41a', marginTop: '20px' }}>
+            🔒 Chính sách bảo mật
+          </Typography.Title>
+
+          <Typography.Paragraph>
+            <Typography.Text strong>Thu thập thông tin:</Typography.Text><br />
+            Chúng tôi chỉ thu thập thông tin cần thiết để cung cấp dịch vụ tốt nhất cho bạn.
+          </Typography.Paragraph>
+
+          <Typography.Paragraph>
+            <Typography.Text strong>Bảo vệ dữ liệu:</Typography.Text><br />
+            • Mã hóa thông tin cá nhân<br />
+            • Không chia sẻ với bên thứ ba không được phép<br />
+            • Tuân thủ các quy định bảo mật quốc tế
+          </Typography.Paragraph>
+
+          <Typography.Paragraph>
+            <Typography.Text strong>Quyền của bạn:</Typography.Text><br />
+            • Xem và cập nhật thông tin cá nhân<br />
+            • Yêu cầu xóa tài khoản<br />
+            • Từ chối nhận email marketing
+          </Typography.Paragraph>
+
+          <Typography.Title level={4} style={{ color: '#fa8c16', marginTop: '20px' }}>
+            📞 Liên hệ
+          </Typography.Title>
+
+          <Typography.Paragraph>
+            Nếu có thắc mắc về điều khoản này, vui lòng liên hệ:<br />
+            📧 Email: support@fashionstore.com<br />
+            📞 Hotline: 1900 xxxx<br />
+            📍 Địa chỉ: 123 Đường ABC, Quận 1, TP.HaNoi
+          </Typography.Paragraph>
+
+          <Typography.Paragraph style={{ 
+            background: '#f0f2f5', 
+            padding: '12px', 
+            borderRadius: '4px',
+            marginTop: '20px'
+          }}>
+            <Typography.Text type="secondary">
+              Điều khoản này có hiệu lực từ ngày 01/01/2025. Fashion Store có quyền cập nhật 
+              điều khoản này và sẽ thông báo trước cho người dùng.
+            </Typography.Text>
+          </Typography.Paragraph>
+        </div>
+      </Modal>
     </div>
   );
 };
