@@ -20,6 +20,10 @@ import {
   MenuUnfoldOutlined,
   LogoutOutlined,
   SettingOutlined,
+  InboxOutlined,
+  BarChartOutlined,
+  HistoryOutlined,
+  WarningOutlined,
 } from '@ant-design/icons';
 import { useNavigate, useLocation } from 'react-router-dom';
 
@@ -65,6 +69,33 @@ const AdminLayout = ({ children }) => {
           key: '/admin/products/brands',
           icon: <TagsOutlined />,
           label: 'Thương hiệu',
+        },
+      ],
+    },
+    {
+      key: '/admin/stock',
+      icon: <InboxOutlined />,
+      label: 'Quản lý kho',
+      children: [
+        {
+          key: '/admin/stock',
+          icon: <InboxOutlined />,
+          label: 'Tồn kho',
+        },
+        {
+          key: '/admin/inventory/report',
+          icon: <BarChartOutlined />,
+          label: 'Báo cáo tồn kho',
+        },
+        {
+          key: '/admin/stock/history',
+          icon: <HistoryOutlined />,
+          label: 'Lịch sử nhập/xuất',
+        },
+        {
+          key: '/admin/stock/alerts',
+          icon: <WarningOutlined />,
+          label: 'Cảnh báo',
         },
       ],
     },

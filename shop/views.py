@@ -13,6 +13,8 @@ from .serializers import (
     WishlistSerializer, WishlistItemSerializer
 )
 from rest_framework_simplejwt.views import TokenObtainPairView
+from shop.services.stock_service import StockService
+from django.db import transaction
 
 # Custom permission for admin only
 class IsAdminUser(permissions.BasePermission):
@@ -293,6 +295,29 @@ class AdminOrderStatusUpdateView(generics.UpdateAPIView):
         print("Is admin:", request.user.is_admin)
         print("Is superuser:", request.user.is_superuser)
         
+        # Get the order and new status
+        order = self.get_object()
+        new_status = request.data.get('status')
+        old_status = order.status
+        
+        # Handle stock return for cancelled/returned orders
+        if new_status in ['cancelled', 'returned'] and old_status not in ['cancelled', 'returned']:
+            with transaction.atomic():
+                for item in order.items.all():
+                    try:
+                        StockService.return_stock(
+                            product_variant=item.product_variant,
+                            quantity=item.quantity,
+                            order=order,
+                            user=request.user,
+                            notes=f"Order #{order.id} {new_status} by admin"
+                        )
+                    except ValueError as e:
+                        return Response(
+                            {"error": f"Failed to return stock: {str(e)}"}, 
+                            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                        )
+        
         return super().patch(request, *args, **kwargs)
 
 # Cancel order (user can cancel if status is pending)
@@ -309,14 +334,26 @@ class OrderCancelView(APIView):
                     status=status.HTTP_400_BAD_REQUEST
                 )
             
-            # Restore stock quantities
-            for item in order.items.all():
-                item.product_variant.stock_quantity += item.quantity
-                item.product_variant.save()
-            
-            # Update order status
-            order.status = 'cancelled'
-            order.save()
+            # Return stock using StockService (proper way)
+            with transaction.atomic():
+                for item in order.items.all():
+                    try:
+                        StockService.return_stock(
+                            product_variant=item.product_variant,
+                            quantity=item.quantity,
+                            order=order,
+                            user=request.user,
+                            notes=f"Order #{order.id} cancelled by customer"
+                        )
+                    except ValueError as e:
+                        return Response(
+                            {"error": f"Failed to return stock: {str(e)}"}, 
+                            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                        )
+                
+                # Update order status
+                order.status = 'cancelled'
+                order.save()
             
             serializer = OrderSerializer(order)
             return Response(serializer.data)
@@ -377,18 +414,33 @@ class CreateOrderFromCartView(APIView):
                 notes=order_data['notes']
             )
             
-            # Create order items from cart items
-            for cart_item in cart.items.all():
-                OrderItem.objects.create(
-                    order=order,
-                    product_variant=cart_item.product_variant,
-                    quantity=cart_item.quantity,
-                    price_per_item=cart_item.product_variant.product.price
-                )
-                
-                # Update stock quantity
-                cart_item.product_variant.stock_quantity -= cart_item.quantity
-                cart_item.product_variant.save()
+            # Create order items from cart items and export stock
+            with transaction.atomic():
+                for cart_item in cart.items.all():
+                    # Create order item
+                    OrderItem.objects.create(
+                        order=order,
+                        product_variant=cart_item.product_variant,
+                        quantity=cart_item.quantity,
+                        price_per_item=cart_item.product_variant.product.price
+                    )
+                    
+                    # Export stock using StockService (proper way)
+                    try:
+                        StockService.export_stock(
+                            product_variant=cart_item.product_variant,
+                            quantity=cart_item.quantity,
+                            order=order,
+                            user=request.user,
+                            notes=f"Order #{order.id} - Customer checkout"
+                        )
+                    except ValueError as e:
+                        # Rollback and return error
+                        raise Exception(f"Failed to export stock: {str(e)}")
+                    
+                    # Release reservation if cart item was reserved
+                    if cart_item.is_reserved:
+                        cart_item.release_reservation()
             
             # Clear cart
             cart.items.all().delete()
@@ -1085,5 +1137,485 @@ class ProductStatsView(APIView):
         except Product.DoesNotExist:
             return Response(
                 {"error": "Product not found"}, 
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+
+#-----------------------------Stock Management APIs (Admin)-----------------------------------------------
+
+from .services.stock_service import StockService
+from .serializers import (
+    StockHistorySerializer, StockAlertSerializer, 
+    ProductVariantStockSerializer, StockTransactionSerializer,
+    StockAdjustmentSerializer
+)
+from .models import StockHistory, StockAlert
+
+# 1. Import Stock (Nhập kho)
+class AdminStockImportView(APIView):
+    """
+    API nhập kho
+    POST /api/shop/admin/stock/import/
+    Body: {
+        "variant_id": 1,
+        "quantity": 100,
+        "cost_per_item": 50000,
+        "reference_number": "NK-001",
+        "notes": "Nhập kho lô hàng mới"
+    }
+    """
+    permission_classes = [IsAdminUser]
+    
+    def post(self, request):
+        serializer = StockTransactionSerializer(data=request.data)
+        
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        
+        try:
+            variant_id = serializer.validated_data['variant_id']
+            quantity = serializer.validated_data['quantity']
+            cost_per_item = serializer.validated_data.get('cost_per_item')
+            reference_number = serializer.validated_data.get('reference_number', '')
+            notes = serializer.validated_data.get('notes', '')
+            
+            # Get variant
+            variant = ProductVariant.objects.get(id=variant_id)
+            
+            # Import stock
+            updated_variant = StockService.import_stock(
+                product_variant=variant,
+                quantity=quantity,
+                cost_per_item=cost_per_item,
+                reference_number=reference_number,
+                notes=notes,
+                user=request.user
+            )
+            
+            # Return updated variant info
+            return Response({
+                'message': f'Nhập kho thành công: {quantity} sản phẩm',
+                'variant': {
+                    'id': updated_variant.id,
+                    'sku': updated_variant.sku,
+                    'product_name': updated_variant.product.name,
+                    'size': updated_variant.size,
+                    'color': updated_variant.color,
+                    'stock_quantity': updated_variant.stock_quantity,
+                    'reserved_quantity': updated_variant.reserved_quantity,
+                    'available_quantity': updated_variant.available_quantity,
+                    'cost_price': float(updated_variant.cost_price),
+                }
+            }, status=status.HTTP_201_CREATED)
+            
+        except ProductVariant.DoesNotExist:
+            return Response(
+                {'error': 'Product variant not found'}, 
+                status=status.HTTP_404_NOT_FOUND
+            )
+        except ValueError as e:
+            return Response(
+                {'error': str(e)}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        except Exception as e:
+            return Response(
+                {'error': f'Error importing stock: {str(e)}'}, 
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+
+# 2. Adjust Stock (Điều chỉnh tồn kho)
+class AdminStockAdjustView(APIView):
+    """
+    API điều chỉnh tồn kho
+    POST /api/shop/admin/stock/adjust/
+    Body: {
+        "variant_id": 1,
+        "new_quantity": 50,
+        "reason": "Kiểm kê định kỳ"
+    }
+    """
+    permission_classes = [IsAdminUser]
+    
+    def post(self, request):
+        serializer = StockAdjustmentSerializer(data=request.data)
+        
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        
+        try:
+            variant_id = serializer.validated_data['variant_id']
+            new_quantity = serializer.validated_data['new_quantity']
+            reason = serializer.validated_data.get('reason', '')
+            
+            # Get variant
+            variant = ProductVariant.objects.get(id=variant_id)
+            old_quantity = variant.stock_quantity
+            
+            # Adjust stock
+            updated_variant = StockService.adjust_stock(
+                product_variant=variant,
+                new_quantity=new_quantity,
+                reason=reason,
+                user=request.user
+            )
+            
+            difference = new_quantity - old_quantity
+            action = "tăng" if difference > 0 else "giảm"
+            
+            return Response({
+                'message': f'Điều chỉnh tồn kho thành công: {action} {abs(difference)} sản phẩm',
+                'variant': {
+                    'id': updated_variant.id,
+                    'sku': updated_variant.sku,
+                    'product_name': updated_variant.product.name,
+                    'size': updated_variant.size,
+                    'color': updated_variant.color,
+                    'old_quantity': old_quantity,
+                    'new_quantity': updated_variant.stock_quantity,
+                    'difference': difference,
+                    'available_quantity': updated_variant.available_quantity,
+                }
+            }, status=status.HTTP_200_OK)
+            
+        except ProductVariant.DoesNotExist:
+            return Response(
+                {'error': 'Product variant not found'}, 
+                status=status.HTTP_404_NOT_FOUND
+            )
+        except ValueError as e:
+            return Response(
+                {'error': str(e)}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        except Exception as e:
+            return Response(
+                {'error': f'Error adjusting stock: {str(e)}'}, 
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+
+# 3. Mark as Damaged (Đánh dấu hàng hỏng)
+class AdminStockDamagedView(APIView):
+    """
+    API đánh dấu hàng hỏng
+    POST /api/shop/admin/stock/damaged/
+    Body: {
+        "variant_id": 1,
+        "quantity": 5,
+        "notes": "Hàng bị ướt do mưa"
+    }
+    """
+    permission_classes = [IsAdminUser]
+    
+    def post(self, request):
+        try:
+            variant_id = request.data.get('variant_id')
+            quantity = int(request.data.get('quantity', 0))
+            reason = request.data.get('notes', '')
+            
+            if quantity <= 0:
+                return Response(
+                    {'error': 'Quantity must be greater than 0'}, 
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Get variant
+            variant = ProductVariant.objects.get(id=variant_id)
+            
+            # Mark as damaged
+            updated_variant = StockService.mark_damaged(
+                product_variant=variant,
+                quantity=quantity,
+                reason=reason,
+                user=request.user
+            )
+            
+            return Response({
+                'message': f'Đã đánh dấu {quantity} sản phẩm hỏng',
+                'variant': {
+                    'id': updated_variant.id,
+                    'sku': updated_variant.sku,
+                    'product_name': updated_variant.product.name,
+                    'stock_quantity': updated_variant.stock_quantity,
+                    'available_quantity': updated_variant.available_quantity,
+                }
+            }, status=status.HTTP_200_OK)
+            
+        except ProductVariant.DoesNotExist:
+            return Response(
+                {'error': 'Product variant not found'}, 
+                status=status.HTTP_404_NOT_FOUND
+            )
+        except ValueError as e:
+            return Response(
+                {'error': str(e)}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        except Exception as e:
+            return Response(
+                {'error': f'Error marking as damaged: {str(e)}'}, 
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+
+# 4. Stock History (Lịch sử nhập/xuất)
+class AdminStockHistoryView(generics.ListAPIView):
+    """
+    API xem lịch sử stock
+    GET /api/shop/admin/stock/history/
+    Query params:
+        - variant_id: Filter by variant
+        - transaction_type: Filter by type (import, export, adjustment, etc.)
+        - start_date: Filter from date
+        - end_date: Filter to date
+    """
+    permission_classes = [IsAdminUser]
+    serializer_class = StockHistorySerializer
+    pagination_class = AdminPagination
+    
+    def get_queryset(self):
+        queryset = StockHistory.objects.all().select_related(
+            'product_variant__product',
+            'created_by',
+            'order'
+        ).order_by('-created_at')
+        
+        # Filter by variant
+        variant_id = self.request.query_params.get('variant_id')
+        if variant_id:
+            queryset = queryset.filter(product_variant_id=variant_id)
+        
+        # Filter by transaction type
+        transaction_type = self.request.query_params.get('transaction_type')
+        if transaction_type:
+            queryset = queryset.filter(transaction_type=transaction_type)
+        
+        # Filter by date range
+        start_date = self.request.query_params.get('start_date')
+        end_date = self.request.query_params.get('end_date')
+        
+        if start_date:
+            from django.utils.dateparse import parse_date
+            queryset = queryset.filter(created_at__date__gte=parse_date(start_date))
+        
+        if end_date:
+            from django.utils.dateparse import parse_date
+            queryset = queryset.filter(created_at__date__lte=parse_date(end_date))
+        
+        return queryset
+
+
+# 5. Stock Alerts (Cảnh báo tồn kho)
+class AdminStockAlertsView(generics.ListAPIView):
+    """
+    API xem cảnh báo tồn kho
+    GET /api/shop/admin/stock/alerts/
+    Query params:
+        - alert_type: Filter by type (low_stock, out_of_stock, reorder_needed)
+        - is_resolved: Filter by resolved status (true/false)
+    """
+    permission_classes = [IsAdminUser]
+    serializer_class = StockAlertSerializer
+    pagination_class = AdminPagination
+    
+    def get_queryset(self):
+        queryset = StockAlert.objects.all().select_related(
+            'product_variant__product',
+            'resolved_by'
+        ).order_by('is_resolved', '-created_at')
+        
+        # Filter by alert type
+        alert_type = self.request.query_params.get('alert_type')
+        if alert_type:
+            queryset = queryset.filter(alert_type=alert_type)
+        
+        # Filter by resolved status
+        is_resolved = self.request.query_params.get('is_resolved')
+        if is_resolved is not None:
+            is_resolved_bool = is_resolved.lower() == 'true'
+            queryset = queryset.filter(is_resolved=is_resolved_bool)
+        
+        return queryset
+
+
+# 6. Resolve Alert (Giải quyết cảnh báo)
+class AdminStockAlertResolveView(APIView):
+    """
+    API giải quyết cảnh báo
+    PATCH /api/shop/admin/stock/alerts/<id>/resolve/
+    """
+    permission_classes = [IsAdminUser]
+    
+    def patch(self, request, pk):
+        try:
+            alert = StockAlert.objects.get(pk=pk)
+            
+            if alert.is_resolved:
+                return Response(
+                    {'message': 'Alert đã được giải quyết trước đó'}, 
+                    status=status.HTTP_200_OK
+                )
+            
+            # Resolve alert
+            from django.utils import timezone
+            alert.is_resolved = True
+            alert.resolved_at = timezone.now()
+            alert.resolved_by = request.user
+            alert.save()
+            
+            return Response({
+                'message': 'Alert đã được giải quyết',
+                'alert': {
+                    'id': alert.id,
+                    'product_variant': alert.product_variant.sku,
+                    'alert_type': alert.get_alert_type_display(),
+                    'resolved_at': alert.resolved_at,
+                    'resolved_by': alert.resolved_by.username,
+                }
+            }, status=status.HTTP_200_OK)
+            
+        except StockAlert.DoesNotExist:
+            return Response(
+                {'error': 'Alert not found'}, 
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+
+# 7. Inventory Report (Báo cáo tồn kho)
+class AdminInventoryReportView(APIView):
+    """
+    API báo cáo tồn kho
+    GET /api/shop/admin/inventory/report/
+    Query params:
+        - category: Filter by category ID
+        - brand: Filter by brand ID
+        - low_stock: Show only low stock items (true/false)
+        - out_of_stock: Show only out of stock items (true/false)
+        - need_reorder: Show items need reorder (true/false)
+    """
+    permission_classes = [IsAdminUser]
+    
+    def get(self, request):
+        try:
+            # Get filters from query params
+            filters = {}
+            
+            category = request.query_params.get('category')
+            if category:
+                filters['category'] = int(category)
+            
+            brand = request.query_params.get('brand')
+            if brand:
+                filters['brand'] = int(brand)
+            
+            if request.query_params.get('low_stock') == 'true':
+                filters['low_stock'] = True
+            
+            if request.query_params.get('out_of_stock') == 'true':
+                filters['out_of_stock'] = True
+            
+            if request.query_params.get('need_reorder') == 'true':
+                filters['need_reorder'] = True
+            
+            # Get report
+            report = StockService.get_inventory_report(filters)
+            
+            # Serialize variants
+            variants_data = []
+            for variant in report['variants']:
+                variants_data.append({
+                    'id': variant.id,
+                    'sku': variant.sku,
+                    'product': {
+                        'id': variant.product.id,
+                        'name': variant.product.name,
+                        'category': variant.product.category.name if variant.product.category else None,
+                        'brand': variant.product.brand.name if variant.product.brand else None,
+                    },
+                    'size': variant.size,
+                    'color': variant.color,
+                    'stock_quantity': variant.stock_quantity,
+                    'reserved_quantity': variant.reserved_quantity,
+                    'available_quantity': variant.available_quantity,
+                    'minimum_stock': variant.minimum_stock,
+                    'reorder_point': variant.reorder_point,
+                    'cost_price': float(variant.cost_price),
+                    'total_value': float(variant.stock_quantity * variant.cost_price),
+                    'is_low_stock': variant.is_low_stock,
+                    'need_reorder': variant.need_reorder,
+                    'is_active': variant.is_active,
+                })
+            
+            return Response({
+                'summary': report['summary'],
+                'variants': variants_data,
+                'filters_applied': filters,
+            }, status=status.HTTP_200_OK)
+            
+        except Exception as e:
+            return Response(
+                {'error': f'Error generating report: {str(e)}'}, 
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+
+# 8. Get Variant Stock Info (Chi tiết stock của một variant)
+class AdminVariantStockDetailView(APIView):
+    """
+    API xem chi tiết stock của một variant
+    GET /api/shop/admin/inventory/variants/<id>/
+    """
+    permission_classes = [IsAdminUser]
+    
+    def get(self, request, pk):
+        try:
+            variant = ProductVariant.objects.select_related(
+                'product__category',
+                'product__brand'
+            ).get(pk=pk)
+            
+            # Get recent stock history
+            recent_history = StockService.get_variant_stock_history(variant, limit=10)
+            history_data = StockHistorySerializer(recent_history, many=True).data
+            
+            # Get active alerts
+            active_alerts = StockAlert.objects.filter(
+                product_variant=variant,
+                is_resolved=False
+            )
+            alerts_data = StockAlertSerializer(active_alerts, many=True).data
+            
+            return Response({
+                'variant': {
+                    'id': variant.id,
+                    'sku': variant.sku,
+                    'product': {
+                        'id': variant.product.id,
+                        'name': variant.product.name,
+                        'category': variant.product.category.name if variant.product.category else None,
+                        'brand': variant.product.brand.name if variant.product.brand else None,
+                    },
+                    'size': variant.size,
+                    'color': variant.color,
+                    'stock_quantity': variant.stock_quantity,
+                    'reserved_quantity': variant.reserved_quantity,
+                    'available_quantity': variant.available_quantity,
+                    'minimum_stock': variant.minimum_stock,
+                    'reorder_point': variant.reorder_point,
+                    'cost_price': float(variant.cost_price),
+                    'total_value': float(variant.stock_quantity * variant.cost_price),
+                    'is_low_stock': variant.is_low_stock,
+                    'need_reorder': variant.need_reorder,
+                    'is_active': variant.is_active,
+                },
+                'recent_history': history_data,
+                'active_alerts': alerts_data,
+            }, status=status.HTTP_200_OK)
+            
+        except ProductVariant.DoesNotExist:
+            return Response(
+                {'error': 'Product variant not found'}, 
                 status=status.HTTP_404_NOT_FOUND
             )

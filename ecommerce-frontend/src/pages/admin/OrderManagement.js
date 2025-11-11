@@ -172,54 +172,6 @@ const OrderManagement = () => {
       width: 90,
     },
     {
-      title: 'Sản phẩm / Mặt hàng',
-      key: 'products',
-      width: 280,
-      render: (_, record) => {
-        const items = record.items || [];
-        if (!Array.isArray(items) || items.length === 0) {
-          return <span style={{ color: '#999' }}>Không có sản phẩm</span>;
-        }
-        
-        return (
-          <div>
-            {items.slice(0, 2).map((item, index) => (
-              <div key={index} style={{ marginBottom: '6px', borderBottom: index === 0 && items.length > 1 ? '1px solid #f0f0f0' : 'none', paddingBottom: '4px' }}>
-                <div style={{ fontWeight: 600, color: '#1890ff', fontSize: '13px' }}>
-                  {item.product_variant?.product_name || 'Sản phẩm không xác định'}
-                </div>
-                <div style={{ fontSize: '11px', color: '#666', marginTop: '2px' }}>
-                  <span style={{ background: '#f6f6f6', padding: '2px 6px', borderRadius: '4px', marginRight: '8px' }}>
-                    SL: {item.quantity}
-                  </span>
-                  {item.product_variant?.size && (
-                    <span style={{ background: '#e6f7ff', color: '#1890ff', padding: '2px 6px', borderRadius: '4px', marginRight: '8px', fontSize: '10px' }}>
-                      {item.product_variant.size}
-                    </span>
-                  )}
-                  {item.product_variant?.color && (
-                    <span style={{ background: '#f6ffed', color: '#52c41a', padding: '2px 6px', borderRadius: '4px', marginRight: '8px', fontSize: '10px' }}>
-                      {item.product_variant.color}
-                    </span>
-                  )}
-                  <span style={{ color: '#52c41a', fontWeight: 500 }}>
-                    {Number(item.price_per_item || 0).toLocaleString()} VND
-                  </span>
-                </div>
-              </div>
-            ))}
-            {items.length > 2 && (
-              <div style={{ fontSize: '12px', color: '#1890ff', fontStyle: 'italic', marginTop: '4px' }}>
-                <Button type="link" size="small" style={{ padding: 0, height: 'auto' }}>
-                  +{items.length - 2} sản phẩm khác →
-                </Button>
-              </div>
-            )}
-          </div>
-        );
-      },
-    },
-    {
       title: 'Khách hàng',
       key: 'customer',
       width: 160,
@@ -469,120 +421,227 @@ const OrderManagement = () => {
 
       {/* Order Detail Modal */}
       <Modal
-        title={`Chi tiết đơn hàng #${selectedOrder?.id}`}
+        title={
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <FileTextOutlined style={{ fontSize: '24px', color: '#1890ff' }} />
+            <span>Chi tiết đơn hàng #{selectedOrder?.id}</span>
+          </div>
+        }
         visible={modalVisible}
         onCancel={() => setModalVisible(false)}
         footer={null}
-        width={800}
+        width={900}
       >
         {selectedOrder && (
           <div>
-            <Descriptions bordered column={2}>
+            {/* Thông tin đơn hàng */}
+            <Title level={5} style={{ marginBottom: '16px', color: '#1890ff' }}>
+               Thông tin đơn hàng
+            </Title>
+            <Descriptions bordered column={2} size="small" style={{ marginBottom: '24px' }}>
               <Descriptions.Item label="Mã đơn hàng">
-                #{selectedOrder.id}
+                <Tag color="blue" style={{ fontSize: '14px' }}>#{selectedOrder.id}</Tag>
               </Descriptions.Item>
-              <Descriptions.Item label="Ngày đặt">
+              <Descriptions.Item label="Ngày đặt hàng">
                 {formatDate(new Date(selectedOrder.created_at), 'dd/MM/yyyy HH:mm')}
               </Descriptions.Item>
-              <Descriptions.Item label="Khách hàng">
-                {selectedOrder.user?.username}
-              </Descriptions.Item>
-              <Descriptions.Item label="Email">
-                {selectedOrder.user?.email}
-              </Descriptions.Item>
-              <Descriptions.Item label="Số điện thoại">
-                {selectedOrder.phone || 'Chưa cung cấp'}
-              </Descriptions.Item>
-              <Descriptions.Item label="Địa chỉ">
-                {selectedOrder.address || 'Chưa cung cấp'}
-              </Descriptions.Item>
-              <Descriptions.Item label="Trạng thái">
+              <Descriptions.Item label="Trạng thái đơn hàng">
                 <Tag color={getStatusColor(selectedOrder.status)}>
                   {statusOptions.find(opt => opt.value === selectedOrder.status)?.label}
                 </Tag>
               </Descriptions.Item>
-              <Descriptions.Item label="Thanh toán">
+              <Descriptions.Item label="Trạng thái thanh toán">
                 <Tag color={getPaymentStatusColor(selectedOrder.payment_status)}>
                   {paymentStatusOptions.find(opt => opt.value === selectedOrder.payment_status)?.label}
                 </Tag>
               </Descriptions.Item>
-              <Descriptions.Item label="Tổng tiền" span={2}>
+              <Descriptions.Item label="Phương thức thanh toán" span={2}>
+                {selectedOrder.payment_method === 'cod' ? (
+                  <Tag color="orange">💵 Thanh toán khi nhận hàng (COD)</Tag>
+                ) : selectedOrder.payment_method === 'bank' ? (
+                  <Tag color="green">🏦 Chuyển khoản ngân hàng</Tag>
+                ) : selectedOrder.payment_method === 'momo' ? (
+                  <Tag color="purple">📱 Ví điện tử MoMo</Tag>
+                ) : (
+                  <Tag color="default">{selectedOrder.payment_method || 'Chưa cung cấp'}</Tag>
+                )}
+              </Descriptions.Item>
+            </Descriptions>
+
+            {/* Thông tin khách hàng */}
+            <Title level={5} style={{ marginBottom: '16px', color: '#52c41a' }}>
+               Thông tin khách hàng
+            </Title>
+            <Descriptions bordered column={2} size="small" style={{ marginBottom: '24px' }}>
+              <Descriptions.Item label="Tên đăng nhập">
+                <Tag color="blue">@{selectedOrder.user?.username || 'N/A'}</Tag>
+              </Descriptions.Item>
+              <Descriptions.Item label="Họ tên">
+                {selectedOrder.user?.first_name || selectedOrder.user?.last_name 
+                  ? `${selectedOrder.user?.first_name || ''} ${selectedOrder.user?.last_name || ''}`.trim()
+                  : <span style={{ color: '#999' }}>Chưa cập nhật</span>
+                }
+              </Descriptions.Item>
+              <Descriptions.Item label="Email">
+                {selectedOrder.user?.email || <span style={{ color: '#999' }}>Chưa cung cấp</span>}
+              </Descriptions.Item>
+              <Descriptions.Item label="Số điện thoại">
+                {selectedOrder.phone_number || <span style={{ color: '#999' }}>Chưa cung cấp</span>}
+              </Descriptions.Item>
+              <Descriptions.Item label="Người nhận" span={2}>
+                {selectedOrder.shipping_name || <span style={{ color: '#999' }}>Chưa cung cấp</span>}
+              </Descriptions.Item>
+              <Descriptions.Item label="Địa chỉ giao hàng" span={2}>
+                {selectedOrder.shipping_address || <span style={{ color: '#999' }}>Chưa cung cấp</span>}
+              </Descriptions.Item>
+            </Descriptions>
+
+            {/* Thông tin tổng tiền */}
+            <Title level={5} style={{ marginBottom: '16px', color: '#f5222d' }}>
+               Thông tin thanh toán
+            </Title>
+            <Descriptions bordered column={2} size="small" style={{ marginBottom: '24px' }}>
+              <Descriptions.Item label="Tổng tiền hàng">
+                {selectedOrder.total_price ? Number(selectedOrder.total_price).toLocaleString() : '0'} VND
+              </Descriptions.Item>
+              <Descriptions.Item label="Phí vận chuyển">
+                {selectedOrder.shipping_fee ? Number(selectedOrder.shipping_fee).toLocaleString() : '0'} VND
+              </Descriptions.Item>
+              <Descriptions.Item label="Giảm giá">
+                {selectedOrder.discount ? Number(selectedOrder.discount).toLocaleString() : '0'} VND
+              </Descriptions.Item>
+              <Descriptions.Item label="Tổng thanh toán">
                 <strong style={{ fontSize: '16px', color: '#f5222d' }}>
                   {selectedOrder.total_price ? Number(selectedOrder.total_price).toLocaleString() : '0'} VND
                 </strong>
               </Descriptions.Item>
-              {selectedOrder.notes && (
-                <Descriptions.Item label="Ghi chú" span={2}>
-                  {selectedOrder.notes}
-                </Descriptions.Item>
-              )}
             </Descriptions>
 
+            {/* Ghi chú */}
+            {selectedOrder.notes && (
+              <>
+                <Title level={5} style={{ marginBottom: '16px', color: '#faad14' }}>
+                  📝 Ghi chú đơn hàng
+                </Title>
+                <div style={{ 
+                  padding: '12px', 
+                  background: '#fffbe6', 
+                  border: '1px solid #ffe58f',
+                  borderRadius: '8px',
+                  marginBottom: '24px'
+                }}>
+                  {selectedOrder.notes}
+                </div>
+              </>
+            )}
+
             {/* Order Items */}
-            <Title level={4} style={{ marginTop: 24 }}>
-              Danh sách sản phẩm ({(selectedOrder.order_items || []).length} sản phẩm)
+            <Title level={5} style={{ marginTop: 24, marginBottom: '16px', color: '#722ed1' }}>
+               Danh sách sản phẩm ({(selectedOrder.items || []).length} sản phẩm)
             </Title>
             <Table
-              dataSource={Array.isArray(selectedOrder.order_items) ? selectedOrder.order_items : []}
+              dataSource={Array.isArray(selectedOrder.items) ? selectedOrder.items : []}
               pagination={false}
               size="small"
+              bordered
               columns={[
                 {
-                  title: 'Hình ảnh',
-                  key: 'image',
-                  width: 80,
-                  render: (_, record) => (
-                    <img
-                      src={record.product?.image || '/images/no-image.png'}
-                      alt={record.product?.name || 'Product'}
-                      style={{ width: 50, height: 50, objectFit: 'cover', borderRadius: 4 }}
-                      onError={(e) => {
-                        e.target.src = '/images/no-image.png';
-                      }}
-                    />
-                  ),
+                  title: 'STT',
+                  key: 'index',
+                  width: 50,
+                  align: 'center',
+                  render: (_, __, index) => index + 1,
                 },
                 {
                   title: 'Tên sản phẩm',
                   key: 'product_name',
                   render: (_, record) => (
                     <div>
-                      <div style={{ fontWeight: 500 }}>
-                        {record.product?.name || 'Sản phẩm không xác định'}
+                      <div style={{ fontWeight: 600, color: '#1890ff', fontSize: '14px' }}>
+                        {record.product_variant?.product_name || 'Sản phẩm không xác định'}
                       </div>
-                      <div style={{ fontSize: '12px', color: '#666' }}>
-                        Mã SP: #{record.product?.id || 'N/A'}
+                      <div style={{ fontSize: '12px', color: '#666', marginTop: '4px' }}>
+                        {record.product_variant?.size && (
+                          <Tag color="blue" size="small" style={{ marginRight: '4px' }}>
+                            Size: {record.product_variant.size}
+                          </Tag>
+                        )}
+                        {record.product_variant?.color && (
+                          <Tag color="green" size="small">
+                            Màu: {record.product_variant.color}
+                          </Tag>
+                        )}
                       </div>
                     </div>
                   ),
                 },
                 {
                   title: 'Đơn giá',
-                  dataIndex: 'price',
-                  key: 'price',
-                  width: 120,
-                  render: (price) => `${Number(price || 0).toLocaleString()} VND`,
+                  dataIndex: 'price_per_item',
+                  key: 'price_per_item',
+                  width: 130,
+                  align: 'right',
+                  render: (price) => (
+                    <span style={{ color: '#52c41a', fontWeight: 500 }}>
+                      {Number(price || 0).toLocaleString()} VND
+                    </span>
+                  ),
                 },
                 {
                   title: 'Số lượng',
                   dataIndex: 'quantity',
                   key: 'quantity',
-                  width: 80,
+                  width: 90,
                   align: 'center',
+                  render: (quantity) => (
+                    <Tag color="orange" style={{ fontSize: '13px', padding: '2px 12px' }}>
+                      x{quantity}
+                    </Tag>
+                  ),
                 },
                 {
                   title: 'Thành tiền',
-                  key: 'total',
-                  width: 120,
+                  key: 'total_price',
+                  width: 140,
                   align: 'right',
                   render: (_, record) => (
-                    <strong style={{ color: '#f5222d' }}>
-                      {((Number(record.price) || 0) * (Number(record.quantity) || 0)).toLocaleString()} VND
+                    <strong style={{ color: '#f5222d', fontSize: '14px' }}>
+                      {record.total_price ? Number(record.total_price).toLocaleString() : 
+                       ((Number(record.price_per_item) || 0) * (Number(record.quantity) || 0)).toLocaleString()} VND
                     </strong>
                   ),
                 },
               ]}
               rowKey={(record, index) => record.id || index}
+              summary={(pageData) => {
+                let totalQuantity = 0;
+                let totalAmount = 0;
+                
+                pageData.forEach(({ quantity, total_price, price_per_item }) => {
+                  totalQuantity += Number(quantity) || 0;
+                  totalAmount += Number(total_price) || ((Number(price_per_item) || 0) * (Number(quantity) || 0));
+                });
+                
+                return (
+                  <Table.Summary fixed>
+                    <Table.Summary.Row style={{ background: '#fafafa' }}>
+                      <Table.Summary.Cell index={0} colSpan={3} align="right">
+                        <strong style={{ fontSize: '14px' }}>Tổng cộng:</strong>
+                      </Table.Summary.Cell>
+                      <Table.Summary.Cell index={1} align="center">
+                        <Tag color="orange" style={{ fontSize: '14px', padding: '4px 16px' }}>
+                          <strong>{totalQuantity} sản phẩm</strong>
+                        </Tag>
+                      </Table.Summary.Cell>
+                      <Table.Summary.Cell index={2} align="right">
+                        <strong style={{ color: '#f5222d', fontSize: '16px' }}>
+                          {totalAmount.toLocaleString()} VND
+                        </strong>
+                      </Table.Summary.Cell>
+                    </Table.Summary.Row>
+                  </Table.Summary>
+                );
+              }}
             />
           </div>
         )}

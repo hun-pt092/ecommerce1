@@ -1,6 +1,10 @@
 
 from django.contrib import admin
-from .models import User, Category, Brand, Product, ProductImage, ProductVariant, Order, OrderItem, Review, Wishlist
+from .models import (
+    User, Category, Brand, Product, ProductImage, ProductVariant, 
+    Order, OrderItem, Review, Wishlist, Cart, CartItem,
+    StockHistory, StockAlert
+)
 
 # Custom admin cho User
 @admin.register(User)
@@ -42,7 +46,8 @@ class ProductImageInline(admin.TabularInline):
 class ProductVariantInline(admin.TabularInline):
     model = ProductVariant
     extra = 1
-    fields = ['size', 'color', 'stock_quantity']
+    fields = ['sku', 'size', 'color', 'stock_quantity', 'reserved_quantity', 'minimum_stock', 'cost_price', 'is_active']
+    readonly_fields = ['sku']
 
 # Custom admin cho Product
 @admin.register(Product)
@@ -86,9 +91,35 @@ class ProductImageAdmin(admin.ModelAdmin):
 # Custom admin cho ProductVariant  
 @admin.register(ProductVariant)
 class ProductVariantAdmin(admin.ModelAdmin):
-    list_display = ['product', 'size', 'color', 'stock_quantity']
-    list_filter = ['size', 'color', 'product__category']
-    search_fields = ['product__name', 'size', 'color']
+    list_display = ['sku', 'product', 'size', 'color', 'stock_quantity', 'reserved_quantity', 'available_quantity', 'is_low_stock', 'cost_price', 'is_active']
+    list_filter = ['size', 'color', 'is_active', 'product__category', 'product__brand']
+    search_fields = ['product__name', 'sku', 'size', 'color']
+    readonly_fields = ['sku', 'available_quantity', 'is_low_stock', 'need_reorder', 'created_at', 'updated_at']
+    
+    fieldsets = (
+        ('Thông tin sản phẩm', {
+            'fields': ('product', 'sku', 'size', 'color')
+        }),
+        ('Quản lý kho', {
+            'fields': ('stock_quantity', 'reserved_quantity', 'available_quantity', 'minimum_stock', 'reorder_point', 'cost_price')
+        }),
+        ('Trạng thái', {
+            'fields': ('is_active', 'is_low_stock', 'need_reorder')
+        }),
+        ('Thời gian', {
+            'fields': ('created_at', 'updated_at'),
+            'classes': ('collapse',)
+        }),
+    )
+    
+    def available_quantity(self, obj):
+        return obj.available_quantity
+    available_quantity.short_description = 'Available Stock'
+    
+    def is_low_stock(self, obj):
+        return obj.is_low_stock
+    is_low_stock.boolean = True
+    is_low_stock.short_description = 'Low Stock'
 
 # Custom admin cho Order
 @admin.register(Order)
@@ -124,3 +155,47 @@ class WishlistAdmin(admin.ModelAdmin):
     list_filter = ['created_at', 'product__category']
     search_fields = ['user__username', 'product__name']
     readonly_fields = ['created_at']
+
+
+# Custom admin cho StockHistory
+@admin.register(StockHistory)
+class StockHistoryAdmin(admin.ModelAdmin):
+    list_display = ['id', 'product_variant', 'transaction_type', 'quantity', 'quantity_before', 'quantity_after', 'created_by', 'created_at']
+    list_filter = ['transaction_type', 'created_at', 'product_variant__product__category']
+    search_fields = ['product_variant__product__name', 'product_variant__sku', 'reference_number', 'notes']
+    readonly_fields = ['created_at']
+    date_hierarchy = 'created_at'
+    
+    fieldsets = (
+        ('Transaction Info', {
+            'fields': ('product_variant', 'transaction_type', 'quantity', 'quantity_before', 'quantity_after')
+        }),
+        ('Reference', {
+            'fields': ('order', 'reference_number', 'cost_per_item')
+        }),
+        ('Details', {
+            'fields': ('notes', 'created_by', 'created_at')
+        }),
+    )
+
+
+# Custom admin cho StockAlert
+@admin.register(StockAlert)
+class StockAlertAdmin(admin.ModelAdmin):
+    list_display = ['id', 'product_variant', 'alert_type', 'current_quantity', 'threshold', 'is_resolved', 'created_at']
+    list_filter = ['alert_type', 'is_resolved', 'created_at']
+    search_fields = ['product_variant__product__name', 'product_variant__sku']
+    readonly_fields = ['created_at', 'resolved_at']
+    
+    actions = ['mark_as_resolved']
+    
+    def mark_as_resolved(self, request, queryset):
+        from django.utils import timezone
+        updated = queryset.update(
+            is_resolved=True,
+            resolved_at=timezone.now(),
+            resolved_by=request.user
+        )
+        self.message_user(request, f'{updated} alert(s) marked as resolved.')
+    mark_as_resolved.short_description = 'Mark selected alerts as resolved'
+

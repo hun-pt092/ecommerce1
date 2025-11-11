@@ -65,11 +65,13 @@ const ProductList = () => {
       title: 'Danh mục',
       dataIndex: ['category', 'name'],
       key: 'category',
+      render: (name) => name || <span style={{ color: '#999' }}>Chưa cập nhật</span>,
     },
     {
       title: 'Thương hiệu',
       dataIndex: ['brand', 'name'],
       key: 'brand',
+      render: (name) => name || <span style={{ color: '#999' }}>Chưa cập nhật</span>,
     },
     {
       title: 'Giá',

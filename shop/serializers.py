@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import User, Product, ProductVariant, Order, OrderItem, Category, Brand, ProductImage, Review, Wishlist
+from .models import User, Product, ProductVariant, Order, OrderItem, Category, Brand, ProductImage, Review, Wishlist, StockHistory, StockAlert
 from django.contrib.auth.password_validation import validate_password
 from rest_framework.validators import UniqueValidator
 
@@ -72,12 +72,25 @@ class ProductSerializer(serializers.ModelSerializer):
 class AdminProductSerializer(serializers.ModelSerializer):
     variants = ProductVariantSerializer(many=True, required=False)
     images = ProductImageSerializer(many=True, read_only=True)
-    category_name = serializers.CharField(source='category.name', read_only=True)
-    brand_name = serializers.CharField(source='brand.name', read_only=True)
     
-    # Handle foreign key fields
-    category = serializers.PrimaryKeyRelatedField(queryset=Category.objects.all(), required=True)
-    brand = serializers.PrimaryKeyRelatedField(queryset=Brand.objects.all(), required=False, allow_null=True)
+    # For reading - return nested objects
+    category = CategorySerializer(read_only=True)
+    brand = BrandSerializer(read_only=True)
+    
+    # For writing - accept IDs
+    category_id = serializers.PrimaryKeyRelatedField(
+        queryset=Category.objects.all(), 
+        source='category',
+        write_only=True,
+        required=True
+    )
+    brand_id = serializers.PrimaryKeyRelatedField(
+        queryset=Brand.objects.all(), 
+        source='brand',
+        write_only=True,
+        required=False, 
+        allow_null=True
+    )
     
     # Handle boolean fields from FormData
     is_active = serializers.BooleanField(required=False, default=True)
@@ -384,3 +397,108 @@ class WishlistItemSerializer(serializers.ModelSerializer):
     
     def get_product_main_image(self, obj):
         return obj.product.get_main_image()
+
+
+#-----------------------------Stock Management Serializers-----------------------------------------------
+
+# Stock History Serializer
+class StockHistorySerializer(serializers.ModelSerializer):
+    product_variant_detail = serializers.SerializerMethodField()
+    created_by_name = serializers.CharField(source='created_by.username', read_only=True)
+    transaction_type_display = serializers.CharField(source='get_transaction_type_display', read_only=True)
+    order_id = serializers.IntegerField(source='order.id', read_only=True)
+    
+    class Meta:
+        model = StockHistory
+        fields = [
+            'id', 'product_variant', 'product_variant_detail', 'transaction_type', 
+            'transaction_type_display', 'quantity', 'quantity_before', 'quantity_after',
+            'order', 'order_id', 'reference_number', 'cost_per_item', 'notes',
+            'created_by', 'created_by_name', 'created_at'
+        ]
+        read_only_fields = ['created_at']
+    
+    def get_product_variant_detail(self, obj):
+        return {
+            'id': obj.product_variant.id,
+            'sku': obj.product_variant.sku,
+            'product_name': obj.product_variant.product.name,
+            'size': obj.product_variant.size,
+            'color': obj.product_variant.color,
+        }
+
+
+# Stock Alert Serializer
+class StockAlertSerializer(serializers.ModelSerializer):
+    product_variant_detail = serializers.SerializerMethodField()
+    alert_type_display = serializers.CharField(source='get_alert_type_display', read_only=True)
+    resolved_by_name = serializers.CharField(source='resolved_by.username', read_only=True)
+    
+    class Meta:
+        model = StockAlert
+        fields = [
+            'id', 'product_variant', 'product_variant_detail', 'alert_type', 
+            'alert_type_display', 'current_quantity', 'threshold', 
+            'is_resolved', 'resolved_at', 'resolved_by', 'resolved_by_name', 'created_at'
+        ]
+        read_only_fields = ['created_at']
+    
+    def get_product_variant_detail(self, obj):
+        return {
+            'id': obj.product_variant.id,
+            'sku': obj.product_variant.sku,
+            'product_name': obj.product_variant.product.name,
+            'size': obj.product_variant.size,
+            'color': obj.product_variant.color,
+            'stock_quantity': obj.product_variant.stock_quantity,
+            'available_quantity': obj.product_variant.available_quantity,
+        }
+
+
+# Product Variant với Stock Info đầy đủ
+class ProductVariantStockSerializer(serializers.ModelSerializer):
+    product_name = serializers.CharField(source='product.name', read_only=True)
+    available_quantity = serializers.IntegerField(read_only=True)
+    is_low_stock = serializers.BooleanField(read_only=True)
+    need_reorder = serializers.BooleanField(read_only=True)
+    total_value = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = ProductVariant
+        fields = [
+            'id', 'product', 'product_name', 'sku', 'size', 'color',
+            'stock_quantity', 'reserved_quantity', 'available_quantity',
+            'minimum_stock', 'reorder_point', 'cost_price', 'total_value',
+            'is_active', 'is_low_stock', 'need_reorder',
+            'created_at', 'updated_at'
+        ]
+    
+    def get_total_value(self, obj):
+        return float(obj.stock_quantity * obj.cost_price)
+
+
+# Stock Import/Export Request Serializer
+class StockTransactionSerializer(serializers.Serializer):
+    variant_id = serializers.IntegerField(required=True)
+    quantity = serializers.IntegerField(required=True, min_value=1)
+    cost_per_item = serializers.DecimalField(max_digits=10, decimal_places=2, required=False, allow_null=True)
+    reference_number = serializers.CharField(max_length=50, required=False, allow_blank=True)
+    notes = serializers.CharField(required=False, allow_blank=True)
+    
+    def validate_quantity(self, value):
+        if value <= 0:
+            raise serializers.ValidationError("Số lượng phải lớn hơn 0")
+        return value
+
+
+# Stock Adjustment Request Serializer
+class StockAdjustmentSerializer(serializers.Serializer):
+    variant_id = serializers.IntegerField(required=True)
+    new_quantity = serializers.IntegerField(required=True, min_value=0)
+    reason = serializers.CharField(required=False, allow_blank=True)
+    
+    def validate_new_quantity(self, value):
+        if value < 0:
+            raise serializers.ValidationError("Số lượng mới không thể âm")
+        return value
+

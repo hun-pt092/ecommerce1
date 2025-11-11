@@ -15,7 +15,11 @@ from .views import (
     CurrentUserView,
     # Review and Wishlist views
     ProductReviewListView, ReviewCreateView, UserReviewListView, ReviewDetailView,
-    WishlistView, WishlistItemView, WishlistCheckView, ProductStatsView
+    WishlistView, WishlistItemView, WishlistCheckView, ProductStatsView,
+    # Stock Management views
+    AdminStockImportView, AdminStockAdjustView, AdminStockDamagedView,
+    AdminStockHistoryView, AdminStockAlertsView, AdminStockAlertResolveView,
+    AdminInventoryReportView, AdminVariantStockDetailView,
 )
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 
@@ -91,5 +95,15 @@ urlpatterns = [
     path('wishlist/', WishlistView.as_view(), name='wishlist'),
     path('wishlist/<int:product_id>/', WishlistItemView.as_view(), name='wishlist_item'),
     path('wishlist/check/<int:product_id>/', WishlistCheckView.as_view(), name='wishlist_check'),
+    
+    # Stock Management (Admin)
+    path('admin/stock/import/', AdminStockImportView.as_view(), name='admin_stock_import'),
+    path('admin/stock/adjust/', AdminStockAdjustView.as_view(), name='admin_stock_adjust'),
+    path('admin/stock/damaged/', AdminStockDamagedView.as_view(), name='admin_stock_damaged'),
+    path('admin/stock/history/', AdminStockHistoryView.as_view(), name='admin_stock_history'),
+    path('admin/stock/alerts/', AdminStockAlertsView.as_view(), name='admin_stock_alerts'),
+    path('admin/stock/alerts/<int:pk>/resolve/', AdminStockAlertResolveView.as_view(), name='admin_stock_alert_resolve'),
+    path('admin/inventory/report/', AdminInventoryReportView.as_view(), name='admin_inventory_report'),
+    path('admin/inventory/variants/<int:pk>/', AdminVariantStockDetailView.as_view(), name='admin_variant_stock_detail'),
 ]
 

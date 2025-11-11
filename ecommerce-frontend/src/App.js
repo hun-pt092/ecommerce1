@@ -30,6 +30,10 @@ import ProductList from './pages/admin/ProductList';
 import AddProduct from './pages/admin/AddProduct';
 import OrderManagement from './pages/admin/OrderManagement';
 import UserManagement from './pages/admin/UserManagement';
+import StockManagement from './pages/admin/StockManagement';
+import InventoryReport from './pages/admin/InventoryReport';
+import StockHistory from './pages/admin/StockHistory';
+import StockAlerts from './pages/admin/StockAlerts';
 
 function App() {
   return (
@@ -51,6 +55,10 @@ function App() {
                 <Route path="/products/edit/:id" element={<AddProduct />} />
                 <Route path="/orders" element={<OrderManagement />} />
                 <Route path="/users" element={<UserManagement />} />
+                <Route path="/stock" element={<StockManagement />} />
+                <Route path="/inventory/report" element={<InventoryReport />} />
+                <Route path="/stock/history" element={<StockHistory />} />
+                <Route path="/stock/alerts" element={<StockAlerts />} />
               </Routes>
             </AdminLayout>
           </AdminProtectedRoute>
