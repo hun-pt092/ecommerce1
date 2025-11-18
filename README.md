@@ -56,7 +56,10 @@ python manage.py createsuperuser
 ```bash
 python manage.py runserver
 ```
-
+5, mã cập nhật voucher sinh nhật
+```bash
+python manage.py generate_birthday_coupons --days-before=0
+```
 Backend sẽ chạy tại: http://localhost:8000
 
 ### Frontend (React)

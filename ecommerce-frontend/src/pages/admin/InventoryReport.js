@@ -19,7 +19,7 @@ const InventoryReport = () => {
   const fetchData = async () => {
     setLoading(true);
     try {
-      const response = await apiClient.get('/shop/admin/products/variants/');
+      const response = await apiClient.get('/admin/products/variants/');
       setVariants(response.data.results || response.data);
     } catch (error) {
       console.error('Error fetching data:', error);
@@ -35,7 +35,10 @@ const InventoryReport = () => {
     outOfStock: variants.filter(v => (v.available_quantity || 0) === 0).length,
     lowStock: variants.filter(v => {
       const available = v.available_quantity || 0;
-      return available > 0 && available < (v.minimum_stock || 5);
+      const minimumStock = v.minimum_stock || 5;
+      const reorderPoint = v.reorder_point || 10;
+      // Sắp hết = Hết hàng HOẶC dưới mức tối thiểu HOẶC cần đặt hàng
+      return available === 0 || available <= minimumStock || available <= reorderPoint;
     }).length,
   };
 
@@ -48,11 +51,23 @@ const InventoryReport = () => {
     .sort((a, b) => b.totalValue - a.totalValue)
     .slice(0, 10);
 
-  // Products need reorder
-  const needReorder = variants.filter(v => {
-    const available = v.available_quantity || 0;
-    return available > 0 && available < (v.reorder_point || 10);
-  });
+  // Products need reorder (including out of stock)
+  const needReorder = variants
+    .filter(v => {
+      const available = v.available_quantity || 0;
+      const reorderPoint = v.reorder_point || 10;
+      // Cần đặt hàng = Hết hàng HOẶC dưới điểm đặt hàng
+      return available <= reorderPoint;
+    })
+    .sort((a, b) => {
+      // Sắp xếp: Hết hàng trước, sau đó theo số lượng tăng dần
+      const availableA = a.available_quantity || 0;
+      const availableB = b.available_quantity || 0;
+      if (availableA === 0 && availableB !== 0) return -1;
+      if (availableA !== 0 && availableB === 0) return 1;
+      return availableA - availableB;
+    })
+    .slice(0, 6); // Chỉ lấy 6 sản phẩm cần đặt hàng nhất
 
   const columns = [
     {
@@ -210,7 +225,25 @@ const InventoryReport = () => {
 
         <Table
           columns={columns}
-          dataSource={variants}
+          dataSource={[...variants].sort((a, b) => {
+            const valueA = (a.stock_quantity || 0) * (a.cost_price || 0);
+            const valueB = (b.stock_quantity || 0) * (b.cost_price || 0);
+            const qtyA = a.stock_quantity || 0;
+            const qtyB = b.stock_quantity || 0;
+
+            switch (sortBy) {
+              case 'value_desc':
+                return valueB - valueA;
+              case 'value_asc':
+                return valueA - valueB;
+              case 'qty_desc':
+                return qtyB - qtyA;
+              case 'qty_asc':
+                return qtyA - qtyB;
+              default:
+                return valueB - valueA;
+            }
+          })}
           loading={loading}
           rowKey="id"
           pagination={{

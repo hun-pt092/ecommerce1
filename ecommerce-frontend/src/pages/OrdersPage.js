@@ -1,8 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { 
   Card, 
-  List, 
-  Badge, 
+  Table,
   Typography, 
   Space, 
   Divider, 
@@ -11,17 +10,28 @@ import {
   Tag,
   Row,
   Col,
-  message
+  message,
+  Button,
+  Modal,
+  List,
+  Descriptions
 } from 'antd';
 import { useTheme } from '../contexts/ThemeContext';
 import { 
   ShoppingOutlined,
   CalendarOutlined,
-  DollarOutlined,
-  UserOutlined
+  EyeOutlined,
+  ClockCircleOutlined,
+  EnvironmentOutlined,
+  PhoneOutlined,
+  CreditCardOutlined,
+  CloseCircleOutlined,
+  ExclamationCircleOutlined
 } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import authAxios from '../api/AuthAxios';
+import { format } from 'date-fns';
+import { vi } from 'date-fns/locale';
 
 const { Title, Text } = Typography;
 
@@ -29,10 +39,13 @@ const OrdersPage = () => {
   const navigate = useNavigate();
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [selectedOrder, setSelectedOrder] = useState(null);
+  const [detailModalVisible, setDetailModalVisible] = useState(false);
+  const [cancelModalVisible, setCancelModalVisible] = useState(false);
+  const [orderToCancel, setOrderToCancel] = useState(null);
   const { theme } = useTheme();
 
   useEffect(() => {
-    // Scroll to top when page loads
     window.scrollTo(0, 0);
     fetchOrders();
   }, []);
@@ -84,13 +97,188 @@ const OrdersPage = () => {
 
   const getPaymentStatusText = (status) => {
     const texts = {
-      'pending': 'Chờ thanh toán',
+      'pending': 'Chưa thanh toán',
       'paid': 'Đã thanh toán',
       'failed': 'Thanh toán thất bại',
       'refunded': 'Đã hoàn tiền'
     };
     return texts[status] || status;
   };
+
+  const getPaymentMethodText = (method) => {
+    const methods = {
+      'COD': 'Thanh toán khi nhận hàng',
+      'bank_transfer': 'Chuyển khoản',
+      'credit_card': 'Thẻ tín dụng',
+      'e_wallet': 'Ví điện tử'
+    };
+    return methods[method] || method;
+  };
+
+  const formatRelativeTime = (dateString) => {
+    const orderTime = new Date(dateString);
+    const now = new Date();
+    const diffInMinutes = Math.floor((now - orderTime) / (1000 * 60));
+    const diffInHours = Math.floor(diffInMinutes / 60);
+    const diffInDays = Math.floor(diffInHours / 24);
+    
+    if (diffInDays > 0) {
+      return `${diffInDays} ngày trước`;
+    } else if (diffInHours > 0) {
+      return `${diffInHours} giờ trước`;
+    } else if (diffInMinutes > 0) {
+      return `${diffInMinutes} phút trước`;
+    } else {
+      return 'Vừa xong';
+    }
+  };
+
+  const handleViewDetail = (order) => {
+    setSelectedOrder(order);
+    setDetailModalVisible(true);
+  };
+
+  const handleCancelOrder = (orderId) => {
+    setOrderToCancel(orderId);
+    setCancelModalVisible(true);
+  };
+
+  const confirmCancelOrder = async () => {
+    try {
+      const response = await authAxios.post(`orders/${orderToCancel}/cancel/`);
+      message.success(response.data.message || 'Hủy đơn hàng thành công');
+      
+      // Cập nhật lại danh sách đơn hàng
+      fetchOrders();
+      
+      // Nếu đang xem chi tiết đơn hàng này, cập nhật lại
+      if (selectedOrder && selectedOrder.id === orderToCancel) {
+        setSelectedOrder(response.data.order);
+      }
+      
+      // Đóng modal
+      setCancelModalVisible(false);
+      setOrderToCancel(null);
+    } catch (error) {
+      console.error('Error canceling order:', error);
+      message.error(error.response?.data?.error || 'Không thể hủy đơn hàng');
+    }
+  };
+
+  // Kiểm tra xem đơn hàng có thể hủy không (trong vòng 48 giờ và status phù hợp)
+  const canCancelOrder = (order) => {
+    // Chỉ cho phép hủy đơn pending hoặc processing
+    if (order.status !== 'pending' && order.status !== 'processing') {
+      return false;
+    }
+    
+    // Kiểm tra thời gian đặt hàng (trong vòng 48 giờ)
+    const orderTime = new Date(order.created_at);
+    const now = new Date();
+    const hoursDiff = (now - orderTime) / (1000 * 60 * 60);
+    
+    // Cho phép hủy trong vòng 48 giờ
+    return hoursDiff <= 48;
+  };
+
+  const columns = [
+    {
+      title: 'Mã đơn hàng',
+      dataIndex: 'id',
+      key: 'id',
+      render: (id) => (
+        <Text strong style={{ color: '#1890ff' }}>
+          ORD-{new Date().getFullYear()}{String(new Date().getMonth() + 1).padStart(2, '0')}-{id.toString().padStart(6, '0').substring(0, 6).toUpperCase()}
+        </Text>
+      ),
+      width: 180,
+    },
+    {
+      title: 'Ngày đặt',
+      dataIndex: 'created_at',
+      key: 'created_at',
+      render: (date) => (
+        <div>
+          <div>{format(new Date(date), 'dd/MM/yyyy HH:mm', { locale: vi })}</div>
+          <Text type="secondary" style={{ fontSize: '12px' }}>
+            {formatRelativeTime(date)}
+          </Text>
+        </div>
+      ),
+      width: 180,
+    },
+    {
+      title: 'Tổng tiền',
+      dataIndex: 'total_price',
+      key: 'total_price',
+      render: (price) => (
+        <Text strong style={{ color: '#ff4d4f', fontSize: '15px' }}>
+          {parseFloat(price).toLocaleString('vi-VN')}₫
+        </Text>
+      ),
+      width: 130,
+    },
+    {
+      title: 'Thanh toán',
+      key: 'payment',
+      render: (_, record) => (
+        <div>
+          <div>{getPaymentMethodText(record.payment_method)}</div>
+          <Tag 
+            color={getPaymentStatusColor(record.payment_status)}
+            style={{ marginTop: '4px' }}
+          >
+            {getPaymentStatusText(record.payment_status)}
+          </Tag>
+        </div>
+      ),
+      width: 180,
+    },
+    {
+      title: 'Trạng thái',
+      dataIndex: 'status',
+      key: 'status',
+      render: (status) => (
+        <Tag color={getStatusColor(status)} style={{ fontSize: '13px' }}>
+          {getStatusText(status)}
+        </Tag>
+      ),
+      width: 120,
+    },
+    {
+      title: 'Thao tác',
+      key: 'action',
+      render: (_, record) => {
+        return (
+          <Space>
+            <Button 
+              type="primary" 
+              icon={<EyeOutlined />}
+              onClick={() => handleViewDetail(record)}
+              size="small"
+            >
+              Xem
+            </Button>
+            {canCancelOrder(record) && (
+              <Button 
+                danger
+                icon={<CloseCircleOutlined />}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleCancelOrder(record.id);
+                }}
+                size="small"
+              >
+                Hủy
+              </Button>
+            )}
+          </Space>
+        );
+      },
+      width: 150,
+      fixed: 'right',
+    },
+  ];
 
   if (loading) {
     return (
@@ -124,298 +312,298 @@ const OrdersPage = () => {
       backgroundColor: theme.backgroundColor,
       color: theme.textColor,
       minHeight: '100vh',
-      padding: '20px'
+      padding: '24px'
     }}>
-      <Title level={2} style={{ color: theme.textColor }}>Đơn hàng của bạn</Title>
+      <Title level={2} style={{ color: theme.textColor, marginBottom: '24px' }}>
+        <ShoppingOutlined /> Đơn hàng của tôi
+      </Title>
       
-      <List
-        itemLayout="vertical"
-        dataSource={Array.isArray(orders) ? orders : []}
-        renderItem={(order) => (
-          <Card 
-            style={{ 
-              marginBottom: '16px',
-              backgroundColor: theme.cardBackground,
-              borderColor: theme.borderColor
-            }}
-            headStyle={{ color: theme.textColor, borderBottomColor: theme.borderColor }}
-            title={
-              <Space>
-                <ShoppingOutlined style={{ color: theme.textColor }} />
-                <Text strong style={{ color: theme.textColor }}>Đơn hàng #{order.id}</Text>
-              </Space>
-            }
-            extra={
-              <Space>
-                <Tag color={getStatusColor(order.status)}>
-                  {getStatusText(order.status)}
-                </Tag>
-                <Tag color={getPaymentStatusColor(order.payment_status)}>
-                  {getPaymentStatusText(order.payment_status)}
-                </Tag>
-              </Space>
-            }
-          >
-            <Row gutter={[16, 16]}>
-              <Col xs={24} sm={12} md={8}>
-                <Space direction="vertical" size="small">
-                  <Space>
-                    <CalendarOutlined style={{ color: theme.textColor }} />
-                    <Text type="secondary" style={{ color: theme.secondaryText }}>Thời gian đặt:</Text>
-                  </Space>
-                  <Text style={{ color: theme.textColor }}>{new Date(order.created_at).toLocaleDateString('vi-VN')}</Text>
-                  <Text type="secondary" style={{ fontSize: '12px', color: theme.secondaryText }}>
-                    {new Date(order.created_at).toLocaleTimeString('vi-VN', {
-                      hour: '2-digit',
-                      minute: '2-digit',
-                      second: '2-digit'
-                    })}
-                  </Text>
-                </Space>
-              </Col>
-              
-              <Col xs={24} sm={12} md={8}>
-                <Space direction="vertical" size="small">
-                  <Space>
-                    <DollarOutlined style={{ color: theme.textColor }} />
-                    <Text type="secondary" style={{ color: theme.secondaryText }}>Tổng tiền:</Text>
-                  </Space>
-                  <Text strong style={{ color: '#ff4d4f', fontSize: '16px' }}>
-                    {parseFloat(order.total_price).toLocaleString('vi-VN')}₫
-                  </Text>
-                  <Text type="secondary" style={{ fontSize: '12px', color: theme.secondaryText }}>
-                    ({order.total_items || order.items?.length || 0} sản phẩm)
-                  </Text>
-                </Space>
-              </Col>
-              
-              <Col xs={24} sm={12} md={8}>
-                <Space direction="vertical" size="small">
-                  <Space>
-                    <UserOutlined style={{ color: theme.textColor }} />
-                    <Text type="secondary" style={{ color: theme.secondaryText }}>Người nhận:</Text>
-                  </Space>
-                  <Text style={{ color: theme.textColor }}>{order.shipping_name}</Text>
-                </Space>
-              </Col>
-            </Row>
+      <Card>
+        <Table
+          columns={columns}
+          dataSource={orders}
+          rowKey="id"
+          pagination={{
+            pageSize: 10,
+            showSizeChanger: true,
+            showTotal: (total) => `Tổng ${total} đơn hàng`,
+          }}
+          scroll={{ x: 1000 }}
+        />
+      </Card>
 
-            {/* Products List */}
-            {order.items && order.items.length > 0 && (
-              <>
-                <Divider />
-                <Text strong style={{ color: theme.textColor }}>Sản phẩm đã đặt:</Text>
-                <List
-                  dataSource={order.items}
-                  renderItem={(item) => (
-                    <List.Item style={{ padding: '8px 0' }}>
-                      <List.Item.Meta
-                        title={
-                          <Space direction="vertical">
-                            <Text style={{ color: theme.textColor }}>{item.product_variant?.product_name || 'Sản phẩm'}</Text>
-                            <Text type="secondary" style={{ color: theme.secondaryText }}>
-                              ({item.product_variant?.color} - {item.product_variant?.size})
-                            </Text>
-                          </Space>
-                        }
-                        description={
-                          <Space>
-                            <Text style={{ color: theme.textColor }}>Số lượng: {item.quantity}</Text>
-                            <Text style={{ color: theme.textColor }}>•</Text>
-                            <Text style={{ color: theme.textColor }}>
-                              Đơn giá: {parseFloat(item.price_per_item).toLocaleString('vi-VN')}₫
-                            </Text>
-                          </Space>
-                        }
-                      />
-                      <Text strong style={{ color: theme.textColor }}>
-                        {(parseFloat(item.price_per_item) * item.quantity).toLocaleString('vi-VN')}₫
-                      </Text>
-                    </List.Item>
-                  )}
-                />
-                
-                {/* Price Breakdown */}
-                <div style={{ marginTop: '12px', padding: '12px', backgroundColor: '#fafafa', borderRadius: '6px' }}>
-                  {(() => {
-                    const totalPrice = parseFloat(order.total_price);
-                    const shippingFee = totalPrice >= 500000 ? 0 : 30000;
-                    const subTotal = totalPrice - shippingFee;
-                    
-                    return (
-                      <>
-                        <Row justify="space-between" style={{ marginBottom: '4px' }}>
-                          <Text>Tạm tính:</Text>
-                          <Text>{subTotal.toLocaleString('vi-VN')}₫</Text>
-                        </Row>
-                        <Row justify="space-between" style={{ marginBottom: '4px' }}>
-                          <Text>Phí vận chuyển:</Text>
-                          <Text style={{ color: shippingFee === 0 ? '#52c41a' : undefined }}>
-                            {shippingFee === 0 ? 'Miễn phí' : `${shippingFee.toLocaleString('vi-VN')}₫`}
-                          </Text>
-                        </Row>
-                        <Divider style={{ margin: '8px 0' }} />
-                        <Row justify="space-between">
-                          <Text strong>Tổng cộng:</Text>
-                          <Text strong style={{ color: '#ff4d4f' }}>
-                            {totalPrice.toLocaleString('vi-VN')}₫
-                          </Text>
-                        </Row>
-                      </>
-                    );
-                  })()}
-                </div>
-              </>
+      {/* Order Detail Modal */}
+      <Modal
+        title={
+          <Space>
+            <ShoppingOutlined style={{ color: '#1890ff' }} />
+            <span>Chi tiết đơn hàng</span>
+            {selectedOrder && (
+              <Text strong style={{ color: '#1890ff' }}>
+                ORD-{new Date().getFullYear()}{String(new Date().getMonth() + 1).padStart(2, '0')}-{selectedOrder.id.toString().padStart(6, '0').substring(0, 6).toUpperCase()}
+              </Text>
             )}
-
-            {/* Order Timeline */}
-            <Divider />
-            <Text strong style={{ color: theme.textColor}} >⏰ Thông tin thời gian:</Text>
-            <div style={{ marginTop: '8px', padding: '12px', backgroundColor: '#f0f5ff', borderRadius: '6px', border: '1px solid #adc6ff' }}>
-              <Row gutter={[16, 8]}>
-                <Col xs={24} sm={12}>
-                  <Text strong>Đặt hàng:</Text>
-                  <br />
-                  <Text style={{ fontSize: '13px' }}>
-                    {new Date(order.created_at).toLocaleDateString('vi-VN', {
-                      weekday: 'long',
-                      year: 'numeric',
-                      month: 'long',
-                      day: 'numeric'
-                    })}
-                  </Text>
-                  <br />
-                  <Text type="secondary" style={{ fontSize: '12px' }}>
-                    Lúc {new Date(order.created_at).toLocaleTimeString('vi-VN', {
-                      hour: '2-digit',
-                      minute: '2-digit'
-                    })}
-                  </Text>
+          </Space>
+        }
+        open={detailModalVisible}
+        onCancel={() => {
+          setDetailModalVisible(false);
+          setSelectedOrder(null);
+        }}
+        footer={[
+          selectedOrder && canCancelOrder(selectedOrder) && (
+            <Button 
+              key="cancel"
+              danger
+              icon={<CloseCircleOutlined />}
+              onClick={() => {
+                console.log('Cancel button in modal clicked for order:', selectedOrder.id);
+                setDetailModalVisible(false);
+                handleCancelOrder(selectedOrder.id);
+              }}
+            >
+              Hủy đơn hàng
+            </Button>
+          ),
+          <Button key="close" onClick={() => setDetailModalVisible(false)}>
+            Đóng
+          </Button>
+        ]}
+        width={800}
+      >
+        {selectedOrder && (
+          <div>
+            {/* Order Status */}
+            <Card 
+              size="small" 
+              style={{ marginBottom: '16px', backgroundColor: '#f0f5ff' }}
+            >
+              <Row gutter={16}>
+                <Col span={12}>
+                  <Space direction="vertical" size="small">
+                    <Text type="secondary">Trạng thái đơn hàng</Text>
+                    <Tag color={getStatusColor(selectedOrder.status)} style={{ fontSize: '14px' }}>
+                      {getStatusText(selectedOrder.status)}
+                    </Tag>
+                  </Space>
                 </Col>
-                
-                <Col xs={24} sm={12}>
-                  <Text strong>Cập nhật cuối:</Text>
-                  <br />
-                  <Text style={{ fontSize: '13px' }}>
-                    {new Date(order.updated_at).toLocaleDateString('vi-VN', {
-                      weekday: 'long',
-                      year: 'numeric',
-                      month: 'long',
-                      day: 'numeric'
-                    })}
-                  </Text>
-                  <br />
-                  <Text type="secondary" style={{ fontSize: '12px' }}>
-                    Lúc {new Date(order.updated_at).toLocaleTimeString('vi-VN', {
-                      hour: '2-digit',
-                      minute: '2-digit'
-                    })}
-                  </Text>
+                <Col span={12}>
+                  <Space direction="vertical" size="small">
+                    <Text type="secondary">Trạng thái thanh toán</Text>
+                    <Tag color={getPaymentStatusColor(selectedOrder.payment_status)} style={{ fontSize: '14px' }}>
+                      {getPaymentStatusText(selectedOrder.payment_status)}
+                    </Tag>
+                  </Space>
                 </Col>
               </Row>
-              
-              {/* Time since order */}
-              <div style={{ marginTop: '8px', paddingTop: '8px', borderTop: '1px solid #d9d9d9' }}>
-                <Text type="secondary" style={{ fontSize: '12px' }}>
-                  🕒 Đã đặt {(() => {
-                    const orderTime = new Date(order.created_at);
-                    const now = new Date();
-                    const diffInMinutes = Math.floor((now - orderTime) / (1000 * 60));
-                    const diffInHours = Math.floor(diffInMinutes / 60);
-                    const diffInDays = Math.floor(diffInHours / 24);
-                    
-                    if (diffInDays > 0) {
-                      return `${diffInDays} ngày trước`;
-                    } else if (diffInHours > 0) {
-                      return `${diffInHours} giờ trước`;
-                    } else if (diffInMinutes > 0) {
-                      return `${diffInMinutes} phút trước`;
-                    } else {
-                      return 'vừa xong';
-                    }
-                  })()}
+            </Card>
+
+            {/* Order Info */}
+            <Descriptions bordered column={2} size="small" style={{ marginBottom: '16px' }}>
+              <Descriptions.Item label={<><CalendarOutlined /> Ngày đặt</>} span={2}>
+                {format(new Date(selectedOrder.created_at), 'dd/MM/yyyy HH:mm:ss', { locale: vi })}
+                <Text type="secondary" style={{ marginLeft: '8px', fontSize: '12px' }}>
+                  ({formatRelativeTime(selectedOrder.created_at)})
                 </Text>
-              </div>
-            </div>
+              </Descriptions.Item>
+              
+              <Descriptions.Item label={<><CreditCardOutlined /> Phương thức thanh toán</>} span={2}>
+                {getPaymentMethodText(selectedOrder.payment_method)}
+              </Descriptions.Item>
+            </Descriptions>
 
-            {/* Shipping Address */}
-            <Divider />
-            <Text strong style={{ color: theme.textColor }}>📍 Thông tin giao hàng:</Text>
-            <div style={{ marginTop: '8px', padding: '12px', backgroundColor: '#f6ffed', borderRadius: '6px', border: '1px solid #b7eb8f' }}>
-              <Text strong style={{ display: 'block', marginBottom: '4px' }}>
-                {order.shipping_name}
-              </Text>
-              <Text style={{ display: 'block', marginBottom: '4px' }}>
-                📞 {order.phone_number}
-              </Text>
-              <Text type="secondary" style={{ fontSize: '13px', lineHeight: '1.4' }}>
-                {order.shipping_address}
-                {order.shipping_city && <><br/>{order.shipping_city}</>}
-                {order.shipping_postal_code && <> - {order.shipping_postal_code}</>}
-                {order.shipping_country && <><br/>{order.shipping_country}</>}
-              </Text>
-            </div>
-
-            {/* Estimated Delivery */}
-            {order.status !== 'delivered' && order.status !== 'cancelled' && (
-              <>
-                <Divider />
-                <Text strong style={{ color: theme.textColor}}>🚚 Dự kiến giao hàng:</Text>
-                <div style={{ marginTop: '8px', padding: '12px', backgroundColor: '#fff7e6', borderRadius: '6px', border: '1px solid #ffd591' }}>
-                  {(() => {
-                    const orderDate = new Date(order.created_at);
-                    const estimatedDelivery = new Date(orderDate);
-                    
-                    // Add estimated delivery days based on status
-                    let deliveryDays = 3; // default
-                    switch(order.status) {
-                      case 'pending':
-                        deliveryDays = 3;
-                        break;
-                      case 'processing':
-                        deliveryDays = 2;
-                        break;
-                      case 'shipped':
-                        deliveryDays = 1;
-                        break;
-                      default:
-                        deliveryDays = 3;
-                    }
-                    
-                    estimatedDelivery.setDate(orderDate.getDate() + deliveryDays);
-                    
-                    return (
-                      <>
-                        <Text>
-                          {estimatedDelivery.toLocaleDateString('vi-VN', {
-                            weekday: 'long',
-                            year: 'numeric',
-                            month: 'long',
-                            day: 'numeric'
-                          })}
-                        </Text>
-                        <br />
-                        <Text type="secondary" style={{ fontSize: '12px' }}>
-                          (Trong vòng {deliveryDays} ngày làm việc từ khi đặt hàng)
-                        </Text>
-                      </>
-                    );
-                  })()}
+            {/* Shipping Info */}
+            <Card 
+              title={<><EnvironmentOutlined /> Thông tin giao hàng</>}
+              size="small" 
+              style={{ marginBottom: '16px' }}
+            >
+              <Space direction="vertical" style={{ width: '100%' }}>
+                <div>
+                  <Text strong>{selectedOrder.shipping_name}</Text>
                 </div>
-              </>
-            )}
+                <div>
+                  <PhoneOutlined /> <Text>{selectedOrder.phone_number}</Text>
+                </div>
+                <div>
+                  <Text type="secondary">
+                    {selectedOrder.shipping_address}
+                    {selectedOrder.shipping_city && <>, {selectedOrder.shipping_city}</>}
+                    {selectedOrder.shipping_postal_code && <>, {selectedOrder.shipping_postal_code}</>}
+                    {selectedOrder.shipping_country && <>, {selectedOrder.shipping_country}</>}
+                  </Text>
+                </div>
+              </Space>
+            </Card>
 
-            {order.notes && (
-              <>
-                <Divider />
+            {/* Products List */}
+            <Card 
+              title="Sản phẩm đã đặt"
+              size="small" 
+              style={{ marginBottom: '16px' }}
+            >
+              <List
+                dataSource={selectedOrder.items || []}
+                renderItem={(item) => (
+                  <List.Item>
+                    <List.Item.Meta
+                      avatar={
+                        <img 
+                          src={item.product_variant?.image || '/placeholder-image.png'} 
+                          alt={item.product_variant?.product_name || 'Sản phẩm'}
+                          style={{ 
+                            width: '80px', 
+                            height: '80px', 
+                            objectFit: 'cover',
+                            borderRadius: '8px',
+                            border: '1px solid #f0f0f0'
+                          }}
+                        />
+                      }
+                      title={
+                        <div>
+                          <Text strong>{item.product_variant?.product_name || 'Sản phẩm'}</Text>
+                          <br />
+                          <Text type="secondary" style={{ fontSize: '13px' }}>
+                            Màu: {item.product_variant?.color} | Size: {item.product_variant?.size}
+                          </Text>
+                        </div>
+                      }
+                      description={
+                        <Space>
+                          <Text>Số lượng: {item.quantity}</Text>
+                          <Text>•</Text>
+                          <Text>Đơn giá: {parseFloat(item.price_per_item).toLocaleString('vi-VN')}₫</Text>
+                        </Space>
+                      }
+                    />
+                    <Text strong style={{ color: '#ff4d4f' }}>
+                      {(parseFloat(item.price_per_item) * item.quantity).toLocaleString('vi-VN')}₫
+                    </Text>
+                  </List.Item>
+                )}
+              />
+            </Card>
+
+            {/* Price Summary */}
+            <Card size="small" style={{ backgroundColor: '#fafafa' }}>
+              {(() => {
+                const totalPrice = parseFloat(selectedOrder.total_price);
+                const discountAmount = parseFloat(selectedOrder.discount_amount || 0);
+                const shippingFee = totalPrice >= 500000 ? 0 : 30000;
+                const subTotal = totalPrice - shippingFee + discountAmount;
+                
+                return (
+                  <>
+                    <Row justify="space-between" style={{ marginBottom: '8px' }}>
+                      <Text>Tạm tính:</Text>
+                      <Text>{subTotal.toLocaleString('vi-VN')}₫</Text>
+                    </Row>
+                    
+                    {discountAmount > 0 && (
+                      <Row justify="space-between" style={{ marginBottom: '8px' }}>
+                        <Text>Giảm giá voucher:</Text>
+                        <Text style={{ color: '#52c41a' }}>
+                          -{discountAmount.toLocaleString('vi-VN')}₫
+                        </Text>
+                      </Row>
+                    )}
+                    
+                    <Row justify="space-between" style={{ marginBottom: '8px' }}>
+                      <Text>Phí vận chuyển:</Text>
+                      <Text style={{ color: shippingFee === 0 ? '#52c41a' : undefined }}>
+                        {shippingFee === 0 ? 'Miễn phí' : `${shippingFee.toLocaleString('vi-VN')}₫`}
+                      </Text>
+                    </Row>
+                    
+                    <Divider style={{ margin: '12px 0' }} />
+                    
+                    <Row justify="space-between">
+                      <Text strong style={{ fontSize: '16px' }}>Tổng cộng:</Text>
+                      <Text strong style={{ color: '#ff4d4f', fontSize: '18px' }}>
+                        {totalPrice.toLocaleString('vi-VN')}₫
+                      </Text>
+                    </Row>
+                  </>
+                );
+              })()}
+            </Card>
+
+            {/* Notes */}
+            {selectedOrder.notes && (
+              <Card 
+                size="small" 
+                style={{ marginTop: '16px', backgroundColor: '#fffbe6' }}
+              >
                 <Text strong>Ghi chú:</Text>
                 <br />
-                <Text italic>{order.notes}</Text>
-              </>
+                <Text italic>{selectedOrder.notes}</Text>
+              </Card>
             )}
-          </Card>
+
+            {/* Estimated Delivery */}
+            {selectedOrder.status !== 'delivered' && selectedOrder.status !== 'cancelled' && (
+              <Card 
+                size="small" 
+                style={{ marginTop: '16px', backgroundColor: '#fff7e6' }}
+              >
+                <Space direction="vertical">
+                  <Text strong><ClockCircleOutlined /> Dự kiến giao hàng:</Text>
+                  <Text>
+                    {(() => {
+                      const orderDate = new Date(selectedOrder.created_at);
+                      const estimatedDelivery = new Date(orderDate);
+                      let deliveryDays = 3;
+                      
+                      switch(selectedOrder.status) {
+                        case 'pending':
+                          deliveryDays = 3;
+                          break;
+                        case 'processing':
+                          deliveryDays = 2;
+                          break;
+                        case 'shipped':
+                          deliveryDays = 1;
+                          break;
+                        default:
+                          deliveryDays = 3;
+                      }
+                      
+                      estimatedDelivery.setDate(orderDate.getDate() + deliveryDays);
+                      
+                      return format(estimatedDelivery, 'dd/MM/yyyy', { locale: vi });
+                    })()}
+                  </Text>
+                </Space>
+              </Card>
+            )}
+          </div>
         )}
-      />
+      </Modal>
+
+      {/* Cancel Order Confirmation Modal */}
+      <Modal
+        title={
+          <Space>
+            <ExclamationCircleOutlined style={{ color: '#ff4d4f' }} />
+            <span>Xác nhận hủy đơn hàng</span>
+          </Space>
+        }
+        open={cancelModalVisible}
+        onOk={confirmCancelOrder}
+        onCancel={() => {
+          setCancelModalVisible(false);
+          setOrderToCancel(null);
+        }}
+        okText="Hủy đơn hàng"
+        cancelText="Không"
+        okButtonProps={{ danger: true }}
+      >
+        <p>Bạn có chắc chắn muốn hủy đơn hàng này không?</p>
+        <p style={{ color: '#8c8c8c', fontSize: '14px' }}>
+          Hành động này không thể hoàn tác. Số lượng sản phẩm sẽ được hoàn trả vào kho.
+        </p>
+      </Modal>
     </div>
   );
 };

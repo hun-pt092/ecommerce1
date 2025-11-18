@@ -3,7 +3,7 @@ from .views import (
     CartView, RegisterView, ProductListView, ProductDetailView,
     CategoryListView, BrandListView,  # Public views
     OrderCreateView, OrderListView, OrderDetailView, 
-    AdminOrderListView, AdminOrderStatusUpdateView, OrderCancelView,
+    AdminOrderListView, AdminOrderStatusUpdateView, CancelOrderView,
     CreateOrderFromCartView, UserOrderListView, UserOrderDetailView, OrderStatusUpdateView,
     # Admin views
     AdminCategoryListView, AdminCategoryDetailView,
@@ -12,7 +12,7 @@ from .views import (
     # Admin dashboard and management
     AdminDashboardStatsView, AdminOrderStatsView, AdminUserStatsView,
     AdminUserListView, AdminUserDetailView, AdminUserStatusUpdateView,
-    CurrentUserView,
+    CurrentUserView, ChangePasswordView,
     # Review and Wishlist views
     ProductReviewListView, ReviewCreateView, UserReviewListView, ReviewDetailView,
     WishlistView, WishlistItemView, WishlistCheckView, ProductStatsView,
@@ -20,6 +20,10 @@ from .views import (
     AdminStockImportView, AdminStockAdjustView, AdminStockDamagedView,
     AdminStockHistoryView, AdminStockAlertsView, AdminStockAlertResolveView,
     AdminInventoryReportView, AdminVariantStockDetailView,
+    AdminStockReturnView, AdminVariantStockHistoryView, AdminVariantListView,
+    # Coupon & Birthday views
+    UserCouponListView, ApplyCouponView,
+    AdminCouponListCreateView, AdminCouponDetailView, AdminUserCouponListView,
 )
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 
@@ -30,6 +34,7 @@ urlpatterns = [
     path('token/', TokenObtainPairView.as_view(), name='token_obtain_pair_alt'),
     path('token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
     path('user/', CurrentUserView.as_view(), name='current_user'),
+    path('user/change-password/', ChangePasswordView.as_view(), name='change_password'),
     
     # Products
     path('products/', ProductListView.as_view(), name='product_list'),
@@ -48,7 +53,7 @@ urlpatterns = [
     path('orders/create-from-cart/', CreateOrderFromCartView.as_view(), name='create_order_from_cart'),
     path('orders/my-orders/', UserOrderListView.as_view(), name='user_order_list'),
     path('orders/<int:pk>/', UserOrderDetailView.as_view(), name='user_order_detail'),
-    path('orders/<int:pk>/cancel/', OrderCancelView.as_view(), name='order_cancel'),
+    path('orders/<int:pk>/cancel/', CancelOrderView.as_view(), name='order_cancel'),
     
     # Orders - Admin endpoints
     path('admin/orders/', AdminOrderListView.as_view(), name='admin_order_list'),
@@ -96,14 +101,25 @@ urlpatterns = [
     path('wishlist/<int:product_id>/', WishlistItemView.as_view(), name='wishlist_item'),
     path('wishlist/check/<int:product_id>/', WishlistCheckView.as_view(), name='wishlist_check'),
     
-    # Stock Management (Admin)
-    path('admin/stock/import/', AdminStockImportView.as_view(), name='admin_stock_import'),
-    path('admin/stock/adjust/', AdminStockAdjustView.as_view(), name='admin_stock_adjust'),
-    path('admin/stock/damaged/', AdminStockDamagedView.as_view(), name='admin_stock_damaged'),
+    # Stock Management (Admin) - Updated URLs
+    path('admin/stock/variants/<int:variant_id>/import/', AdminStockImportView.as_view(), name='admin_stock_import'),
+    path('admin/stock/variants/<int:variant_id>/adjust/', AdminStockAdjustView.as_view(), name='admin_stock_adjust'),
+    path('admin/stock/variants/<int:variant_id>/damaged/', AdminStockDamagedView.as_view(), name='admin_stock_damaged'),
+    path('admin/stock/variants/<int:variant_id>/return/', AdminStockReturnView.as_view(), name='admin_stock_return'),
     path('admin/stock/history/', AdminStockHistoryView.as_view(), name='admin_stock_history'),
+    path('admin/stock/variants/<int:variant_id>/history/', AdminVariantStockHistoryView.as_view(), name='admin_variant_stock_history'),
     path('admin/stock/alerts/', AdminStockAlertsView.as_view(), name='admin_stock_alerts'),
     path('admin/stock/alerts/<int:pk>/resolve/', AdminStockAlertResolveView.as_view(), name='admin_stock_alert_resolve'),
     path('admin/inventory/report/', AdminInventoryReportView.as_view(), name='admin_inventory_report'),
     path('admin/inventory/variants/<int:pk>/', AdminVariantStockDetailView.as_view(), name='admin_variant_stock_detail'),
+    # Lấy danh sách variants cho Stock Management
+    path('admin/products/variants/', AdminVariantListView.as_view(), name='admin_variant_list'),
+    
+    # Coupon & Birthday Coupons
+    path('coupons/', UserCouponListView.as_view(), name='user_coupon_list'),  # Ví voucher
+    path('coupons/apply/', ApplyCouponView.as_view(), name='apply_coupon'),  # Áp dụng mã
+    # Admin coupon management
+    path('admin/coupons/', AdminCouponListCreateView.as_view(), name='admin_coupon_list'),
+    path('admin/coupons/<int:pk>/', AdminCouponDetailView.as_view(), name='admin_coupon_detail'),
+    path('admin/user-coupons/', AdminUserCouponListView.as_view(), name='admin_user_coupon_list'),
 ]
-

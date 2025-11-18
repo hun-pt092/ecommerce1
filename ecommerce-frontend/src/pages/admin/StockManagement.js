@@ -27,7 +27,7 @@ const StockManagement = () => {
   const fetchVariants = async () => {
     setLoading(true);
     try {
-      const response = await apiClient.get('/shop/admin/products/variants/');
+      const response = await apiClient.get('/admin/products/variants/');
       setVariants(response.data.results || response.data);
     } catch (error) {
       message.error('Không thể tải danh sách sản phẩm');
@@ -57,30 +57,26 @@ const StockManagement = () => {
     const reorderPoint = variant.reorder_point || 10;
 
     if (available === 0) return 'out_of_stock';
-    if (available < minimumStock) return 'low';
-    if (available < reorderPoint) return 'warning';
+    if (available <= minimumStock) return 'low';
+    if (available <= reorderPoint) return 'warning';
     return 'good';
   };
 
   const columns = [
     {
-      title: 'SKU',
-      dataIndex: 'sku',
-      key: 'sku',
-      width: 120,
-      fixed: 'left',
-    },
-    {
       title: 'Sản phẩm',
       key: 'product',
-      width: 250,
+      width: 300,
+      fixed: 'left',
       render: (_, record) => (
         <div>
-          <div style={{ fontWeight: 500 }}>{record.product?.name || record.product_name}</div>
+          <div style={{ fontWeight: 500, marginBottom: 4 }}>
+            {record.product_name || record.product?.name}
+          </div>
           <div style={{ fontSize: '12px', color: '#666' }}>
-            {record.size && `Size: ${record.size}`}
+            {record.size && <span>Size: <strong>{record.size}</strong></span>}
             {record.size && record.color && ' | '}
-            {record.color && `Màu: ${record.color}`}
+            {record.color && <span>Màu: <strong>{record.color}</strong></span>}
           </div>
         </div>
       ),
@@ -100,7 +96,8 @@ const StockManagement = () => {
       key: 'reserved_quantity',
       width: 100,
       align: 'center',
-      render: (qty) => qty > 0 ? <Tag color="orange">{qty}</Tag> : '-',
+      render: (qty) => qty > 0 ? <Tag color="orange">{qty}</Tag> : <span style={{ color: '#999' }}>0</span>,
+      tooltip: 'Số lượng đang giữ trong đơn hàng chưa hoàn thành',
     },
     {
       title: 'Khả dụng',
@@ -112,11 +109,13 @@ const StockManagement = () => {
       render: (qty) => (
         <span style={{ 
           fontWeight: 'bold', 
+          fontSize: '16px',
           color: qty > 10 ? '#52c41a' : qty > 0 ? '#faad14' : '#ff4d4f' 
         }}>
           {qty || 0}
         </span>
       ),
+      tooltip: 'Số lượng có thể bán = Tồn kho - Đang giữ',
     },
     {
       title: 'Trạng thái',
@@ -133,20 +132,23 @@ const StockManagement = () => {
       render: (_, record) => <StockAlertBadge variant={record} />,
     },
     {
+      title: 'Giá bán',
+      dataIndex: 'product_price',
+      key: 'product_price',
+      width: 130,
+      align: 'right',
+      render: (price, record) => {
+        const displayPrice = price || record.product?.price;
+        return displayPrice ? `${Number(displayPrice).toLocaleString()} ₫` : '-';
+      },
+    },
+    {
       title: 'Giá vốn',
       dataIndex: 'cost_price',
       key: 'cost_price',
-      width: 120,
+      width: 130,
       align: 'right',
-      render: (price) => price ? `${Number(price).toLocaleString()} ₫` : '-',
-    },
-    {
-      title: 'Giá bán',
-      dataIndex: 'price',
-      key: 'price',
-      width: 120,
-      align: 'right',
-      render: (price) => `${Number(price).toLocaleString()} ₫`,
+      render: (price) => price ? `${Number(price).toLocaleString()} ₫` : <span style={{ color: '#999' }}>Chưa có</span>,
     },
     {
       title: 'Thao tác',
@@ -193,10 +195,13 @@ const StockManagement = () => {
     outOfStock: variants.filter(v => (v.available_quantity || 0) === 0).length,
     lowStock: variants.filter(v => {
       const available = v.available_quantity || 0;
-      return available > 0 && available < (v.minimum_stock || 5);
+      const minimumStock = v.minimum_stock || 5;
+      return available > 0 && available <= minimumStock;
     }).length,
     totalValue: variants.reduce((sum, v) => {
-      return sum + (v.stock_quantity || 0) * (v.cost_price || 0);
+      const price = v.cost_price || 0;
+      const quantity = v.stock_quantity || 0;
+      return sum + (quantity * price);
     }, 0),
   };
 

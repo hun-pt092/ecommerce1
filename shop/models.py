@@ -1,5 +1,7 @@
 from django.db import models
 from django.contrib.auth.models import AbstractUser
+from django.utils import timezone
+from datetime import timedelta
 import uuid
 import os
 
@@ -14,6 +16,8 @@ def product_image_path(instance, filename):
 # Custom User model để dễ mở rộng (thêm is_admin,...)
 class User(AbstractUser):
     is_admin = models.BooleanField(default=False)
+    date_of_birth = models.DateField(null=True, blank=True, verbose_name='Ngày sinh')
+    phone_number = models.CharField(max_length=20, blank=True, verbose_name='Số điện thoại')
     # email, username, password đã có sẵn từ AbstractUser
 
 class Category(models.Model):
@@ -180,6 +184,10 @@ class Order(models.Model):
     
     # Order notes
     notes = models.TextField(blank=True)
+    
+    # Coupon information
+    used_coupon = models.ForeignKey('UserCoupon', on_delete=models.SET_NULL, null=True, blank=True, related_name='orders_used')
+    discount_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     
     # Timestamps
     created_at = models.DateTimeField(auto_now_add=True)
@@ -354,4 +362,157 @@ class StockAlert(models.Model):
     
     class Meta:
         ordering = ['is_resolved', '-created_at']
+
+
+class Coupon(models.Model):
+    """Mã giảm giá"""
+    COUPON_TYPES = [
+        ('percentage', 'Phần trăm'),
+        ('fixed', 'Số tiền cố định'),
+        ('free_shipping', 'Miễn phí vận chuyển'),
+    ]
+    
+    OCCASION_TYPES = [
+        ('birthday', 'Sinh nhật'),
+        ('promotion', 'Khuyến mãi'),
+        ('seasonal', 'Theo mùa'),
+        ('first_order', 'Đơn hàng đầu'),
+        ('loyalty', 'Khách hàng thân thiết'),
+    ]
+    
+    code = models.CharField(max_length=50, unique=True, verbose_name='Mã giảm giá')
+    name = models.CharField(max_length=200, verbose_name='Tên chương trình')
+    description = models.TextField(blank=True, verbose_name='Mô tả')
+    
+    # Loại mã
+    coupon_type = models.CharField(max_length=20, choices=COUPON_TYPES, default='percentage')
+    occasion_type = models.CharField(max_length=20, choices=OCCASION_TYPES, default='promotion')
+    
+    # Giá trị giảm
+    discount_value = models.DecimalField(max_digits=10, decimal_places=2, verbose_name='Giá trị giảm')
+    max_discount_amount = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True, 
+                                              verbose_name='Giảm tối đa (cho phần trăm)')
+    
+    # Điều kiện áp dụng
+    min_purchase_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0, 
+                                              verbose_name='Giá trị đơn hàng tối thiểu')
+    
+    # Số lần sử dụng
+    max_uses = models.PositiveIntegerField(null=True, blank=True, verbose_name='Số lần sử dụng tối đa')
+    max_uses_per_user = models.PositiveIntegerField(default=1, verbose_name='Số lần/khách')
+    current_uses = models.PositiveIntegerField(default=0, verbose_name='Đã sử dụng')
+    
+    # Thời gian
+    valid_from = models.DateTimeField(null=True, blank=True, verbose_name='Có hiệu lực từ')
+    valid_to = models.DateTimeField(null=True, blank=True, verbose_name='Có hiệu lực đến')
+    
+    # Trạng thái
+    is_active = models.BooleanField(default=True, verbose_name='Kích hoạt')
+    is_public = models.BooleanField(default=False, verbose_name='Công khai')  # False = chỉ gửi cho user cụ thể
+    
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    def __str__(self):
+        return f"{self.code} - {self.name}"
+    
+    def is_valid(self, user=None):
+        """Kiểm tra mã còn hiệu lực không"""
+        now = timezone.now()
+        
+        # Kiểm tra active
+        if not self.is_active:
+            return False, "Mã giảm giá không còn hoạt động"
+        
+        # Kiểm tra thời gian
+        if self.valid_from and now < self.valid_from:
+            return False, "Mã giảm giá chưa có hiệu lực"
+        if self.valid_to and now > self.valid_to:
+            return False, "Mã giảm giá đã hết hạn"
+        
+        # Kiểm tra số lần sử dụng
+        if self.max_uses and self.current_uses >= self.max_uses:
+            return False, "Mã giảm giá đã hết lượt sử dụng"
+        
+        # Kiểm tra số lần sử dụng per user
+        if user and self.max_uses_per_user:
+            user_uses = UserCoupon.objects.filter(
+                user=user, 
+                coupon=self,
+                is_used=True
+            ).count()
+            if user_uses >= self.max_uses_per_user:
+                return False, "Bạn đã sử dụng hết lượt cho mã này"
+        
+        return True, "Mã hợp lệ"
+    
+    def calculate_discount(self, order_amount):
+        """Tính số tiền giảm"""
+        if self.coupon_type == 'percentage':
+            discount = order_amount * (self.discount_value / 100)
+            if self.max_discount_amount:
+                discount = min(discount, self.max_discount_amount)
+            return discount
+        elif self.coupon_type == 'fixed':
+            return min(self.discount_value, order_amount)
+        elif self.coupon_type == 'free_shipping':
+            return 0  # Xử lý riêng ở logic shipping
+        return 0
+    
+    class Meta:
+        ordering = ['-created_at']
+        verbose_name = 'Mã giảm giá'
+        verbose_name_plural = 'Mã giảm giá'
+
+
+class UserCoupon(models.Model):
+    """Ví voucher của khách hàng"""
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='coupons')
+    coupon = models.ForeignKey(Coupon, on_delete=models.CASCADE, related_name='user_coupons')
+    
+    # Thời gian có hiệu lực riêng cho user này
+    valid_from = models.DateTimeField(verbose_name='Có hiệu lực từ')
+    valid_to = models.DateTimeField(verbose_name='Có hiệu lực đến')
+    
+    # Trạng thái sử dụng
+    is_used = models.BooleanField(default=False, verbose_name='Đã sử dụng')
+    used_at = models.DateTimeField(null=True, blank=True, verbose_name='Thời gian sử dụng')
+    order = models.ForeignKey(Order, on_delete=models.SET_NULL, null=True, blank=True, related_name='used_coupons')
+    
+    # Tracking
+    assigned_at = models.DateTimeField(auto_now_add=True, verbose_name='Ngày nhận')
+    notified = models.BooleanField(default=False, verbose_name='Đã thông báo')
+    notified_at = models.DateTimeField(null=True, blank=True, verbose_name='Thời gian thông báo')
+    
+    def __str__(self):
+        status = "Đã dùng" if self.is_used else "Chưa dùng"
+        return f"{self.user.username} - {self.coupon.code} - {status}"
+    
+    def is_valid(self):
+        """Kiểm tra voucher còn dùng được không"""
+        now = timezone.now()
+        if self.is_used:
+            return False, "Mã đã được sử dụng"
+        if now < self.valid_from:
+            return False, "Mã chưa có hiệu lực"
+        if now > self.valid_to:
+            return False, "Mã đã hết hạn"
+        return True, "Mã hợp lệ"
+    
+    def use_coupon(self, order):
+        """Đánh dấu mã đã sử dụng"""
+        self.is_used = True
+        self.used_at = timezone.now()
+        self.order = order
+        self.save()
+        
+        # Tăng số lần sử dụng của coupon
+        self.coupon.current_uses += 1
+        self.coupon.save()
+    
+    class Meta:
+        unique_together = ['user', 'coupon', 'valid_from']  # Mỗi năm sinh nhật có 1 mã
+        ordering = ['-assigned_at']
+        verbose_name = 'Voucher của khách'
+        verbose_name_plural = 'Voucher của khách'
 

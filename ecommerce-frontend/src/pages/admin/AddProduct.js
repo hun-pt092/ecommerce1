@@ -205,25 +205,33 @@ const AddProduct = () => {
         console.log('Selected brand in form:', form.getFieldValue('brand'));
       }
       
-      // Thêm thông tin sản phẩm - ĐĂNG BIỆt XỬ LÝ brand field
+      // Thêm thông tin sản phẩm - Backend cần category_id và brand_id
       Object.keys(values).forEach(key => {
         const value = values[key];
+        
+        // Map category -> category_id và brand -> brand_id
+        let fieldName = key;
+        if (key === 'category') {
+          fieldName = 'category_id';
+        } else if (key === 'brand') {
+          fieldName = 'brand_id';
+        }
         
         // Đặc biệt xử lý brand field - cho phép null
         if (key === 'brand') {
           if (value !== undefined) {
-            console.log(`✅ Adding ${key}:`, value, '(type:', typeof value, ')');
-            formData.append(key, value || ''); // Convert null to empty string
+            console.log(`✅ Adding ${fieldName}:`, value, '(type:', typeof value, ')');
+            formData.append(fieldName, value || ''); // Convert null to empty string
           } else {
-            console.log(`❌ SKIPPING ${key} - undefined`);
+            console.log(`❌ SKIPPING ${fieldName} - undefined`);
           }
         }
         // Xử lý các field khác
         else if (value !== undefined && value !== null && value !== '') {
-          console.log(`✅ Adding ${key}:`, value);
-          formData.append(key, value);
+          console.log(`✅ Adding ${fieldName}:`, value);
+          formData.append(fieldName, value);
         } else {
-          console.log(`❌ SKIPPING ${key} because it is:`, value);
+          console.log(`❌ SKIPPING ${fieldName} because it is:`, value);
         }
       });
       

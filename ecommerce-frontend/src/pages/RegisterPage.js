@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { Form, Input, Button, message, Card, Typography, Divider, Checkbox, Modal } from 'antd';
-import { UserOutlined, LockOutlined, MailOutlined, EyeInvisibleOutlined, EyeTwoTone, FileTextOutlined } from '@ant-design/icons';
+import { Form, Input, Button, message, Card, Typography, Divider, Checkbox, Modal, DatePicker } from 'antd';
+import { UserOutlined, LockOutlined, MailOutlined, EyeInvisibleOutlined, EyeTwoTone, FileTextOutlined, PhoneOutlined, GiftOutlined } from '@ant-design/icons';
 import axios from 'axios';
 import { useNavigate, Link } from 'react-router-dom';
+import dayjs from 'dayjs';
+import logoImage from '../logo (2).png';
 
 const { Title, Text } = Typography;
 
@@ -35,6 +37,16 @@ const RegisterPage = () => {
         first_name: values.first_name,
         last_name: values.last_name,
       };
+      
+      // Thêm ngày sinh nếu có
+      if (values.date_of_birth) {
+        registerData.date_of_birth = values.date_of_birth.format('YYYY-MM-DD');
+      }
+      
+      // Thêm số điện thoại nếu có
+      if (values.phone_number) {
+        registerData.phone_number = values.phone_number;
+      }
       
       console.log('Register data being sent:', registerData);
       
@@ -97,8 +109,11 @@ const RegisterPage = () => {
         bordered={false}
       >
         <div style={{ textAlign: 'center', marginBottom: '30px' }}>
-          <Title level={2} style={{ color: '#1890ff', marginBottom: '8px' }}>
-            🛍️ Fashion Store
+          <div style={{ marginBottom: '16px' }}>
+            <img src={logoImage} alt="Fashion Store" style={{ height: '50px' }} />
+          </div>
+          <Title level={2} style={{ color: '#06131fff', marginBottom: '8px' }}>
+            PKA
           </Title>
           <Text type="secondary" style={{ fontSize: '16px' }}>
             Tạo tài khoản mới để bắt đầu mua sắm
@@ -151,6 +166,41 @@ const RegisterPage = () => {
             rules={[{ required: true, message: 'Vui lòng nhập tên!' }]}
           >
             <Input placeholder="Nhập tên" />
+          </Form.Item>
+
+          <Divider style={{ margin: '16px 0' }}>
+            <span style={{ color: '#999', fontSize: '14px' }}>
+              <GiftOutlined /> Thông tin tùy chọn (để nhận ưu đãi sinh nhật)
+            </span>
+          </Divider>
+
+          <Form.Item 
+            name="date_of_birth" 
+            label={
+              <span>
+                Ngày sinh 
+                <span style={{ color: '#999', fontSize: '12px', marginLeft: '8px' }}>
+                  (Nhận mã giảm giá 20% vào sinh nhật! 🎂)
+                </span>
+              </span>
+            }
+          >
+            <DatePicker 
+              style={{ width: '100%' }}
+              placeholder="Chọn ngày sinh"
+              format="DD/MM/YYYY"
+              disabledDate={(current) => current && current > dayjs().endOf('day')}
+            />
+          </Form.Item>
+
+          <Form.Item 
+            name="phone_number" 
+            label="Số điện thoại"
+          >
+            <Input 
+              prefix={<PhoneOutlined />} 
+              placeholder="Nhập số điện thoại (tùy chọn)"
+            />
           </Form.Item>
 
           <Form.Item 

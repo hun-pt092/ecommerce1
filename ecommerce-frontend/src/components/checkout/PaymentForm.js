@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Card, 
   Form, 
@@ -10,7 +10,11 @@ import {
   Space,
   Divider,
   Input,
-  Alert
+  Alert,
+  Tag,
+  Modal,
+  List,
+  message as antdMessage
 } from 'antd';
 import { 
   CreditCardOutlined, 
@@ -18,8 +22,11 @@ import {
   CheckCircleOutlined,
   BankOutlined,
   MobileOutlined,
-  DollarOutlined
+  DollarOutlined,
+  GiftOutlined,
+  CloseCircleOutlined
 } from '@ant-design/icons';
+import apiClient from '../../api/apiClient';
 
 const { Title, Text } = Typography;
 const { TextArea } = Input;
@@ -27,6 +34,65 @@ const { TextArea } = Input;
 const PaymentForm = ({ cartData, shippingAddress, onSubmit, onPrevious, loading }) => {
   const [form] = Form.useForm();
   const [paymentMethod, setPaymentMethod] = useState('cod');
+  const [couponCode, setCouponCode] = useState('');
+  const [appliedCoupon, setAppliedCoupon] = useState(null);
+  const [couponLoading, setCouponLoading] = useState(false);
+  const [availableCoupons, setAvailableCoupons] = useState([]);
+  const [showCouponModal, setShowCouponModal] = useState(false);
+
+  // Fetch available coupons on mount
+  useEffect(() => {
+    const fetchAvailableCoupons = async () => {
+      try {
+        const response = await apiClient.get('coupons/?status=available');
+        const coupons = response.data.results || response.data || [];
+        console.log('Fetched coupons:', coupons);
+        setAvailableCoupons(coupons);
+      } catch (error) {
+        console.error('Error fetching coupons:', error);
+      }
+    };
+    fetchAvailableCoupons();
+  }, []);
+
+  // Apply coupon
+  const applyCoupon = async (code) => {
+    console.log('applyCoupon called with code:', code);
+    setCouponLoading(true);
+    try {
+      const subTotal = calculateSubTotal();
+      const shippingFee = subTotal >= 500000 ? 0 : 30000;
+      const totalAmount = subTotal + shippingFee;
+
+      console.log('Sending request:', { coupon_code: code, order_amount: totalAmount });
+
+      const response = await apiClient.post('coupons/apply/', {
+        coupon_code: code,
+        order_amount: totalAmount
+      });
+
+      setAppliedCoupon({
+        code: code,
+        discount: response.data.discount_amount,
+        name: response.data.coupon_name
+      });
+      antdMessage.success(`Áp dụng mã giảm giá thành công! Giảm ${response.data.discount_amount.toLocaleString()}₫`);
+      setShowCouponModal(false);
+    } catch (error) {
+      console.error('Error applying coupon:', error);
+      const errorMsg = error.response?.data?.error || 'Không thể áp dụng mã giảm giá';
+      antdMessage.error(errorMsg);
+    } finally {
+      setCouponLoading(false);
+    }
+  };
+
+  // Remove applied coupon
+  const removeCoupon = () => {
+    setAppliedCoupon(null);
+    setCouponCode('');
+    antdMessage.info('Đã bỏ áp dụng mã giảm giá');
+  };
 
   // Calculate totals
   const calculateSubTotal = () => {
@@ -110,12 +176,14 @@ const PaymentForm = ({ cartData, shippingAddress, onSubmit, onPrevious, loading 
 
   const subTotal = calculateSubTotal();
   const shippingFee = subTotal >= 500000 ? 0 : 30000;
-  const totalAmount = subTotal + shippingFee;
+  const discount = appliedCoupon?.discount || 0;
+  const totalAmount = subTotal + shippingFee - discount;
 
   // Debug final calculations
   console.log('=== PaymentForm Final Calculations ===');
   console.log('SubTotal:', subTotal);
   console.log('ShippingFee:', shippingFee);
+  console.log('Discount:', discount);
   console.log('TotalAmount:', totalAmount);
   console.log('CartData:', cartData);
 
@@ -126,7 +194,8 @@ const PaymentForm = ({ cartData, shippingAddress, onSubmit, onPrevious, loading 
     const paymentData = {
       method: paymentMethod,
       details: values,
-      notes: values.notes || ''
+      notes: values.notes || '',
+      coupon: appliedCoupon ? appliedCoupon.code : null
     };
     
     console.log('Calling onSubmit with:', paymentData);
@@ -356,10 +425,61 @@ const PaymentForm = ({ cartData, shippingAddress, onSubmit, onPrevious, loading 
                 {shippingFee === 0 ? 'Miễn phí' : `${shippingFee.toLocaleString()}₫`}
               </Text>
             </Row>
+            
+            {discount > 0 && (
+              <Row justify="space-between" style={{ marginBottom: '8px' }}>
+                <Text>Giảm giá:</Text>
+                <Text strong style={{ color: '#52c41a' }}>
+                  -{discount.toLocaleString()}₫
+                </Text>
+              </Row>
+            )}
+            
             {shippingFee === 0 && (
               <Text type="success" style={{ fontSize: '12px', textAlign: 'right', display: 'block', marginBottom: '8px' }}>
                 🎉 Miễn phí vận chuyển cho đơn ≥ 500k
               </Text>
+            )}
+
+            {/* Coupon Section */}
+            {appliedCoupon ? (
+              <Row justify="space-between" align="middle" style={{ 
+                marginTop: '12px', 
+                padding: '8px', 
+                background: '#f6ffed',
+                borderRadius: '4px',
+                border: '1px solid #b7eb8f'
+              }}>
+                <Space>
+                  <GiftOutlined style={{ color: '#52c41a' }} />
+                  <div>
+                    <Text strong style={{ color: '#52c41a', fontSize: '13px' }}>{appliedCoupon.name}</Text>
+                    <div><Text type="secondary" style={{ fontSize: '12px' }}>{appliedCoupon.code}</Text></div>
+                  </div>
+                </Space>
+                <Space>
+                  <Text strong style={{ color: '#52c41a' }}>-{appliedCoupon.discount.toLocaleString()}₫</Text>
+                  <Button 
+                    type="text" 
+                    size="small" 
+                    icon={<CloseCircleOutlined />}
+                    onClick={removeCoupon}
+                    style={{ color: '#ff4d4f' }}
+                  />
+                </Space>
+              </Row>
+            ) : (
+              <Button 
+                icon={<GiftOutlined />}
+                onClick={() => setShowCouponModal(true)}
+                style={{ marginTop: '12px', width: '100%' }}
+                disabled={availableCoupons.length === 0}
+              >
+                {availableCoupons.length > 0 
+                  ? `Áp dụng mã giảm giá (${availableCoupons.length})`
+                  : 'Không có mã giảm giá'
+                }
+              </Button>
             )}
           </div>
           
@@ -381,6 +501,92 @@ const PaymentForm = ({ cartData, shippingAddress, onSubmit, onPrevious, loading 
           />
         </Card>
       </Col>
+
+      {/* Coupon Selection Modal */}
+      <Modal
+        title={
+          <Space>
+            <GiftOutlined style={{ color: '#1890ff' }} />
+            <span>Chọn mã giảm giá</span>
+          </Space>
+        }
+        open={showCouponModal}
+        onCancel={() => setShowCouponModal(false)}
+        footer={null}
+        width={600}
+      >
+        <List
+          dataSource={availableCoupons}
+          locale={{ emptyText: 'Không có mã giảm giá khả dụng' }}
+          renderItem={coupon => {
+            console.log('Rendering coupon:', coupon);
+            return (
+            <List.Item
+              style={{
+                padding: '16px',
+                border: '1px solid #d9d9d9',
+                borderRadius: '8px',
+                marginBottom: '12px',
+                cursor: 'pointer',
+                transition: 'all 0.3s',
+                background: '#fff'
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.borderColor = '#1890ff';
+                e.currentTarget.style.boxShadow = '0 2px 8px rgba(24, 144, 255, 0.2)';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.borderColor = '#d9d9d9';
+                e.currentTarget.style.boxShadow = 'none';
+              }}
+              onClick={() => applyCoupon(coupon.coupon_code)}
+            >
+              <div style={{ width: '100%' }}>
+                <Row justify="space-between" align="middle">
+                  <Col span={16}>
+                    <Space direction="vertical" size={4}>
+                      <Text strong style={{ fontSize: '16px', color: '#1890ff' }}>
+                        {coupon.coupon_name}
+                      </Text>
+                      <Tag color="blue">{coupon.coupon_code}</Tag>
+                      <Text type="secondary" style={{ fontSize: '13px' }}>
+                        {coupon.coupon_type === 'percentage' 
+                          ? `Giảm ${coupon.coupon_discount_value}%`
+                          : `Giảm ${Number(coupon.coupon_discount_value || 0).toLocaleString()}₫`
+                        }
+                        {coupon.coupon_max_discount_amount && 
+                          ` (tối đa ${Number(coupon.coupon_max_discount_amount).toLocaleString()}₫)`
+                        }
+                      </Text>
+                      {coupon.coupon_min_purchase_amount > 0 && (
+                        <Text type="secondary" style={{ fontSize: '12px' }}>
+                          Đơn tối thiểu: {Number(coupon.coupon_min_purchase_amount).toLocaleString()}₫
+                        </Text>
+                      )}
+                      <Text type="secondary" style={{ fontSize: '12px' }}>
+                        HSD: {new Date(coupon.valid_to).toLocaleDateString('vi-VN')}
+                      </Text>
+                    </Space>
+                  </Col>
+                  <Col span={8} style={{ textAlign: 'right' }}>
+                    <Button 
+                      type="primary"
+                      loading={couponLoading}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        applyCoupon(coupon.coupon_code);
+                      }}
+                    >
+                      Áp dụng
+                    </Button>
+                  </Col>
+                </Row>
+              </div>
+            </List.Item>
+            );
+          }}
+        />
+      </Modal>
     </Row>
   );
 };

@@ -13,14 +13,14 @@ const StockAdjustModal = ({ visible, onCancel, variant, onSuccess }) => {
       let response;
       
       if (adjustType === 'adjust') {
-        response = await apiClient.post('/shop/admin/stock/adjust/', {
-          variant_id: variant.id,
+        // NEW API: variant_id in URL path, not in body
+        response = await apiClient.post(`/admin/stock/variants/${variant.id}/adjust/`, {
           new_quantity: values.new_quantity,
           reason: values.reason || ''
         });
       } else {
-        response = await apiClient.post('/shop/admin/stock/damaged/', {
-          variant_id: variant.id,
+        // NEW API: variant_id in URL path, not in body
+        response = await apiClient.post(`/admin/stock/variants/${variant.id}/damaged/`, {
           quantity: values.damaged_quantity,
           reason: values.reason || ''
         });

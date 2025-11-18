@@ -3,6 +3,7 @@ import { Form, Input, Button, message, Card, Typography, Divider, Checkbox } fro
 import { UserOutlined, LockOutlined, EyeInvisibleOutlined, EyeTwoTone } from '@ant-design/icons';
 import axios from 'axios';
 import { useNavigate, Link } from 'react-router-dom';
+import logoImage from '../logo (2).png';
 
 const { Title, Text } = Typography;
 
@@ -101,8 +102,11 @@ const LoginPage = () => {
         bordered={false}
       >
         <div style={{ textAlign: 'center', marginBottom: '30px' }}>
-          <Title level={2} style={{ color: '#1890ff', marginBottom: '8px' }}>
-            🛍️ Fashion Store
+          <div style={{ marginBottom: '16px' }}>
+            <img src={logoImage} alt="Fashion Store" style={{ height: '50px' }} />
+          </div>
+          <Title level={2} style={{ color: '#06131fff', marginBottom: '8px' }}>
+            PKA
           </Title>
           <Text type="secondary" style={{ fontSize: '16px' }}>
             Chào mừng bạn trở lại!

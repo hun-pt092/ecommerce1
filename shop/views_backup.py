@@ -1,4 +1,4 @@
-﻿#from django.shortcuts import render
+#from django.shortcuts import render
 
 from rest_framework import generics, permissions
 from rest_framework.views import APIView
@@ -10,8 +10,7 @@ from .serializers import (
     OrderCreateSerializer, OrderStatusUpdateSerializer,
     OrderItemSerializer, UserSerializer,
     CategorySerializer, BrandSerializer, ReviewSerializer, 
-    WishlistSerializer, WishlistItemSerializer,
-    ProductVariantSerializer
+    WishlistSerializer, WishlistItemSerializer
 )
 from rest_framework_simplejwt.views import TokenObtainPairView
 from shop.services.stock_service import StockService
@@ -38,41 +37,6 @@ class CurrentUserView(APIView):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
-class ChangePasswordView(APIView):
-    permission_classes = [permissions.IsAuthenticated]
-    
-    def post(self, request):
-        user = request.user
-        old_password = request.data.get('old_password')
-        new_password = request.data.get('new_password')
-        
-        if not old_password or not new_password:
-            return Response(
-                {'error': 'Vui lòng cung cấp mật khẩu cũ và mật khẩu mới'}, 
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        
-        # Kiểm tra mật khẩu cũ
-        if not user.check_password(old_password):
-            return Response(
-                {'old_password': ['Mật khẩu hiện tại không đúng']}, 
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        
-        # Validate mật khẩu mới
-        if len(new_password) < 8:
-            return Response(
-                {'new_password': ['Mật khẩu phải có ít nhất 8 ký tự']}, 
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        
-        # Đổi mật khẩu
-        user.set_password(new_password)
-        user.save()
-        
-        return Response({'message': 'Đổi mật khẩu thành công'}, status=status.HTTP_200_OK)
-
-
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
@@ -80,7 +44,7 @@ from .models import Cart, CartItem
 from .serializers import CartSerializer
 from rest_framework.permissions import IsAuthenticated
 
-# ÄÄƒng kÃ½ user
+# Đăng ký user
 class RegisterView(generics.CreateAPIView):
     queryset = User.objects.all()
     permission_classes = (permissions.AllowAny,)
@@ -102,14 +66,14 @@ class RegisterView(generics.CreateAPIView):
             print("Serializer errors:", serializer.errors)
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-# Danh sÃ¡ch sáº£n pháº©m
+# Danh sách sản phẩm
 class ProductListView(generics.ListAPIView):
     queryset = Product.objects.filter(is_active=True).select_related('category', 'brand').prefetch_related('images', 'variants')
     serializer_class = ProductSerializer
     permission_classes = (permissions.AllowAny,)
     pagination_class = ProductPagination
 
-# Chi tiáº¿t sáº£n pháº©m
+# Chi tiết sản phẩm
 class ProductDetailView(generics.RetrieveAPIView):
     queryset = Product.objects.all()
     serializer_class = ProductSerializer
@@ -129,7 +93,7 @@ class BrandListView(generics.ListAPIView):
 
 #------------------------------them gio hang----------------------------------------
 
-# API giá» hÃ ng
+# API giỏ hàng
 class CartView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -145,7 +109,7 @@ class CartView(APIView):
         print("Request data:", request.data)
         print("Current cart items:", [{"id": item.id, "variant": item.product_variant.id, "qty": item.quantity} for item in cart.items.all()])
         
-        # Sá»­ dá»¥ng serializer Ä‘á»ƒ update cart vá»›i items má»›i
+        # Sử dụng serializer để update cart với items mới
         serializer = CartSerializer(cart, data=request.data, context={'request': request})
         if serializer.is_valid():
             serializer.save()
@@ -171,7 +135,7 @@ class CartView(APIView):
             # Check if item already exists
             cart_item, created = cart.items.get_or_create(
                 product_variant=product_variant,
-                defaults={'quantity': 0}  # Set default 0 Ä‘á»ƒ validate sau
+                defaults={'quantity': 0}  # Set default 0 để validate sau
             )
             
             # Calculate new quantity
@@ -182,19 +146,19 @@ class CartView(APIView):
             print(f"New quantity: {new_quantity}")
             print(f"Stock available: {product_variant.stock_quantity}")
             
-            # Validate stock quantity (chá»‰ khi tÄƒng quantity)
+            # Validate stock quantity (chỉ khi tăng quantity)
             if quantity > 0 and new_quantity > product_variant.stock_quantity:
                 available = product_variant.stock_quantity - cart_item.quantity
                 if created:
-                    cart_item.delete()  # XÃ³a item vá»«a táº¡o náº¿u validation fail
+                    cart_item.delete()  # Xóa item vừa tạo nếu validation fail
                 return Response({
-                    "error": f"KhÃ´ng Ä‘á»§ hÃ ng trong kho. Chá»‰ cÃ²n {available} sáº£n pháº©m cÃ³ thá»ƒ thÃªm.",
+                    "error": f"Không đủ hàng trong kho. Chỉ còn {available} sản phẩm có thể thêm.",
                     "available_quantity": available,
                     "requested_quantity": quantity
                 }, status=status.HTTP_400_BAD_REQUEST)
             
             if created:
-                # Item má»›i, set quantity sau khi validate
+                # Item mới, set quantity sau khi validate
                 cart_item.quantity = quantity
                 if cart_item.quantity <= 0:
                     cart_item.delete()
@@ -206,7 +170,7 @@ class CartView(APIView):
                 # Update existing item
                 cart_item.quantity = new_quantity
                 
-                # Náº¿u quantity <= 0, xÃ³a item
+                # Nếu quantity <= 0, xóa item
                 if cart_item.quantity <= 0:
                     print(f"Removing item with quantity {cart_item.quantity}")
                     cart_item.delete()
@@ -514,43 +478,6 @@ class UserOrderDetailView(generics.RetrieveAPIView):
     
     def get_queryset(self):
         return Order.objects.filter(user=self.request.user)
-
-
-# Cancel order (user can cancel their own order)
-class CancelOrderView(APIView):
-    permission_classes = [IsAuthenticated]
-    
-    def post(self, request, pk):
-        try:
-            order = Order.objects.get(pk=pk, user=request.user)
-            
-            # Chỉ cho phép hủy đơn hàng khi đang ở trạng thái 'pending' hoặc 'processing'
-            if order.status not in ['pending', 'processing']:
-                return Response(
-                    {"error": "Không thể hủy đơn hàng đã được gửi hoặc đã giao"}, 
-                    status=status.HTTP_400_BAD_REQUEST
-                )
-            
-            # Cập nhật trạng thái đơn hàng
-            order.status = 'cancelled'
-            order.save()
-            
-            # Hoàn lại số lượng sản phẩm vào kho
-            for item in order.items.all():
-                variant = item.product_variant
-                variant.stock_quantity += item.quantity
-                variant.save()
-            
-            return Response({
-                "message": "Đơn hàng đã được hủy thành công",
-                "order": OrderSerializer(order, context={'request': request}).data
-            }, status=status.HTTP_200_OK)
-            
-        except Order.DoesNotExist:
-            return Response(
-                {"error": "Không tìm thấy đơn hàng"}, 
-                status=status.HTTP_404_NOT_FOUND
-            )
 
 
 # Update order status (admin only)
@@ -923,8 +850,8 @@ class AdminDashboardStatsView(APIView):
         start_of_today = now.replace(hour=0, minute=0, second=0, microsecond=0)
         
         stats = {
-            'total_products': ProductVariant.objects.filter(product__is_active=True).count(),  # Tá»•ng sáº£n pháº©m (variants)
-            'total_product_types': Product.objects.filter(is_active=True).count(),  # Tá»•ng loáº¡i sáº£n pháº©m
+            'total_products': ProductVariant.objects.filter(product__is_active=True).count(),  # Tổng sản phẩm (variants)
+            'total_product_types': Product.objects.filter(is_active=True).count(),  # Tổng loại sản phẩm
             'total_orders': Order.objects.count(),
             'total_users': User.objects.count(),
             'total_revenue': Order.objects.filter(
@@ -1224,16 +1151,16 @@ from .serializers import (
 )
 from .models import StockHistory, StockAlert
 
-# 1. Import Stock (Nháº­p kho) - Updated vá»›i variant_id tá»« URL
+# 1. Import Stock (Nhập kho) - Updated với variant_id từ URL
 class AdminStockImportView(APIView):
     """
-    API nháº­p kho
+    API nhập kho
     POST /api/shop/admin/stock/variants/<variant_id>/import/
     Body: {
         "quantity": 100,
         "cost_per_item": 50000,
         "reference_number": "NK-001",
-        "notes": "Nháº­p kho lÃ´ hÃ ng má»›i"
+        "notes": "Nhập kho lô hàng mới"
     }
     """
     permission_classes = [IsAdminUser]
@@ -1265,7 +1192,7 @@ class AdminStockImportView(APIView):
             
             # Return updated variant info
             return Response({
-                'message': f'Nháº­p kho thÃ nh cÃ´ng: {quantity} sáº£n pháº©m',
+                'message': f'Nhập kho thành công: {quantity} sản phẩm',
                 'variant': {
                     'id': updated_variant.id,
                     'sku': updated_variant.sku,
@@ -1296,14 +1223,14 @@ class AdminStockImportView(APIView):
             )
 
 
-# 2. Adjust Stock (Äiá»u chá»‰nh tá»“n kho) - Updated vá»›i variant_id tá»« URL
+# 2. Adjust Stock (Điều chỉnh tồn kho) - Updated với variant_id từ URL
 class AdminStockAdjustView(APIView):
     """
-    API Ä‘iá»u chá»‰nh tá»“n kho
+    API điều chỉnh tồn kho
     POST /api/shop/admin/stock/variants/<variant_id>/adjust/
     Body: {
         "new_quantity": 50,
-        "reason": "Kiá»ƒm kÃª Ä‘á»‹nh ká»³"
+        "reason": "Kiểm kê định kỳ"
     }
     """
     permission_classes = [IsAdminUser]
@@ -1334,7 +1261,7 @@ class AdminStockAdjustView(APIView):
             action = "tăng" if difference > 0 else "giảm"
             
             return Response({
-                'message': f'Äiá»u chá»‰nh tá»“n kho thÃ nh cÃ´ng: {action} {abs(difference)} sáº£n pháº©m',
+                'message': f'Điều chỉnh tồn kho thành công: {action} {abs(difference)} sản phẩm',
                 'variant': {
                     'id': updated_variant.id,
                     'sku': updated_variant.sku,
@@ -1365,14 +1292,14 @@ class AdminStockAdjustView(APIView):
             )
 
 
-# 3. Mark as Damaged (ÄÃ¡nh dáº¥u hÃ ng há»ng) - Updated vá»›i variant_id tá»« URL
+# 3. Mark as Damaged (Đánh dấu hàng hỏng) - Updated với variant_id từ URL
 class AdminStockDamagedView(APIView):
     """
-    API Ä‘Ã¡nh dáº¥u hÃ ng há»ng
+    API đánh dấu hàng hỏng
     POST /api/shop/admin/stock/variants/<variant_id>/damaged/
     Body: {
         "quantity": 5,
-        "reason": "HÃ ng bá»‹ Æ°á»›t do mÆ°a"
+        "reason": "Hàng bị ướt do mưa"
     }
     """
     permission_classes = [IsAdminUser]
@@ -1400,7 +1327,7 @@ class AdminStockDamagedView(APIView):
             )
             
             return Response({
-                'message': f'ÄÃ£ Ä‘Ã¡nh dáº¥u {quantity} sáº£n pháº©m há»ng',
+                'message': f'Đã đánh dấu {quantity} sản phẩm hỏng',
                 'variant': {
                     'id': updated_variant.id,
                     'sku': updated_variant.sku,
@@ -1427,10 +1354,10 @@ class AdminStockDamagedView(APIView):
             )
 
 
-# 4. Stock History (Lá»‹ch sá»­ nháº­p/xuáº¥t)
+# 4. Stock History (Lịch sử nhập/xuất)
 class AdminStockHistoryView(generics.ListAPIView):
     """
-    API xem lá»‹ch sá»­ stock
+    API xem lịch sử stock
     GET /api/shop/admin/stock/history/
     Query params:
         - variant_id: Filter by variant
@@ -1474,10 +1401,10 @@ class AdminStockHistoryView(generics.ListAPIView):
         return queryset
 
 
-# 5. Stock Alerts (Cáº£nh bÃ¡o tá»“n kho)
+# 5. Stock Alerts (Cảnh báo tồn kho)
 class AdminStockAlertsView(generics.ListAPIView):
     """
-    API xem cáº£nh bÃ¡o tá»“n kho
+    API xem cảnh báo tồn kho
     GET /api/shop/admin/stock/alerts/
     Query params:
         - alert_type: Filter by type (low_stock, out_of_stock, reorder_needed)
@@ -1507,10 +1434,10 @@ class AdminStockAlertsView(generics.ListAPIView):
         return queryset
 
 
-# 6. Resolve Alert (Giáº£i quyáº¿t cáº£nh bÃ¡o)
+# 6. Resolve Alert (Giải quyết cảnh báo)
 class AdminStockAlertResolveView(APIView):
     """
-    API giáº£i quyáº¿t cáº£nh bÃ¡o
+    API giải quyết cảnh báo
     PATCH /api/shop/admin/stock/alerts/<id>/resolve/
     """
     permission_classes = [IsAdminUser]
@@ -1521,7 +1448,7 @@ class AdminStockAlertResolveView(APIView):
             
             if alert.is_resolved:
                 return Response(
-                    {'message': 'Alert Ä‘Ã£ Ä‘Æ°á»£c giáº£i quyáº¿t trÆ°á»›c Ä‘Ã³'}, 
+                    {'message': 'Alert đã được giải quyết trước đó'}, 
                     status=status.HTTP_200_OK
                 )
             
@@ -1533,7 +1460,7 @@ class AdminStockAlertResolveView(APIView):
             alert.save()
             
             return Response({
-                'message': 'Alert Ä‘Ã£ Ä‘Æ°á»£c giáº£i quyáº¿t',
+                'message': 'Alert đã được giải quyết',
                 'alert': {
                     'id': alert.id,
                     'product_variant': alert.product_variant.sku,
@@ -1550,10 +1477,10 @@ class AdminStockAlertResolveView(APIView):
             )
 
 
-# 7. Inventory Report (BÃ¡o cÃ¡o tá»“n kho)
+# 7. Inventory Report (Báo cáo tồn kho)
 class AdminInventoryReportView(APIView):
     """
-    API bÃ¡o cÃ¡o tá»“n kho
+    API báo cáo tồn kho
     GET /api/shop/admin/inventory/report/
     Query params:
         - category: Filter by category ID
@@ -1628,10 +1555,10 @@ class AdminInventoryReportView(APIView):
             )
 
 
-# 8. Get Variant Stock Info (Chi tiáº¿t stock cá»§a má»™t variant)
+# 8. Get Variant Stock Info (Chi tiết stock của một variant)
 class AdminVariantStockDetailView(APIView):
     """
-    API xem chi tiáº¿t stock cá»§a má»™t variant
+    API xem chi tiết stock của một variant
     GET /api/shop/admin/inventory/variants/<id>/
     """
     permission_classes = [IsAdminUser]
@@ -1688,12 +1615,9 @@ class AdminVariantStockDetailView(APIView):
             )
 
 
-# 9. Return Stock - NEW
+# 9. Return Stock (Ho�n tr? h�ng) - NEW
 class AdminStockReturnView(APIView):
-    """
-    API hoan tra hang
-    POST /api/shop/admin/stock/variants/<variant_id>/return/
-    """
+  
     permission_classes = [IsAdminUser]
     
     def post(self, request, variant_id):
@@ -1708,8 +1632,10 @@ class AdminStockReturnView(APIView):
                     status=status.HTTP_400_BAD_REQUEST
                 )
             
+            # Get variant
             variant = ProductVariant.objects.select_related('product').get(id=variant_id)
             
+            # Get order if provided
             order = None
             if order_id:
                 try:
@@ -1717,6 +1643,7 @@ class AdminStockReturnView(APIView):
                 except Order.DoesNotExist:
                     pass
             
+            # Return stock
             updated_variant = StockService.return_stock(
                 product_variant=variant,
                 quantity=quantity,
@@ -1726,7 +1653,7 @@ class AdminStockReturnView(APIView):
             )
             
             return Response({
-                'message': f'Return successful: {quantity} items',
+                'message': f'Ho�n tr? th�nh c�ng: {quantity} s?n ph?m',
                 'variant': {
                     'id': updated_variant.id,
                     'sku': updated_variant.sku,
@@ -1756,12 +1683,9 @@ class AdminStockReturnView(APIView):
             )
 
 
-# 10. Get Variant Stock History - NEW  
+# 10. Get Variant Stock History (L?ch s? c?a m?t variant) - NEW  
 class AdminVariantStockHistoryView(generics.ListAPIView):
-    """
-    API lay lich su stock cua mot variant
-    GET /api/shop/admin/stock/variants/<variant_id>/history/
-    """
+   
     permission_classes = [IsAdminUser]
     serializer_class = StockHistorySerializer
     pagination_class = StandardResultsSetPagination
@@ -1779,10 +1703,7 @@ class AdminVariantStockHistoryView(generics.ListAPIView):
 
 # 11. List All Variants for Stock Management - NEW
 class AdminVariantListView(generics.ListAPIView):
-    """
-    API lay danh sach variants cho Stock Management
-    GET /api/shop/admin/products/variants/
-    """
+   
     permission_classes = [IsAdminUser]
     serializer_class = ProductVariantSerializer
     pagination_class = AdminPagination
@@ -1794,6 +1715,7 @@ class AdminVariantListView(generics.ListAPIView):
             'product__brand'
         ).all()
         
+        # Filters
         search = self.request.query_params.get('search')
         if search:
             queryset = queryset.filter(
@@ -1811,6 +1733,7 @@ class AdminVariantListView(generics.ListAPIView):
         if brand:
             queryset = queryset.filter(product__brand_id=brand)
         
+        # Stock filters
         if self.request.query_params.get('low_stock') == 'true':
             queryset = queryset.filter(stock_quantity__lte=F('minimum_stock'))
         
@@ -1821,108 +1744,3 @@ class AdminVariantListView(generics.ListAPIView):
             queryset = queryset.filter(stock_quantity__lte=F('reorder_point'))
         
         return queryset.order_by('-id')
-
-
-#-----------------------------Coupon & Birthday Management-----------------------------------------------
-
-from .models import Coupon, UserCoupon
-from .serializers import CouponSerializer, UserCouponSerializer, ApplyCouponSerializer
-from django.utils import timezone
-
-
-class UserCouponListView(generics.ListAPIView):
-    """Xem danh sách voucher trong ví của khách hàng"""
-    serializer_class = UserCouponSerializer
-    permission_classes = [permissions.IsAuthenticated]
-    
-    def get_queryset(self):
-        user = self.request.user
-        queryset = UserCoupon.objects.filter(user=user).select_related('coupon').order_by('-assigned_at')
-        
-        # Filter by status
-        status_filter = self.request.query_params.get('status')
-        if status_filter == 'available':
-            # Chưa sử dụng và còn hạn
-            queryset = queryset.filter(
-                is_used=False,
-                valid_to__gte=timezone.now()
-            )
-        elif status_filter == 'used':
-            queryset = queryset.filter(is_used=True)
-        elif status_filter == 'expired':
-            queryset = queryset.filter(
-                is_used=False,
-                valid_to__lt=timezone.now()
-            )
-        
-        return queryset
-
-
-class ApplyCouponView(APIView):
-    """API để check và áp dụng mã giảm giá"""
-    permission_classes = [permissions.IsAuthenticated]
-    
-    def post(self, request):
-        print("=== APPLY COUPON DEBUG ===")
-        print("Request data:", request.data)
-        print("User:", request.user.username)
-        
-        serializer = ApplyCouponSerializer(
-            data=request.data,
-            context={'user': request.user}
-        )
-        
-        if serializer.is_valid():
-            return Response({
-                'success': True,
-                'coupon_code': serializer.validated_data['coupon_code'].code,
-                'coupon_name': serializer.validated_data['coupon_code'].name,
-                'discount_amount': float(serializer.validated_data['discount_amount']),
-                'final_amount': float(serializer.validated_data['final_amount']),
-                'message': 'Áp dụng mã giảm giá thành công!'
-            })
-        
-        print("Serializer errors:", serializer.errors)
-        return Response({
-            'success': False,
-            'error': str(serializer.errors)
-        }, status=status.HTTP_400_BAD_REQUEST)
-
-
-# Admin views
-class AdminCouponListCreateView(generics.ListCreateAPIView):
-    """Admin: Xem và tạo mã giảm giá"""
-    queryset = Coupon.objects.all().order_by('-created_at')
-    serializer_class = CouponSerializer
-    permission_classes = [IsAdminUser]
-    pagination_class = AdminPagination
-
-
-class AdminCouponDetailView(generics.RetrieveUpdateDestroyAPIView):
-    """Admin: Chi tiết, sửa, xóa mã giảm giá"""
-    queryset = Coupon.objects.all()
-    serializer_class = CouponSerializer
-    permission_classes = [IsAdminUser]
-
-
-class AdminUserCouponListView(generics.ListAPIView):
-    """Admin: Xem danh sách voucher của tất cả khách hàng"""
-    queryset = UserCoupon.objects.all().select_related('user', 'coupon').order_by('-assigned_at')
-    serializer_class = UserCouponSerializer
-    permission_classes = [IsAdminUser]
-    pagination_class = AdminPagination
-    
-    def get_queryset(self):
-        queryset = super().get_queryset()
-        
-        # Filter by user
-        user_id = self.request.query_params.get('user_id')
-        if user_id:
-            queryset = queryset.filter(user_id=user_id)
-        
-        # Filter by occasion
-        occasion = self.request.query_params.get('occasion')
-        if occasion:
-            queryset = queryset.filter(coupon__occasion_type=occasion)
-        
-        return queryset

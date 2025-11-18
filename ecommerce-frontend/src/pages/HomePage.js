@@ -12,6 +12,7 @@ import {
 import { useNavigate } from 'react-router-dom';
 import { useTheme } from '../contexts/ThemeContext';
 import WishlistButton from '../components/WishlistButton';
+import logoImage from '../logo (2).png';
 
 const { Title, Text } = Typography;
 const { Search } = Input;
@@ -163,8 +164,11 @@ function HomePage() {
         color: 'white',
         marginBottom: '40px'
       }}>
+        <div style={{ marginBottom: '16px' }}>
+          <img src={logoImage} alt="Fashion Store" style={{ height: '60px' }} />
+        </div>
         <Title level={1} style={{ color: 'white', fontSize: '36px', marginBottom: '16px' }}>
-          🛍️ Fashion Store
+          Fashion Store
         </Title>
         <Text style={{ fontSize: '18px', color: 'rgba(255,255,255,0.9)' }}>
           Khám phá bộ sưu tập thời trang mới nhất với phong cách độc đáo

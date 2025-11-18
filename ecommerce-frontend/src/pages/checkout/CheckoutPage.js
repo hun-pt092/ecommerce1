@@ -135,6 +135,11 @@ const CheckoutPage = () => {
         notes: paymentData.notes || ''
       };
 
+      // Add coupon if applied
+      if (paymentData.coupon) {
+        orderPayload.coupon_code = paymentData.coupon;
+      }
+
       if (isBuyNow) {
         // Với Buy Now, tạm thời backup cart hiện tại
         let originalCart = null;

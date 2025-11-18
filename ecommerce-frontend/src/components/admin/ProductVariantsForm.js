@@ -29,7 +29,7 @@ const ProductVariantsForm = ({ variants = [], onChange }) => {
   const [newVariant, setNewVariant] = useState({
     size: '',
     color: '',
-    stock_quantity: 0,
+    // KHÔNG quản lý stock_quantity ở đây nữa - sẽ quản lý ở Quản lý Kho hàng
   });
 
   // Kiểm tra variant đang được edit
@@ -80,11 +80,12 @@ const ProductVariantsForm = ({ variants = [], onChange }) => {
     const variant = {
       key: Date.now().toString(),
       ...newVariant,
-      stock_quantity: newVariant.stock_quantity || 0,
+      // Không set stock_quantity ở đây - để quản lý ở phần Kho hàng
+      is_active: true, // Mặc định là active
     };
 
     onChange([...variants, variant]);
-    setNewVariant({ size: '', color: '', stock_quantity: 0 });
+    setNewVariant({ size: '', color: '' });
     message.success('Thêm variant thành công');
   };
 
@@ -108,7 +109,7 @@ const ProductVariantsForm = ({ variants = [], onChange }) => {
     {
       title: 'Size',
       dataIndex: 'size',
-      width: '25%',
+      width: '30%',
       render: (text, record) => {
         if (isEditing(record)) {
           return (
@@ -125,7 +126,7 @@ const ProductVariantsForm = ({ variants = [], onChange }) => {
     {
       title: 'Màu sắc',
       dataIndex: 'color',
-      width: '25%',
+      width: '30%',
       render: (text, record) => {
         if (isEditing(record)) {
           return (
@@ -140,30 +141,18 @@ const ProductVariantsForm = ({ variants = [], onChange }) => {
       },
     },
     {
-      title: 'Số lượng tồn kho',
-      dataIndex: 'stock_quantity',
+      title: 'SKU',
+      dataIndex: 'sku',
       width: '25%',
-      render: (text, record) => {
-        if (isEditing(record)) {
-          return (
-            <InputNumber
-              value={record.stock_quantity}
-              onChange={(value) => updateVariant(record.key, 'stock_quantity', value || 0)}
-              min={0}
-              style={{ width: '100%' }}
-            />
-          );
-        }
-        return (
-          <Text strong style={{ color: text > 0 ? '#52c41a' : '#ff4d4f' }}>
-            {text}
-          </Text>
-        );
-      },
+      render: (text, record) => (
+        <Text type="secondary" style={{ fontSize: '12px' }}>
+          {text || 'Tự động tạo'}
+        </Text>
+      ),
     },
     {
       title: 'Hành động',
-      width: '25%',
+      width: '15%',
       render: (_, record) => {
         const editable = isEditing(record);
         return editable ? (
@@ -210,10 +199,10 @@ const ProductVariantsForm = ({ variants = [], onChange }) => {
   return (
     <div>
       {/* Form thêm variant mới */}
-      <Card size="small" style={{ marginBottom: 16 }}>
+      <Card size="small" style={{ marginBottom: 16, background: '#f0f5ff' }}>
         <Text strong>Thêm variant mới</Text>
         <Row gutter={16} style={{ marginTop: 12 }}>
-          <Col xs={24} sm={6}>
+          <Col xs={24} sm={8}>
             <Input
               placeholder="Size (S, M, L...)"
               value={newVariant.size}
@@ -221,7 +210,7 @@ const ProductVariantsForm = ({ variants = [], onChange }) => {
               onPressEnter={handleAddVariant}
             />
           </Col>
-          <Col xs={24} sm={6}>
+          <Col xs={24} sm={8}>
             <Input
               placeholder="Màu sắc"
               value={newVariant.color}
@@ -229,26 +218,22 @@ const ProductVariantsForm = ({ variants = [], onChange }) => {
               onPressEnter={handleAddVariant}
             />
           </Col>
-          <Col xs={24} sm={6}>
-            <InputNumber
-              placeholder="Số lượng"
-              value={newVariant.stock_quantity}
-              onChange={(value) => setNewVariant({ ...newVariant, stock_quantity: value || 0 })}
-              min={0}
-              style={{ width: '100%' }}
-            />
-          </Col>
-          <Col xs={24} sm={6}>
+          <Col xs={24} sm={8}>
             <Button
               type="primary"
               icon={<PlusOutlined />}
               onClick={handleAddVariant}
               block
             >
-              Thêm
+              Thêm variant
             </Button>
           </Col>
         </Row>
+        <div style={{ marginTop: 8 }}>
+          <Text type="secondary" style={{ fontSize: 12 }}>
+            💡 Số lượng tồn kho sẽ được quản lý ở phần <strong>Quản lý Kho hàng</strong>
+          </Text>
+        </div>
       </Card>
 
       {/* Bảng hiển thị variants */}
@@ -262,17 +247,10 @@ const ProductVariantsForm = ({ variants = [], onChange }) => {
           summary={() => (
             <Table.Summary fixed>
               <Table.Summary.Row>
-                <Table.Summary.Cell colSpan={2}>
-                  <Text strong>Tổng cộng</Text>
+                <Table.Summary.Cell colSpan={3}>
+                  <Text strong>Tổng số variants: {variants.length}</Text>
                 </Table.Summary.Cell>
-                <Table.Summary.Cell>
-                  <Text strong>
-                    {variants.reduce((sum, variant) => sum + (variant.stock_quantity || 0), 0)} sản phẩm
-                  </Text>
-                </Table.Summary.Cell>
-                <Table.Summary.Cell>
-                  <Text type="secondary">{variants.length} variants</Text>
-                </Table.Summary.Cell>
+                <Table.Summary.Cell />
               </Table.Summary.Row>
             </Table.Summary>
           )}
@@ -294,11 +272,20 @@ const ProductVariantsForm = ({ variants = [], onChange }) => {
       )}
 
       {/* Hướng dẫn */}
-      <div style={{ marginTop: 16 }}>
-        <Text type="secondary" style={{ fontSize: 12 }}>
-          💡 <strong>Lưu ý:</strong> Mỗi variant là một tổ hợp duy nhất của size và màu sắc. 
-          Khách hàng sẽ chọn variant khi mua hàng.
+      <div style={{ 
+        marginTop: 16, 
+        padding: 12, 
+        background: '#fffbe6', 
+        borderRadius: 8,
+        border: '1px solid #ffe58f'
+      }}>
+        <Text style={{ fontSize: 12 }}>
+           <strong>Quản lý Sản phẩm vs Quản lý Kho hàng:</strong>
         </Text>
+        <ul style={{ marginTop: 8, marginBottom: 0, fontSize: 12 }}>
+          <li><strong>Ở đây (Quản lý Sản phẩm):</strong> Chỉ thêm/sửa size và màu sắc của variant</li>
+          <li><strong>Quản lý Kho hàng:</strong> Nhập hàng, điều chỉnh tồn kho, xem lịch sử xuất nhập</li>
+        </ul>
       </div>
     </div>
   );

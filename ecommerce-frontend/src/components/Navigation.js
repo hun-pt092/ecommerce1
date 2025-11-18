@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Layout, Menu, Badge, Button, Space, Dropdown, Avatar, Modal, Descriptions, Tag, Form, Input, message, Typography } from 'antd';
+import { Layout, Menu, Badge, Button, Space, Dropdown, Avatar, Modal, Descriptions, Tag, Form, Input, message as antMessage, Typography, DatePicker } from 'antd';
 import { 
   HomeOutlined, 
   ShoppingCartOutlined, 
@@ -14,14 +14,20 @@ import {
   StarFilled,
   EditOutlined,
   SaveOutlined,
-  CloseOutlined
+  CloseOutlined,
+  GiftOutlined,
+  LockOutlined,
+  DashboardOutlined
 } from '@ant-design/icons';
 import { useNavigate, useLocation } from 'react-router-dom';
+import './Navigation.css';
 import authAxios from '../api/AuthAxios';
 import { format } from 'date-fns';
 import { vi } from 'date-fns/locale';
+import dayjs from 'dayjs';
 import { useTheme } from '../contexts/ThemeContext';
 import ThemeToggle from './ThemeToggle';
+import logoImage from '../logo (2).png';
 
 const { Header } = Layout;
 const { Text } = Typography;
@@ -33,10 +39,24 @@ const Navigation = () => {
   const [cartItemCount, setCartItemCount] = useState(0);
   const [userInfo, setUserInfo] = useState(null);
   const [profileModalVisible, setProfileModalVisible] = useState(false);
+  const [passwordModalVisible, setPasswordModalVisible] = useState(false);
   const [isEditMode, setIsEditMode] = useState(false);
   const [updateLoading, setUpdateLoading] = useState(false);
+  const [passwordLoading, setPasswordLoading] = useState(false);
   const [form] = Form.useForm();
+  const [passwordForm] = Form.useForm();
   const { theme } = useTheme();
+
+  // Config message để hiển thị trên Modal với z-index cao
+  useEffect(() => {
+    antMessage.config({
+      top: 100,
+      maxCount: 3,
+      duration: 3,
+      prefixCls: 'ant-message',
+      getContainer: () => document.body,
+    });
+  }, []);
 
   useEffect(() => {
     // Check if user is logged in
@@ -91,6 +111,8 @@ const Navigation = () => {
       first_name: userInfo?.first_name || '',
       last_name: userInfo?.last_name || '',
       email: userInfo?.email || '',
+      phone_number: userInfo?.phone_number || '',
+      date_of_birth: userInfo?.date_of_birth ? dayjs(userInfo.date_of_birth) : null
     });
   };
 
@@ -102,20 +124,97 @@ const Navigation = () => {
   const handleUpdateProfile = async (values) => {
     setUpdateLoading(true);
     try {
-      const response = await authAxios.put('user/', values);
+      const updateData = {
+        first_name: values.first_name,
+        last_name: values.last_name,
+        email: values.email,
+        phone_number: values.phone_number || '',
+        date_of_birth: values.date_of_birth ? values.date_of_birth.format('YYYY-MM-DD') : null
+      };
+      
+      const response = await authAxios.put('user/', updateData);
       setUserInfo(response.data);
-      message.success('Cập nhật thông tin thành công!');
+      antMessage.success('Cập nhật thông tin thành công!');
       setIsEditMode(false);
       form.resetFields();
+      
+      // Refresh user info để cập nhật trong menu
+      fetchUserInfo();
     } catch (error) {
       console.error('Error updating profile:', error);
-      message.error(error.response?.data?.message || 'Có lỗi xảy ra khi cập nhật thông tin!');
+      
+      // Nếu lỗi 401 (Unauthorized), yêu cầu đăng nhập lại
+      if (error.response?.status === 401) {
+        antMessage.error('Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại!');
+        handleLogout();
+      } else {
+        antMessage.error(error.response?.data?.message || 'Có lỗi xảy ra khi cập nhật thông tin!');
+      }
     } finally {
       setUpdateLoading(false);
     }
   };
 
+  const handleChangePassword = async (values) => {
+    setPasswordLoading(true);
+    try {
+      await authAxios.post('user/change-password/', {
+        old_password: values.old_password,
+        new_password: values.new_password
+      });
+      
+      // Đóng modal và reset form trước
+      setPasswordModalVisible(false);
+      passwordForm.resetFields();
+      
+      // Hiển thị thông báo thành công
+      Modal.success({
+        title: 'Thành công',
+        content: 'Đổi mật khẩu thành công!',
+      });
+    } catch (error) {
+      console.error('Error changing password:', error);
+      console.error('Error response:', error.response?.data);
+      
+      if (error.response?.status === 401) {
+        Modal.error({
+          title: 'Lỗi',
+          content: 'Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại!',
+          onOk: handleLogout
+        });
+      } else if (error.response?.status === 400) {
+        const errorData = error.response?.data;
+        const errorMsg = errorData?.old_password?.[0] 
+          || errorData?.new_password?.[0] 
+          || errorData?.error 
+          || JSON.stringify(errorData) 
+          || 'Mật khẩu cũ không đúng!';
+        Modal.error({
+          title: 'Lỗi',
+          content: errorMsg,
+        });
+      } else {
+        Modal.error({
+          title: 'Lỗi',
+          content: 'Có lỗi xảy ra khi đổi mật khẩu!',
+        });
+      }
+    } finally {
+      setPasswordLoading(false);
+    }
+  };
+
   const userMenuItems = [
+     // Chỉ hiển thị Dashboard Admin khi user là staff hoặc superuser
+    ...(userInfo?.is_staff || userInfo?.is_superuser ? [{
+      key: 'admin-dashboard',
+      label: 'Dashboard Admin',
+      icon: <DashboardOutlined />,
+      onClick: () => {
+        navigate('/admin');
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      }
+    }] : []),
     {
       key: 'profile',
       label: 'Thông tin cá nhân',
@@ -125,11 +224,28 @@ const Navigation = () => {
       }
     },
     {
+      key: 'change-password',
+      label: 'Đổi mật khẩu',
+      icon: <LockOutlined />,
+      onClick: () => {
+        setPasswordModalVisible(true);
+      }
+    },
+    {
       key: 'wishlist',
       label: 'Sản phẩm yêu thích',
       icon: <HeartOutlined />,
       onClick: () => {
         navigate('/wishlist');
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      }
+    },
+    {
+      key: 'coupons',
+      label: 'Ví voucher',
+      icon: <GiftOutlined />,
+      onClick: () => {
+        navigate('/coupons');
         window.scrollTo({ top: 0, behavior: 'smooth' });
       }
     },
@@ -223,7 +339,7 @@ const Navigation = () => {
           style={{ 
             fontSize: '24px', 
             fontWeight: 'bold', 
-            color: '#1890ff',
+            color: '#06131fff',
             cursor: 'pointer'
           }}
           onClick={() => {
@@ -231,7 +347,7 @@ const Navigation = () => {
             window.scrollTo(0, 0);
           }}
         >
-          🛍️ Fashion Store
+          <img src={logoImage} alt="Fashion Store" style={{ height: '50px', marginRight: '8px', verticalAlign: 'middle' }} /> PKA
         </div>
 
         {/* Main Menu */}
@@ -444,6 +560,36 @@ const Navigation = () => {
                 />
               </Form.Item>
 
+              <Form.Item
+                label="Số điện thoại"
+                name="phone_number"
+                rules={[
+                  { pattern: /^[0-9]{10,11}$/, message: 'Số điện thoại không hợp lệ (10-11 số)!' }
+                ]}
+              >
+                <Input 
+                  prefix={<PhoneOutlined />}
+                  placeholder="Nhập số điện thoại"
+                  size="large"
+                />
+              </Form.Item>
+
+              <Form.Item
+                label="Ngày sinh"
+                name="date_of_birth"
+              >
+                <DatePicker 
+                  placeholder="Chọn ngày sinh"
+                  format="DD/MM/YYYY"
+                  size="large"
+                  style={{ width: '100%' }}
+                  suffixIcon={<CalendarOutlined />}
+                  disabledDate={(current) => {
+                    return current && current > dayjs().endOf('day');
+                  }}
+                />
+              </Form.Item>
+
               <div style={{ 
                 background: '#f0f2f5', 
                 padding: '12px', 
@@ -458,6 +604,11 @@ const Navigation = () => {
                   <Tag color={userInfo.is_staff ? 'red' : 'green'} style={{ marginLeft: '8px' }}>
                     {userInfo.is_staff ? 'Quản trị viên' : 'Khách hàng'}
                   </Tag>
+                </div>
+                <div style={{ marginTop: '8px' }}>
+                  <Text type="secondary" style={{ fontSize: '12px' }}>
+                    💡 Mẹo: Cập nhật ngày sinh để nhận mã giảm giá sinh nhật đặc biệt!
+                  </Text>
                 </div>
               </div>
             </Form>
@@ -497,6 +648,31 @@ const Navigation = () => {
                 }
               >
                 {userInfo.email || <span style={{ color: '#8c8c8c' }}>Chưa cập nhật</span>}
+              </Descriptions.Item>
+
+              <Descriptions.Item 
+                label={
+                  <span>
+                    <PhoneOutlined style={{ marginRight: 8 }} />
+                    Số điện thoại
+                  </span>
+                }
+              >
+                {userInfo.phone_number || <span style={{ color: '#8c8c8c' }}>Chưa cập nhật</span>}
+              </Descriptions.Item>
+
+              <Descriptions.Item 
+                label={
+                  <span>
+                    <CalendarOutlined style={{ marginRight: 8 }} />
+                    Ngày sinh
+                  </span>
+                }
+              >
+                {userInfo.date_of_birth ? 
+                  format(new Date(userInfo.date_of_birth), 'dd/MM/yyyy', { locale: vi }) :
+                  <span style={{ color: '#8c8c8c' }}>Chưa cập nhật</span>
+                }
               </Descriptions.Item>
 
               <Descriptions.Item 
@@ -555,6 +731,116 @@ const Navigation = () => {
             </Descriptions>
           )
         )}
+      </Modal>
+
+      {/* Change Password Modal */}
+      <Modal
+        title={
+          <Space>
+            <LockOutlined style={{ color: '#1890ff' }} />
+            <span>Đổi mật khẩu</span>
+          </Space>
+        }
+        open={passwordModalVisible}
+        onCancel={() => {
+          setPasswordModalVisible(false);
+          passwordForm.resetFields();
+        }}
+        footer={[
+          <Button 
+            key="cancel"
+            onClick={() => {
+              setPasswordModalVisible(false);
+              passwordForm.resetFields();
+            }}
+          >
+            Hủy
+          </Button>,
+          <Button 
+            key="submit" 
+            type="primary" 
+            loading={passwordLoading}
+            onClick={() => passwordForm.submit()}
+          >
+            Đổi mật khẩu
+          </Button>
+        ]}
+        width={500}
+      >
+        <Form
+          form={passwordForm}
+          layout="vertical"
+          onFinish={handleChangePassword}
+          autoComplete="off"
+        >
+          <Form.Item
+            label="Mật khẩu hiện tại"
+            name="old_password"
+            rules={[
+              { required: true, message: 'Vui lòng nhập mật khẩu hiện tại!' }
+            ]}
+          >
+            <Input.Password 
+              prefix={<LockOutlined />}
+              placeholder="Nhập mật khẩu hiện tại"
+              size="large"
+            />
+          </Form.Item>
+
+          <Form.Item
+            label="Mật khẩu mới"
+            name="new_password"
+            rules={[
+              { required: true, message: 'Vui lòng nhập mật khẩu mới!' },
+              { min: 8, message: 'Mật khẩu phải có ít nhất 8 ký tự!' }
+            ]}
+          >
+            <Input.Password 
+              prefix={<LockOutlined />}
+              placeholder="Nhập mật khẩu mới (tối thiểu 8 ký tự)"
+              size="large"
+            />
+          </Form.Item>
+
+          <Form.Item
+            label="Xác nhận mật khẩu mới"
+            name="confirm_password"
+            dependencies={['new_password']}
+            rules={[
+              { required: true, message: 'Vui lòng xác nhận mật khẩu mới!' },
+              ({ getFieldValue }) => ({
+                validator(_, value) {
+                  if (!value || getFieldValue('new_password') === value) {
+                    return Promise.resolve();
+                  }
+                  return Promise.reject(new Error('Mật khẩu xác nhận không khớp!'));
+                },
+              }),
+            ]}
+          >
+            <Input.Password 
+              prefix={<LockOutlined />}
+              placeholder="Nhập lại mật khẩu mới"
+              size="large"
+            />
+          </Form.Item>
+
+          <div style={{ 
+            background: '#f0f2f5', 
+            padding: '12px', 
+            borderRadius: '8px',
+            marginTop: '16px'
+          }}>
+            <Text type="secondary" style={{ fontSize: '13px' }}>
+              <strong>💡 Lưu ý:</strong>
+              <ul style={{ margin: '8px 0 0 0', paddingLeft: '20px' }}>
+                <li>Mật khẩu phải có ít nhất 8 ký tự</li>
+                <li>Nên kết hợp chữ hoa, chữ thường, số và ký tự đặc biệt</li>
+                <li>Không sử dụng mật khẩu dễ đoán</li>
+              </ul>
+            </Text>
+          </div>
+        </Form>
       </Modal>
     </Header>
   );

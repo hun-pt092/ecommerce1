@@ -1,9 +1,12 @@
 from rest_framework import serializers
-from .models import User, Product, ProductVariant, Order, OrderItem, Category, Brand, ProductImage, Review, Wishlist, StockHistory, StockAlert
+from .models import (
+    User, Product, ProductVariant, Order, OrderItem, Category, Brand, 
+    ProductImage, Review, Wishlist, StockHistory, StockAlert, Cart, CartItem,
+    Coupon, UserCoupon
+)
 from django.contrib.auth.password_validation import validate_password
 from rest_framework.validators import UniqueValidator
-
-from .models import Cart, CartItem 
+from django.utils import timezone 
 
 # User serializer để đăng ký
 class RegisterSerializer(serializers.ModelSerializer):
@@ -13,10 +16,13 @@ class RegisterSerializer(serializers.ModelSerializer):
     )
     password = serializers.CharField(write_only=True, required=True, validators=[validate_password])
     password2 = serializers.CharField(write_only=True, required=True)  # Xác nhận password
+    date_of_birth = serializers.DateField(required=False, allow_null=True)  # Tùy chọn
+    phone_number = serializers.CharField(required=False, allow_blank=True)  # Tùy chọn
 
     class Meta:
         model = User
-        fields = ('username', 'password', 'password2', 'email', 'first_name', 'last_name')
+        fields = ('username', 'password', 'password2', 'email', 'first_name', 'last_name', 
+                 'date_of_birth', 'phone_number')
 
     def validate(self, attrs):
         if attrs['password'] != attrs['password2']:
@@ -24,13 +30,11 @@ class RegisterSerializer(serializers.ModelSerializer):
         return attrs
 
     def create(self, validated_data):
-        user = User.objects.create(
-            username=validated_data['username'],
-            email=validated_data['email'],
-            first_name=validated_data['first_name'],
-            last_name=validated_data['last_name'],
-        )
-        user.set_password(validated_data['password'])
+        validated_data.pop('password2')  # Bỏ password2
+        password = validated_data.pop('password')
+        
+        user = User.objects.create(**validated_data)
+        user.set_password(password)
         user.save()
         return user
 
@@ -54,6 +58,10 @@ class ProductImageSerializer(serializers.ModelSerializer):
 
 # Product serializers
 class ProductVariantSerializer(serializers.ModelSerializer):
+    product_name = serializers.CharField(source='product.name', read_only=True)
+    product_price = serializers.DecimalField(source='product.price', max_digits=10, decimal_places=2, read_only=True)
+    available_quantity = serializers.IntegerField(read_only=True)
+    
     class Meta:
         model = ProductVariant
         fields = '__all__'
@@ -180,10 +188,20 @@ class CartSerializer(serializers.ModelSerializer):
 # Serializer để hiển thị thông tin sản phẩm trong order item
 class OrderItemProductSerializer(serializers.ModelSerializer):
     product_name = serializers.CharField(source='product.name', read_only=True)
+    image = serializers.SerializerMethodField()
     
     class Meta:
         model = ProductVariant
-        fields = ['id', 'size', 'color', 'product_name']
+        fields = ['id', 'size', 'color', 'product_name', 'image']
+    
+    def get_image(self, obj):
+        # Lấy ảnh đầu tiên của product
+        if obj.product.images.exists():
+            first_image = obj.product.images.first()
+            request = self.context.get('request')
+            if request and first_image.image:
+                return request.build_absolute_uri(first_image.image.url)
+        return None
 
 # Order Item serializer
 class OrderItemSerializer(serializers.ModelSerializer):
@@ -204,6 +222,7 @@ class OrderSerializer(serializers.ModelSerializer):
     user_email = serializers.CharField(source='user.email', read_only=True)
     total_items = serializers.SerializerMethodField()
     user = serializers.SerializerMethodField()
+    coupon_info = serializers.SerializerMethodField()
     
     class Meta:
         model = Order
@@ -211,7 +230,8 @@ class OrderSerializer(serializers.ModelSerializer):
             'id', 'user', 'user_name', 'user_email', 'total_price', 'status', 'payment_status',
             'shipping_name', 'shipping_address', 'shipping_city', 
             'shipping_postal_code', 'shipping_country', 'phone_number',
-            'notes', 'created_at', 'updated_at', 'items', 'total_items'
+            'notes', 'created_at', 'updated_at', 'items', 'total_items',
+            'discount_amount', 'coupon_info'
         ]
         read_only_fields = ['created_at', 'updated_at']
     
@@ -228,14 +248,26 @@ class OrderSerializer(serializers.ModelSerializer):
     
     def get_total_items(self, obj):
         return obj.get_total_items()
+    
+    def get_coupon_info(self, obj):
+        if obj.used_coupon:
+            return {
+                'code': obj.used_coupon.coupon.code,
+                'name': obj.used_coupon.coupon.name,
+                'discount_amount': obj.discount_amount
+            }
+        return None
 
 # Order create serializer
 class OrderCreateSerializer(serializers.ModelSerializer):
+    coupon_code = serializers.CharField(required=False, write_only=True)
+    
     class Meta:
         model = Order
         fields = [
             'shipping_name', 'shipping_address', 'shipping_city', 
-            'shipping_postal_code', 'shipping_country', 'phone_number', 'notes'
+            'shipping_postal_code', 'shipping_country', 'phone_number', 'notes',
+            'coupon_code'
         ]
     
     def validate(self, attrs):
@@ -254,6 +286,9 @@ class OrderCreateSerializer(serializers.ModelSerializer):
         user = self.context['request'].user
         cart = Cart.objects.get(user=user)
         
+        # Extract coupon code if provided
+        coupon_code = validated_data.pop('coupon_code', None)
+        
         # Calculate total price
         total_price = 0
         for cart_item in cart.items.all():
@@ -262,12 +297,59 @@ class OrderCreateSerializer(serializers.ModelSerializer):
             item_price = product.discount_price if product.discount_price else product.price
             total_price += item_price * cart_item.quantity
         
+        # Add shipping fee if order is less than 500,000
+        shipping_fee = 0 if total_price >= 500000 else 30000
+        total_price += shipping_fee
+        
+        # Apply coupon if provided
+        discount_amount = 0
+        used_coupon = None
+        
+        if coupon_code:
+            try:
+                # Find the user's coupon
+                user_coupon = UserCoupon.objects.get(
+                    user=user,
+                    coupon__code=coupon_code,
+                    is_used=False
+                )
+                
+                # Validate coupon
+                if user_coupon.coupon.is_valid(user):
+                    # Check if order amount meets minimum purchase requirement
+                    if total_price >= user_coupon.coupon.min_purchase_amount:
+                        # Calculate discount
+                        discount_amount = user_coupon.coupon.calculate_discount(total_price)
+                        total_price -= discount_amount
+                        used_coupon = user_coupon
+                    else:
+                        raise serializers.ValidationError({
+                            'coupon_code': f'Đơn hàng phải tối thiểu {user_coupon.coupon.min_purchase_amount:,.0f}₫ để sử dụng mã này'
+                        })
+                else:
+                    raise serializers.ValidationError({
+                        'coupon_code': 'Mã giảm giá không hợp lệ hoặc đã hết hạn'
+                    })
+            except UserCoupon.DoesNotExist:
+                raise serializers.ValidationError({
+                    'coupon_code': 'Mã giảm giá không tồn tại hoặc đã được sử dụng'
+                })
+        
         # Create order
         order = Order.objects.create(
             user=user,
             total_price=total_price,
+            discount_amount=discount_amount,
+            used_coupon=used_coupon,
             **validated_data
         )
+        
+        # Mark coupon as used
+        if used_coupon:
+            used_coupon.is_used = True
+            used_coupon.used_at = timezone.now()
+            used_coupon.order = order
+            used_coupon.save()
         
         # Create order items from cart
         for cart_item in cart.items.all():
@@ -313,7 +395,8 @@ class UserSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
         fields = ('id', 'username', 'email', 'first_name', 'last_name', 
-                 'is_active', 'is_admin', 'is_staff', 'date_joined', 'last_login')
+                 'is_active', 'is_admin', 'is_staff', 'date_joined', 'last_login',
+                 'date_of_birth', 'phone_number')
         read_only_fields = ('id', 'date_joined', 'last_login')
 
 #-----------------------------Review Management-----------------------------------------------
@@ -478,8 +561,8 @@ class ProductVariantStockSerializer(serializers.ModelSerializer):
 
 
 # Stock Import/Export Request Serializer
+# NOTE: variant_id now comes from URL parameter, not request body
 class StockTransactionSerializer(serializers.Serializer):
-    variant_id = serializers.IntegerField(required=True)
     quantity = serializers.IntegerField(required=True, min_value=1)
     cost_per_item = serializers.DecimalField(max_digits=10, decimal_places=2, required=False, allow_null=True)
     reference_number = serializers.CharField(max_length=50, required=False, allow_blank=True)
@@ -492,8 +575,8 @@ class StockTransactionSerializer(serializers.Serializer):
 
 
 # Stock Adjustment Request Serializer
+# NOTE: variant_id now comes from URL parameter, not request body
 class StockAdjustmentSerializer(serializers.Serializer):
-    variant_id = serializers.IntegerField(required=True)
     new_quantity = serializers.IntegerField(required=True, min_value=0)
     reason = serializers.CharField(required=False, allow_blank=True)
     
@@ -502,3 +585,119 @@ class StockAdjustmentSerializer(serializers.Serializer):
             raise serializers.ValidationError("Số lượng mới không thể âm")
         return value
 
+
+#-----------------------------Coupon & Birthday Coupons-----------------------------------------------
+
+class CouponSerializer(serializers.ModelSerializer):
+    """Serializer cho Coupon (Admin tạo/quản lý)"""
+    is_valid_now = serializers.SerializerMethodField()
+    remaining_uses = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = Coupon
+        fields = '__all__'
+        read_only_fields = ('current_uses', 'created_at', 'updated_at')
+    
+    def get_is_valid_now(self, obj):
+        valid, message = obj.is_valid()
+        return valid
+    
+    def get_remaining_uses(self, obj):
+        if obj.max_uses:
+            return obj.max_uses - obj.current_uses
+        return None
+
+
+class UserCouponSerializer(serializers.ModelSerializer):
+    """Serializer cho UserCoupon (Ví voucher của khách hàng)"""
+    coupon_code = serializers.CharField(source='coupon.code', read_only=True)
+    coupon_name = serializers.CharField(source='coupon.name', read_only=True)
+    coupon_description = serializers.CharField(source='coupon.description', read_only=True)
+    coupon_type = serializers.CharField(source='coupon.coupon_type', read_only=True)
+    discount_value = serializers.DecimalField(source='coupon.discount_value', 
+                                              max_digits=10, decimal_places=2, read_only=True)
+    max_discount_amount = serializers.DecimalField(source='coupon.max_discount_amount', 
+                                                    max_digits=10, decimal_places=2, read_only=True)
+    min_purchase_amount = serializers.DecimalField(source='coupon.min_purchase_amount', 
+                                                    max_digits=10, decimal_places=2, read_only=True)
+    
+    is_valid_now = serializers.SerializerMethodField()
+    days_remaining = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = UserCoupon
+        fields = [
+            'id', 'coupon', 'coupon_code', 'coupon_name', 'coupon_description',
+            'coupon_type', 'discount_value', 'max_discount_amount', 'min_purchase_amount',
+            'valid_from', 'valid_to', 'is_used', 'used_at', 'order',
+            'assigned_at', 'notified', 'is_valid_now', 'days_remaining'
+        ]
+        read_only_fields = ('assigned_at', 'notified', 'is_used', 'used_at', 'order')
+    
+    def get_is_valid_now(self, obj):
+        valid, message = obj.is_valid()
+        return {
+            'valid': valid,
+            'message': message
+        }
+    
+    def get_days_remaining(self, obj):
+        from django.utils import timezone
+        if obj.is_used:
+            return 0
+        remaining = (obj.valid_to - timezone.now()).days
+        return max(0, remaining)
+
+
+class ApplyCouponSerializer(serializers.Serializer):
+    """Serializer để áp dụng mã giảm giá vào đơn hàng"""
+    coupon_code = serializers.CharField(max_length=50)
+    order_amount = serializers.DecimalField(max_digits=12, decimal_places=2)
+    
+    def validate_coupon_code(self, value):
+        try:
+            coupon = Coupon.objects.get(code=value.upper())
+            return coupon
+        except Coupon.DoesNotExist:
+            raise serializers.ValidationError("Mã giảm giá không tồn tại")
+    
+    def validate(self, attrs):
+        coupon = attrs['coupon_code']
+        order_amount = attrs['order_amount']
+        user = self.context.get('user')
+        
+        # Kiểm tra coupon có hợp lệ không
+        valid, message = coupon.is_valid(user)
+        if not valid:
+            raise serializers.ValidationError({"coupon_code": message})
+        
+        # Kiểm tra đơn hàng tối thiểu
+        if order_amount < coupon.min_purchase_amount:
+            raise serializers.ValidationError({
+                "order_amount": f"Đơn hàng tối thiểu {coupon.min_purchase_amount:,}đ"
+            })
+        
+        # Kiểm tra user có mã này trong ví không (với birthday coupon)
+        if coupon.occasion_type == 'birthday':
+            user_coupon = UserCoupon.objects.filter(
+                user=user,
+                coupon=coupon,
+                is_used=False
+            ).first()
+            
+            if not user_coupon:
+                raise serializers.ValidationError({
+                    "coupon_code": "Bạn không có mã sinh nhật này trong ví voucher"
+                })
+            
+            # Kiểm tra thời gian của user_coupon
+            valid_uc, message_uc = user_coupon.is_valid()
+            if not valid_uc:
+                raise serializers.ValidationError({"coupon_code": message_uc})
+        
+        # Tính discount
+        discount = coupon.calculate_discount(order_amount)
+        attrs['discount_amount'] = discount
+        attrs['final_amount'] = order_amount - discount
+        
+        return attrs

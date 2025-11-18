@@ -81,7 +81,7 @@ const StockHistory = () => {
             style={{ width: 200 }}
           >
             <Option value="all">Tất cả giao dịch</Option>
-            <Option value="import">  Nhập kho</Option>
+            <Option value="import"> Nhập kho</Option>
             <Option value="sale">🛒 Bán hàng</Option>
             <Option value="return">↩️ Trả hàng</Option>
             <Option value="adjustment">⚙️ Điều chỉnh</Option>

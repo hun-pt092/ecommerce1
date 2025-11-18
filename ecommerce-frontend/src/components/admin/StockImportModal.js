@@ -9,8 +9,8 @@ const StockImportModal = ({ visible, onCancel, variant, onSuccess }) => {
   const handleSubmit = async (values) => {
     setLoading(true);
     try {
-      const response = await apiClient.post('/shop/admin/stock/import/', {
-        variant_id: variant.id,
+      // NEW API: variant_id in URL path, not in body
+      const response = await apiClient.post(`/admin/stock/variants/${variant.id}/import/`, {
         quantity: values.quantity,
         cost_per_item: values.cost_per_item,
         reference_number: values.reference_number || '',
@@ -31,7 +31,7 @@ const StockImportModal = ({ visible, onCancel, variant, onSuccess }) => {
 
   return (
     <Modal
-      title="📥 Nhập kho"
+      title="Nhập kho"
       open={visible}
       onCancel={onCancel}
       onOk={() => form.submit()}
