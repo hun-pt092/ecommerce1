@@ -261,13 +261,14 @@ class OrderSerializer(serializers.ModelSerializer):
 # Order create serializer
 class OrderCreateSerializer(serializers.ModelSerializer):
     coupon_code = serializers.CharField(required=False, write_only=True)
+    payment_method = serializers.CharField(required=False, write_only=True)
     
     class Meta:
         model = Order
         fields = [
             'shipping_name', 'shipping_address', 'shipping_city', 
             'shipping_postal_code', 'shipping_country', 'phone_number', 'notes',
-            'coupon_code'
+            'coupon_code', 'payment_method'
         ]
     
     def validate(self, attrs):
@@ -286,8 +287,9 @@ class OrderCreateSerializer(serializers.ModelSerializer):
         user = self.context['request'].user
         cart = Cart.objects.get(user=user)
         
-        # Extract coupon code if provided
+        # Extract coupon code and payment method if provided
         coupon_code = validated_data.pop('coupon_code', None)
+        payment_method = validated_data.pop('payment_method', None)
         
         # Calculate total price
         total_price = 0
@@ -335,12 +337,18 @@ class OrderCreateSerializer(serializers.ModelSerializer):
                     'coupon_code': 'Mã giảm giá không tồn tại hoặc đã được sử dụng'
                 })
         
+        # Determine payment status based on payment method
+        payment_status = 'pending'  # Default
+        if payment_method == 'momo':
+            payment_status = 'paid'  # MoMo payments are pre-paid
+        
         # Create order
         order = Order.objects.create(
             user=user,
             total_price=total_price,
             discount_amount=discount_amount,
             used_coupon=used_coupon,
+            payment_status=payment_status,
             **validated_data
         )
         
@@ -356,6 +364,11 @@ class OrderCreateSerializer(serializers.ModelSerializer):
             product = cart_item.product_variant.product
             item_price = product.discount_price if product.discount_price else product.price
             
+            # Release reservation before creating OrderItem
+            # This will restore reserved_quantity back to available
+            if cart_item.is_reserved:
+                cart_item.release_reservation()
+            
             OrderItem.objects.create(
                 order=order,
                 product_variant=cart_item.product_variant,
@@ -363,9 +376,8 @@ class OrderCreateSerializer(serializers.ModelSerializer):
                 price_per_item=item_price
             )
             
-            # Update stock quantity
-            cart_item.product_variant.stock_quantity -= cart_item.quantity
-            cart_item.product_variant.save()
+            # Stock will be exported automatically by post_save signal
+            # Signal will handle the actual stock export (reduce stock_quantity)
         
         # Clear cart after creating order
         cart.items.all().delete()

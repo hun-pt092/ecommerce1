@@ -280,32 +280,63 @@ const ProductDetailPage = () => {
 
   return (
     <div style={{ 
-      backgroundColor: theme.backgroundColor, 
+      backgroundColor: theme.backgroundColor === '#001529' ? '#141414' : '#f5f5f5', 
       minHeight: '100vh',
-      color: theme.textColor
+      color: theme.textColor,
+      paddingBottom: '60px'
     }}>
-      <div style={{ padding: '20px', maxWidth: '1200px', margin: '0 auto' }}>
+      <div style={{ padding: '24px 20px', maxWidth: '1400px', margin: '0 auto' }}>
         {/* Breadcrumb */}
-        <Breadcrumb style={{ marginBottom: '20px' }}>
+        <Breadcrumb 
+          separator={<span style={{ color: theme.mode === 'dark' ? '#666' : '#999', margin: '0 8px' }}>/</span>}
+          style={{ marginBottom: '24px', fontSize: '14px' }}
+        >
           <Breadcrumb.Item>
-            <Button type="link" onClick={() => navigate('/')} style={{ padding: 0, color: theme.textColor }}>
+            <Button 
+              type="link" 
+              onClick={() => navigate('/')} 
+              style={{ 
+                padding: 0, 
+                color: '#1890ff',
+                height: 'auto',
+                fontWeight: 500
+              }}
+            >
               Trang chủ
             </Button>
           </Breadcrumb.Item>
-          <Breadcrumb.Item style={{ color: theme.textColor }}>{product?.category?.name}</Breadcrumb.Item>
-          <Breadcrumb.Item style={{ color: theme.textColor }}>{product?.name}</Breadcrumb.Item>
+          <Breadcrumb.Item>
+            <span style={{ 
+              color: theme.mode === 'dark' ? '#888' : '#999',
+              fontSize: '14px'
+            }}>
+              {product?.category?.name}
+            </span>
+          </Breadcrumb.Item>
+          <Breadcrumb.Item>
+            <span style={{ 
+              color: theme.mode === 'dark' ? '#fff' : '#262626', 
+              fontWeight: 600,
+              fontSize: '14px'
+            }}>
+              {product?.name}
+            </span>
+          </Breadcrumb.Item>
         </Breadcrumb>
 
-        <Row gutter={[32, 32]}>
+        <Row gutter={[40, 40]}>
           {/* Hình ảnh sản phẩm */}
-          <Col xs={24} md={12}>
+          <Col xs={24} lg={11}>
             <Card 
               bodyStyle={{ padding: 0 }}
               style={{ 
-                borderRadius: '12px', 
+                borderRadius: '16px', 
                 overflow: 'hidden',
                 backgroundColor: theme.cardBackground,
-                borderColor: theme.borderColor
+                border: `1px solid ${theme.borderColor}`,
+                boxShadow: theme.mode === 'dark' 
+                  ? '0 4px 24px rgba(0,0,0,0.3)' 
+                  : '0 4px 24px rgba(0,0,0,0.08)'
               }}
             >
               {product?.images && product.images.length > 0 ? (
@@ -315,7 +346,7 @@ const ProductDetailPage = () => {
                       ref={setCarouselRef}
                       arrows 
                       beforeChange={(from, to) => setActiveImageIndex(to)}
-                      style={{ backgroundColor: '#fff' }}
+                      style={{ backgroundColor: theme.cardBackground }}
                     >
                       {product.images.map((image, index) => (
                         <div key={index}>
@@ -328,7 +359,7 @@ const ProductDetailPage = () => {
                             placeholder={
                               <div style={{ 
                                 height: '500px', 
-                                background: '#f0f0f0',
+                                background: theme.mode === 'dark' ? '#2a2a2a' : '#f0f0f0',
                                 display: 'flex',
                                 alignItems: 'center',
                                 justifyContent: 'center'
@@ -345,35 +376,39 @@ const ProductDetailPage = () => {
                   {/* Thumbnails */}
                   {product.images.length > 1 && (
                     <div style={{ 
-                      padding: '16px',
+                      padding: '20px',
                       display: 'flex',
-                      gap: '12px',
+                      gap: '16px',
                       overflowX: 'auto',
                       scrollbarWidth: 'thin',
-                      WebkitOverflowScrolling: 'touch'
+                      WebkitOverflowScrolling: 'touch',
+                      justifyContent: 'center'
                     }}>
                       {product.images.map((image, index) => (
                         <div
                           key={index}
                           style={{ 
-                            minWidth: '70px',
-                            height: '70px',
-                            border: activeImageIndex === index ? '3px solid #1890ff' : '2px solid #d9d9d9',
-                            borderRadius: '6px',
+                            minWidth: '80px',
+                            height: '80px',
+                            border: activeImageIndex === index 
+                              ? '3px solid #1890ff' 
+                              : `2px solid ${theme.borderColor}`,
+                            borderRadius: '12px',
                             overflow: 'hidden',
                             cursor: 'pointer',
                             transition: 'all 0.3s ease',
-                            opacity: activeImageIndex === index ? 1 : 0.7
+                            opacity: activeImageIndex === index ? 1 : 0.6,
+                            transform: activeImageIndex === index ? 'scale(1.05)' : 'scale(1)'
                           }}
                           onClick={() => handleThumbnailClick(index)}
                           onMouseEnter={(e) => {
-                            if (activeImageIndex !== index) {
-                              e.target.style.opacity = '0.9';
-                            }
+                            e.currentTarget.style.opacity = '1';
+                            e.currentTarget.style.transform = 'scale(1.05)';
                           }}
                           onMouseLeave={(e) => {
                             if (activeImageIndex !== index) {
-                              e.target.style.opacity = '0.7';
+                              e.currentTarget.style.opacity = '0.6';
+                              e.currentTarget.style.transform = 'scale(1)';
                             }
                           }}
                         >
@@ -396,17 +431,19 @@ const ProductDetailPage = () => {
                 <div 
                   style={{ 
                     height: '500px', 
-                    background: 'linear-gradient(45deg, #f0f0f0, #e0e0e0)',
+                    background: theme.mode === 'dark' 
+                      ? 'linear-gradient(45deg, #2a2a2a, #3a3a3a)'
+                      : 'linear-gradient(45deg, #f0f0f0, #e0e0e0)',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
                     fontSize: '48px',
-                    color: '#999',
+                    color: theme.mode === 'dark' ? '#666' : '#999',
                     flexDirection: 'column'
                   }}
                 >
                   👕
-                  <Text type="secondary" style={{ marginTop: '16px', fontSize: '14px' }}>
+                  <Text type="secondary" style={{ marginTop: '16px', fontSize: '14px', color: theme.secondaryText }}>
                     Hình ảnh sẽ được cập nhật sau
                   </Text>
                 </div>
@@ -415,79 +452,176 @@ const ProductDetailPage = () => {
           </Col>
 
         {/* Thông tin sản phẩm */}
-        <Col xs={24} md={12}>
+        <Col xs={24} lg={13}>
           <Card style={{ 
-            borderRadius: '12px',
+            borderRadius: '16px',
             backgroundColor: theme.cardBackground,
-            borderColor: theme.borderColor
-          }}>
-            <div style={{ marginBottom: '16px' }}>
-              <Space>
+            border: `1px solid ${theme.borderColor}`,
+            boxShadow: theme.mode === 'dark' 
+              ? '0 4px 24px rgba(0,0,0,0.3)' 
+              : '0 4px 24px rgba(0,0,0,0.08)',
+            padding: '32px'
+          }}
+          bodyStyle={{ padding: 0 }}
+          >
+            {/* Tags */}
+            <div style={{ marginBottom: '20px' }}>
+              <Space wrap>
                 {product?.brand && (
-                  <Tag color="blue">{product.brand.name}</Tag>
+                  <Tag 
+                    color="blue" 
+                    style={{ 
+                      padding: '6px 16px', 
+                      fontSize: '13px', 
+                      borderRadius: '20px',
+                      fontWeight: 500
+                    }}
+                  >
+                    {product.brand.name}
+                  </Tag>
                 )}
                 {product?.is_new && (
-                  <Tag color="green">Mới</Tag>
+                  <Tag 
+                    color="green"
+                    style={{ 
+                      padding: '6px 16px', 
+                      fontSize: '13px', 
+                      borderRadius: '20px',
+                      fontWeight: 500
+                    }}
+                  >
+                    🆕 Mới
+                  </Tag>
                 )}
                 {product?.is_featured && (
-                  <Tag color="gold">Nổi bật</Tag>
+                  <Tag 
+                    color="gold"
+                    style={{ 
+                      padding: '6px 16px', 
+                      fontSize: '13px', 
+                      borderRadius: '20px',
+                      fontWeight: 500
+                    }}
+                  >
+                    ⭐ Nổi bật
+                  </Tag>
                 )}
               </Space>
             </div>
 
-            <Title level={2} style={{ marginBottom: '8px', color: theme.textColor }}>
+            <Title 
+              level={2} 
+              style={{ 
+                marginBottom: '12px', 
+                color: theme.textColor,
+                fontSize: '32px',
+                fontWeight: 700,
+                lineHeight: 1.3
+              }}
+            >
               {product.name}
             </Title>
             
             {product?.sku && (
-              <Text type="secondary" style={{ fontSize: '12px', color: theme.secondaryText }}>
-                SKU: {product.sku}
+              <Text 
+                type="secondary" 
+                style={{ 
+                  fontSize: '13px', 
+                  color: theme.secondaryText,
+                  display: 'block',
+                  marginBottom: '16px'
+                }}
+              >
+                Mã sản phẩm: <strong>{product.sku}</strong>
               </Text>
             )}
 
-            {/* Rating placeholder */}
-            <div style={{ margin: '12px 0' }}>
-              <Space>
-                <Rate disabled defaultValue={4.5} allowHalf style={{ fontSize: '16px' }} />
-                <Text type="secondary" style={{ color: theme.secondaryText }}>(0 đánh giá)</Text>
+            {/* Rating */}
+            <div style={{ 
+              margin: '16px 0 24px 0',
+              padding: '16px',
+              background: theme.mode === 'dark'
+                ? 'linear-gradient(135deg, #2a2a2a 0%, #3a3a3a 100%)'
+                : 'linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%)',
+              borderRadius: '12px',
+              border: `1px solid ${theme.borderColor}`
+            }}>
+              <Space align="center">
+                <Rate 
+                  disabled 
+                  defaultValue={4.5} 
+                  allowHalf 
+                  style={{ fontSize: '20px', color: '#faad14' }} 
+                />
+                <Text strong style={{ fontSize: '18px', color: theme.mode === 'dark' ? '#fff' : '#262626' }}>4.5</Text>
+                <Divider type="vertical" style={{ height: '20px', margin: '0 8px' }} />
+                <Text type="secondary" style={{ color: theme.secondaryText, fontSize: '14px' }}>
+                  (0 đánh giá)
+                </Text>
               </Space>
             </div>
             
             {/* Giá */}
-            <div style={{ marginBottom: '20px', padding: '16px', backgroundColor: '#f8f9fa', borderRadius: '8px' }}>
+            <div style={{ 
+              marginBottom: '32px', 
+              padding: '24px', 
+              background: theme.mode === 'dark'
+                ? 'linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%)'
+                : 'linear-gradient(135deg, #667eea15 0%, #764ba215 100%)',
+              borderRadius: '16px',
+              border: theme.mode === 'dark'
+                ? '2px solid rgba(102, 126, 234, 0.2)'
+                : '2px solid #667eea20'
+            }}>
               {hasDiscount() ? (
-                <Space direction="vertical" size="small">
-                  <Space align="center">
+                <Space direction="vertical" size="small" style={{ width: '100%' }}>
+                  <Space align="center" size="large">
                     <Text 
                       style={{ 
-                        fontSize: '32px', 
-                        fontWeight: 'bold', 
-                        color: '#ff4d4f' 
+                        fontSize: '42px', 
+                        fontWeight: 800, 
+                        color: '#ff4d4f',
+                        lineHeight: 1
                       }}
                     >
                       {Number(getCurrentPrice()).toLocaleString()}₫
                     </Text>
-                    <Badge count={`-${getDiscountPercentage()}%`} style={{ backgroundColor: '#ff4d4f' }} />
+                    <Badge 
+                      count={`-${getDiscountPercentage()}%`} 
+                      style={{ 
+                        backgroundColor: '#ff4d4f',
+                        fontSize: '16px',
+                        padding: '8px 16px',
+                        height: 'auto',
+                        borderRadius: '20px',
+                        fontWeight: 700
+                      }} 
+                    />
                   </Space>
                   <Text 
                     delete 
                     style={{ 
-                      fontSize: '18px', 
-                      color: '#999' 
+                      fontSize: '20px', 
+                      color: theme.mode === 'dark' ? '#666' : '#999',
+                      fontWeight: 500
                     }}
                   >
                     {Number(product.price).toLocaleString()}₫
                   </Text>
-                  <Text type="success" style={{ fontSize: '12px' }}>
-                    Tiết kiệm: {Number(product.price - product.discount_price).toLocaleString()}₫
-                  </Text>
+                  <Space align="center" style={{ marginTop: '8px' }}>
+                    <CheckCircleOutlined style={{ color: '#52c41a', fontSize: '16px' }} />
+                    <Text style={{ fontSize: '14px', color: '#52c41a', fontWeight: 600 }}>
+                      Tiết kiệm: {Number(product.price - product.discount_price).toLocaleString()}₫
+                    </Text>
+                  </Space>
                 </Space>
               ) : (
                 <Text 
                   style={{ 
-                    fontSize: '32px', 
-                    fontWeight: 'bold', 
-                    color: '#1890ff' 
+                    fontSize: '42px', 
+                    fontWeight: 800, 
+                    color: theme.mode === 'dark' ? '#40a9ff' : '#1890ff',
+                    lineHeight: 1
                   }}
                 >
                   {Number(getCurrentPrice()).toLocaleString()}₫
@@ -495,26 +629,45 @@ const ProductDetailPage = () => {
               )}
               
               {/* Stock status */}
-              <div style={{ marginTop: '12px' }}>
-                <Space>
-                  {getStockStatus().status === 'available' && <CheckCircleOutlined style={{ color: '#52c41a' }} />}
-                  {getStockStatus().status === 'low' && <ExclamationCircleOutlined style={{ color: '#faad14' }} />}
-                  {getStockStatus().status === 'out' && <ExclamationCircleOutlined style={{ color: '#ff4d4f' }} />}
-                  <Text type={getStockStatus().color}>
-                    {getStockStatus().text}
-                  </Text>
-                </Space>
-              </div>
+              <Divider style={{ margin: '20px 0' }} />
+              <Space size="large">
+                {getStockStatus().status === 'available' && (
+                  <Space align="center">
+                    <CheckCircleOutlined style={{ color: '#52c41a', fontSize: '18px' }} />
+                    <Text style={{ fontSize: '15px', color: '#52c41a', fontWeight: 600 }}>
+                      {getStockStatus().text}
+                    </Text>
+                  </Space>
+                )}
+                {getStockStatus().status === 'low' && (
+                  <Space align="center">
+                    <ExclamationCircleOutlined style={{ color: '#faad14', fontSize: '18px' }} />
+                    <Text style={{ fontSize: '15px', color: '#faad14', fontWeight: 600 }}>
+                      {getStockStatus().text}
+                    </Text>
+                  </Space>
+                )}
+                {getStockStatus().status === 'out' && (
+                  <Space align="center">
+                    <ExclamationCircleOutlined style={{ color: '#ff4d4f', fontSize: '18px' }} />
+                    <Text style={{ fontSize: '15px', color: '#ff4d4f', fontWeight: 600 }}>
+                      {getStockStatus().text}
+                    </Text>
+                  </Space>
+                )}
+              </Space>
             </div>
 
             {/* Chọn variant */}
-            <div style={{ marginBottom: '24px' }}>
-              <Title level={4} style={{ marginBottom: '16px', color: theme.textColor }}>Tùy chọn sản phẩm</Title>
+            <div style={{ marginBottom: '32px' }}>
+              <Title level={4} style={{ marginBottom: '20px', color: theme.textColor, fontSize: '18px', fontWeight: 600 }}>
+                Tùy chọn sản phẩm
+              </Title>
               
-              <Row gutter={[16, 16]}>
+              <Row gutter={[16, 20]}>
                 <Col span={12}>
-                  <Text strong style={{ display: 'block', marginBottom: '8px', color: theme.textColor }}>
-                    Kích cỡ:
+                  <Text strong style={{ display: 'block', marginBottom: '12px', color: theme.textColor, fontSize: '15px' }}>
+                    Kích cỡ
                   </Text>
                   <Select
                     value={selectedSize}
@@ -530,8 +683,8 @@ const ProductDetailPage = () => {
                 </Col>
 
                 <Col span={12}>
-                  <Text strong style={{ display: 'block', marginBottom: '8px', color: theme.textColor }}>
-                    Màu sắc:
+                  <Text strong style={{ display: 'block', marginBottom: '12px', color: theme.textColor, fontSize: '15px' }}>
+                    Màu sắc
                   </Text>
                   <Select
                     value={selectedColor}
@@ -550,32 +703,32 @@ const ProductDetailPage = () => {
             </div>
 
             {/* Số lượng */}
-            <div style={{ marginBottom: '24px' }}>
-              <Text strong style={{ display: 'block', marginBottom: '8px', color: theme.textColor }}>
-                Số lượng:
+            <div style={{ marginBottom: '32px' }}>
+              <Text strong style={{ display: 'block', marginBottom: '12px', color: theme.textColor, fontSize: '15px' }}>
+                Số lượng
               </Text>
               
-              <Space align="center">
+              <Space align="center" size="large">
                 <InputNumber
                   min={1}
                   max={selectedVariant?.stock_quantity || 1}
                   value={quantity}
                   onChange={setQuantity}
                   size="large"
-                  style={{ width: '120px' }}
+                  style={{ width: '140px' }}
                   disabled={!selectedVariant || selectedVariant.stock_quantity === 0}
                 />
                 {selectedVariant && (
-                  <Text type="secondary" style={{ fontSize: '12px', color: theme.secondaryText }}>
-                    (Tối đa: {selectedVariant.stock_quantity})
+                  <Text type="secondary" style={{ fontSize: '13px', color: theme.secondaryText }}>
+                    Tối đa: {selectedVariant.stock_quantity} sản phẩm
                   </Text>
                 )}
               </Space>
             </div>
 
             {/* Action Buttons */}
-            <Row gutter={[8, 12]} style={{ marginBottom: '24px' }}>
-              <Col xs={12} sm={8}>
+            <Row gutter={[12, 16]} style={{ marginBottom: '32px' }}>
+              <Col xs={24} sm={10}>
                 <Button
                   size="large"
                   icon={<ShoppingCartOutlined />}
@@ -583,12 +736,19 @@ const ProductDetailPage = () => {
                   loading={addingToCart}
                   disabled={!selectedVariant || selectedVariant.stock_quantity === 0}
                   block
-                  style={{ height: '50px', borderRadius: '8px' }}
+                  style={{ 
+                    height: '56px', 
+                    borderRadius: '12px',
+                    fontSize: '16px',
+                    fontWeight: 600,
+                    border: '2px solid #1890ff',
+                    color: '#1890ff'
+                  }}
                 >
                   Thêm vào giỏ
                 </Button>
               </Col>
-              <Col xs={12} sm={8}>
+              <Col xs={24} sm={10}>
                 <Button
                   type="primary"
                   size="large"
@@ -597,29 +757,42 @@ const ProductDetailPage = () => {
                   loading={buyingNow}
                   disabled={!selectedVariant || selectedVariant.stock_quantity === 0}
                   block
-                  style={{ height: '50px', borderRadius: '8px' }}
+                  style={{ 
+                    height: '56px', 
+                    borderRadius: '12px',
+                    fontSize: '16px',
+                    fontWeight: 600,
+                    background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                    border: 'none'
+                  }}
                 >
                   Mua ngay
                 </Button>
               </Col>
-              <Col xs={12} sm={4}>
+              <Col xs={12} sm={2}>
                 <WishlistButton 
                   productId={product.id} 
                   size="large"
                   style={{ 
                     width: '100%', 
-                    height: '50px', 
-                    borderRadius: '8px'
+                    height: '56px', 
+                    borderRadius: '12px',
+                    border: '2px solid #f0f0f0'
                   }}
                 />
               </Col>
-              <Col xs={12} sm={4}>
+              <Col xs={12} sm={2}>
                 <Tooltip title="Chia sẻ">
                   <Button
                     size="large"
                     icon={<ShareAltOutlined />}
                     onClick={handleShare}
-                    style={{ height: '50px', borderRadius: '8px' }}
+                    block
+                    style={{ 
+                      height: '56px', 
+                      borderRadius: '12px',
+                      border: '2px solid #f0f0f0'
+                    }}
                   />
                 </Tooltip>
               </Col>
@@ -627,28 +800,82 @@ const ProductDetailPage = () => {
 
             {/* Product features */}
             <div style={{ 
-              background: '#f8f9fa', 
-              padding: '16px', 
-              borderRadius: '8px',
-              marginBottom: '16px'
+              background: theme.mode === 'dark'
+                ? 'linear-gradient(135deg, #2a2a2a 0%, #3a3a3a 100%)'
+                : 'linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%)', 
+              padding: '24px', 
+              borderRadius: '16px',
+              marginBottom: '0',
+              border: `1px solid ${theme.borderColor}`
             }}>
-              <Row gutter={[16, 8]}>
+              <Row gutter={[24, 16]}>
                 <Col span={24}>
-                  <Space>
-                    <TruckOutlined style={{ color: '#1890ff' }} />
-                    <Text style={{ fontSize: '12px' }}>Giao hàng miễn phí cho đơn từ 500k</Text>
+                  <Space size="middle">
+                    <div style={{
+                      width: '48px',
+                      height: '48px',
+                      borderRadius: '12px',
+                      background: 'linear-gradient(135deg, #1890ff 0%, #096dd9 100%)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center'
+                    }}>
+                      <TruckOutlined style={{ color: '#fff', fontSize: '24px' }} />
+                    </div>
+                    <div>
+                      <Text strong style={{ fontSize: '15px', display: 'block', marginBottom: '4px' }}>
+                        Miễn phí vận chuyển
+                      </Text>
+                      <Text style={{ fontSize: '13px', color: '#666' }}>
+                        Cho đơn hàng từ 500.000₫
+                      </Text>
+                    </div>
                   </Space>
                 </Col>
                 <Col span={24}>
-                  <Space>
-                    <SafetyCertificateOutlined style={{ color: '#52c41a' }} />
-                    <Text style={{ fontSize: '12px' }}>Bảo hành chính hãng</Text>
+                  <Space size="middle">
+                    <div style={{
+                      width: '48px',
+                      height: '48px',
+                      borderRadius: '12px',
+                      background: 'linear-gradient(135deg, #52c41a 0%, #389e0d 100%)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center'
+                    }}>
+                      <SafetyCertificateOutlined style={{ color: '#fff', fontSize: '24px' }} />
+                    </div>
+                    <div>
+                      <Text strong style={{ fontSize: '15px', display: 'block', marginBottom: '4px' }}>
+                        Bảo hành chính hãng
+                      </Text>
+                      <Text style={{ fontSize: '13px', color: '#666' }}>
+                        Cam kết 100% hàng chính hãng
+                      </Text>
+                    </div>
                   </Space>
                 </Col>
                 <Col span={24}>
-                  <Space>
-                    <ReloadOutlined style={{ color: '#faad14' }} />
-                    <Text style={{ fontSize: '12px' }}>Đổi trả trong 7 ngày</Text>
+                  <Space size="middle">
+                    <div style={{
+                      width: '48px',
+                      height: '48px',
+                      borderRadius: '12px',
+                      background: 'linear-gradient(135deg, #faad14 0%, #d48806 100%)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center'
+                    }}>
+                      <ReloadOutlined style={{ color: '#fff', fontSize: '24px' }} />
+                    </div>
+                    <div>
+                      <Text strong style={{ fontSize: '15px', display: 'block', marginBottom: '4px' }}>
+                        Đổi trả dễ dàng
+                      </Text>
+                      <Text style={{ fontSize: '13px', color: '#666' }}>
+                        Trong vòng 7 ngày nếu có lỗi
+                      </Text>
+                    </div>
                   </Space>
                 </Col>
               </Row>
@@ -658,62 +885,164 @@ const ProductDetailPage = () => {
       </Row>
 
       {/* Product Details Tabs */}
-      <Row style={{ marginTop: '32px' }}>
+      <Row style={{ marginTop: '48px' }}>
         <Col span={24}>
-          <Tabs defaultActiveKey="1" size="large" style={{ backgroundColor: '#fff', borderRadius: '12px' }}>
-            <TabPane tab="Mô tả sản phẩm" key="1">
-              <div style={{ padding: '24px' }}>
-                {product?.description ? (
-                  <Paragraph style={{ fontSize: '16px', lineHeight: '1.6' }}>
-                    {product.description}
-                  </Paragraph>
-                ) : (
-                  <Text type="secondary">Thông tin mô tả sản phẩm sẽ được cập nhật sau.</Text>
-                )}
-                
-                {product?.material && (
-                  <div style={{ marginTop: '16px' }}>
-                    <Text strong>Chất liệu: </Text>
-                    <Text>{product.material}</Text>
+          <Card
+            style={{
+              borderRadius: '16px',
+              border: 'none',
+              boxShadow: '0 4px 24px rgba(0,0,0,0.08)'
+            }}
+            bodyStyle={{ padding: 0 }}
+          >
+            <Tabs 
+              defaultActiveKey="1" 
+              size="large" 
+              style={{ 
+                backgroundColor: '#fff',
+                borderRadius: '16px'
+              }}
+              tabBarStyle={{
+                padding: '0 32px',
+                margin: 0,
+                fontSize: '16px',
+                fontWeight: 600
+              }}
+            >
+              <TabPane 
+                tab={
+                  <span style={{ fontSize: '16px', fontWeight: 600 }}>
+                     Mô tả sản phẩm
+                  </span>
+                } 
+                key="1"
+              >
+                <div style={{ padding: '32px' }}>
+                  {product?.description ? (
+                    <Paragraph style={{ 
+                      fontSize: '16px', 
+                      lineHeight: '1.8',
+                      color: '#262626'
+                    }}>
+                      {product.description}
+                    </Paragraph>
+                  ) : (
+                    <Text type="secondary" style={{ fontSize: '15px' }}>
+                      Thông tin mô tả sản phẩm sẽ được cập nhật sau.
+                    </Text>
+                  )}
+                  
+                  {product?.material && (
+                    <div style={{ 
+                      marginTop: '24px',
+                      padding: '20px',
+                      background: '#f8f9fa',
+                      borderRadius: '12px'
+                    }}>
+                      <Text strong style={{ fontSize: '15px', color: '#262626' }}>
+                        Chất liệu:{' '}
+                      </Text>
+                      <Text style={{ fontSize: '15px', color: '#595959' }}>
+                        {product.material}
+                      </Text>
+                    </div>
+                  )}
+                </div>
+              </TabPane>
+              
+              <TabPane 
+                tab={
+                  <span style={{ fontSize: '16px', fontWeight: 600 }}>
+                     Thông số kỹ thuật
+                  </span>
+                } 
+                key="2"
+              >
+                <div style={{ padding: '32px' }}>
+                  <Row gutter={[32, 24]}>
+                    <Col span={12}>
+                      <div style={{ 
+                        padding: '16px',
+                        background: '#f8f9fa',
+                        borderRadius: '12px'
+                      }}>
+                        <Text type="secondary" style={{ fontSize: '13px', display: 'block', marginBottom: '8px' }}>
+                          Danh mục
+                        </Text>
+                        <Text strong style={{ fontSize: '15px' }}>
+                          {product?.category?.name || 'N/A'}
+                        </Text>
+                      </div>
+                    </Col>
+                    <Col span={12}>
+                      <div style={{ 
+                        padding: '16px',
+                        background: '#f8f9fa',
+                        borderRadius: '12px'
+                      }}>
+                        <Text type="secondary" style={{ fontSize: '13px', display: 'block', marginBottom: '8px' }}>
+                          Thương hiệu
+                        </Text>
+                        <Text strong style={{ fontSize: '15px' }}>
+                          {product?.brand?.name || 'N/A'}
+                        </Text>
+                      </div>
+                    </Col>
+                    <Col span={12}>
+                      <div style={{ 
+                        padding: '16px',
+                        background: '#f8f9fa',
+                        borderRadius: '12px'
+                      }}>
+                        <Text type="secondary" style={{ fontSize: '13px', display: 'block', marginBottom: '8px' }}>
+                          Mã sản phẩm
+                        </Text>
+                        <Text strong style={{ fontSize: '15px' }}>
+                          {product?.sku || 'N/A'}
+                        </Text>
+                      </div>
+                    </Col>
+                    <Col span={12}>
+                      <div style={{ 
+                        padding: '16px',
+                        background: '#f8f9fa',
+                        borderRadius: '12px'
+                      }}>
+                        <Text type="secondary" style={{ fontSize: '13px', display: 'block', marginBottom: '8px' }}>
+                          Chất liệu
+                        </Text>
+                        <Text strong style={{ fontSize: '15px' }}>
+                          {product?.material || 'N/A'}
+                        </Text>
+                      </div>
+                    </Col>
+                  </Row>
+                </div>
+              </TabPane>
+              
+              <TabPane 
+                tab={
+                  <span style={{ fontSize: '16px', fontWeight: 600 }}>
+                    ⭐ Đánh giá ({0})
+                  </span>
+                } 
+                key="3"
+              >
+                <div style={{ padding: '32px' }}>
+                  <div style={{ marginBottom: '40px' }}>
+                    <ReviewForm 
+                      productId={product.id} 
+                      onReviewSubmitted={() => setReviewRefresh(prev => prev + 1)}
+                    />
                   </div>
-                )}
-              </div>
-            </TabPane>
-            
-            <TabPane tab="Thông số kỹ thuật" key="2">
-              <div style={{ padding: '24px' }}>
-                <Row gutter={[24, 16]}>
-                  <Col span={12}>
-                    <Text strong>Danh mục:</Text> {product?.category?.name || 'N/A'}
-                  </Col>
-                  <Col span={12}>
-                    <Text strong>Thương hiệu:</Text> {product?.brand?.name || 'N/A'}
-                  </Col>
-                  <Col span={12}>
-                    <Text strong>SKU:</Text> {product?.sku || 'N/A'}
-                  </Col>
-                  <Col span={12}>
-                    <Text strong>Chất liệu:</Text> {product?.material || 'N/A'}
-                  </Col>
-                </Row>
-              </div>
-            </TabPane>
-            
-            <TabPane tab="Đánh giá" key="3">
-              <div style={{ padding: '24px' }}>
-                <div style={{ marginBottom: '32px' }}>
-                  <ReviewForm 
+                  <ReviewList 
                     productId={product.id} 
-                    onReviewSubmitted={() => setReviewRefresh(prev => prev + 1)}
+                    refresh={reviewRefresh}
                   />
                 </div>
-                <ReviewList 
-                  productId={product.id} 
-                  refresh={reviewRefresh}
-                />
-              </div>
-            </TabPane>
-          </Tabs>
+              </TabPane>
+            </Tabs>
+          </Card>
         </Col>
       </Row>
       

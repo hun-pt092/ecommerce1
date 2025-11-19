@@ -9,3 +9,15 @@
   border-radius: 4px;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
 }
+
+/* Căn giữa các item trong Navigation right side */
+.nav-right-actions .ant-space-item {
+  display: flex;
+  align-items: center;
+  height: 100%;
+}
+
+.nav-right-actions .ant-input-search {
+  display: flex;
+  align-items: center;
+}

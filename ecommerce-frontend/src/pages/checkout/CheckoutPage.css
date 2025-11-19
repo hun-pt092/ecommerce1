@@ -1,0 +1,145 @@
+/* Checkout Page Styles */
+
+/* Step Navigation Styles */
+.ant-steps-item {
+  transition: all 0.3s ease;
+}
+
+/* Clickable completed steps */
+.ant-steps-item.ant-steps-item-finish {
+  cursor: pointer !important;
+}
+
+.ant-steps-item.ant-steps-item-finish:hover {
+  opacity: 0.8;
+}
+
+.ant-steps-item.ant-steps-item-finish:hover .ant-steps-item-icon {
+  transform: scale(1.1);
+  box-shadow: 0 2px 8px rgba(24, 144, 255, 0.3);
+}
+
+/* Current step */
+.ant-steps-item.ant-steps-item-process .ant-steps-item-icon {
+  box-shadow: 0 0 0 3px rgba(24, 144, 255, 0.15);
+}
+
+/* Future steps - disabled look */
+.ant-steps-item.ant-steps-item-wait {
+  cursor: not-allowed !important;
+  opacity: 0.5;
+}
+
+/* Icon transitions */
+.ant-steps-item-icon {
+  transition: all 0.3s ease !important;
+}
+
+/* Title and description styling */
+.ant-steps-item-title {
+  font-weight: 500 !important;
+}
+
+.ant-steps-item.ant-steps-item-finish .ant-steps-item-title {
+  color: #52c41a !important;
+}
+
+.ant-steps-item.ant-steps-item-process .ant-steps-item-title {
+  color: #1890ff !important;
+  font-weight: 600 !important;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .ant-steps-item-description {
+    display: none !important;
+  }
+  
+  .ant-steps-item-title {
+    font-size: 12px !important;
+  }
+}
+
+/* Loading overlay */
+.checkout-loading-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(255, 255, 255, 0.9);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 9999;
+  backdrop-filter: blur(3px);
+}
+
+/* Page container */
+.checkout-page-container {
+  padding: 24px 16px;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+/* Header section */
+.checkout-header {
+  text-align: center;
+  margin-bottom: 32px;
+}
+
+.checkout-header h2 {
+  margin-bottom: 8px;
+  font-size: 28px;
+  font-weight: 600;
+  color: #262626;
+}
+
+/* Step content area */
+.checkout-step-content {
+  min-height: 400px;
+  animation: fadeIn 0.3s ease-in;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Step navigation buttons */
+.checkout-navigation-buttons {
+  display: flex;
+  gap: 12px;
+  margin-top: 24px;
+}
+
+.checkout-navigation-buttons .ant-btn {
+  height: 40px;
+  padding: 0 24px;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+/* Card styling */
+.checkout-steps-card {
+  margin-bottom: 24px;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+}
+
+/* Progress indicator */
+.checkout-progress-indicator {
+  margin-bottom: 16px;
+  padding: 12px;
+  background: linear-gradient(90deg, #e6f7ff 0%, #bae7ff 100%);
+  border-radius: 6px;
+  text-align: center;
+  font-weight: 500;
+  color: #0050b3;
+}

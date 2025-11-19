@@ -18,6 +18,7 @@ import CartSummary from '../../components/checkout/CartSummary';
 import AddressForm from '../../components/checkout/AddressForm';
 import PaymentForm from '../../components/checkout/PaymentForm';
 import OrderConfirmation from '../../components/checkout/OrderConfirmation';
+import './CheckoutPage.css';
 
 const { Title, Text } = Typography;
 const { Step } = Steps;
@@ -107,6 +108,15 @@ const CheckoutPage = () => {
     }
   };
 
+  // Handle step click - only allow going back to completed steps
+  const handleStepClick = (stepIndex) => {
+    // Only allow clicking on previous steps (already completed)
+    if (stepIndex < currentStep) {
+      setCurrentStep(stepIndex);
+      window.scrollTo(0, 0);
+    }
+  };
+
   const handleAddressSubmit = (addressData) => {
     setShippingAddress(addressData);
     handleNext();
@@ -132,7 +142,8 @@ const CheckoutPage = () => {
         shipping_postal_code: shippingAddress.postal_code || '',
         shipping_country: 'Vietnam',
         phone_number: shippingAddress.phone_number,
-        notes: paymentData.notes || ''
+        notes: paymentData.notes || '',
+        payment_method: paymentData.method || 'cod'  // Add payment method
       };
 
       // Add coupon if applied
@@ -255,13 +266,9 @@ const CheckoutPage = () => {
   }
 
   return (
-    <div style={{ 
-      padding: '24px 16px',
-      maxWidth: '1200px',
-      margin: '0 auto'
-    }}>
+    <div className="checkout-page-container">
       {/* Header */}
-      <div style={{ textAlign: 'center', marginBottom: '32px' }}>
+      <div className="checkout-header">
         <Title level={2} style={{ marginBottom: '8px' }}>
           Thanh toán đơn hàng
         </Title>
@@ -271,7 +278,7 @@ const CheckoutPage = () => {
       </div>
 
       {/* Steps */}
-      <Card style={{ marginBottom: '24px' }}>
+      <Card className="checkout-steps-card">
         <Steps 
           current={currentStep} 
           size="small"
@@ -283,31 +290,21 @@ const CheckoutPage = () => {
               title={step.title}
               description={step.description}
               icon={step.icon}
+              onClick={() => handleStepClick(index)}
             />
           ))}
         </Steps>
       </Card>
 
       {/* Step Content */}
-      <div style={{ minHeight: '400px' }}>
+      <div className="checkout-step-content">
         {renderStepContent()}
       </div>
 
       {/* Loading Overlay */}
       {loading && (
-        <div style={{
-          position: 'fixed',
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          background: 'rgba(255, 255, 255, 0.8)',
-          display: 'flex',
-          justifyContent: 'center',
-          alignItems: 'center',
-          zIndex: 9999
-        }}>
-          <Spin size="large" />
+        <div className="checkout-loading-overlay">
+          <Spin size="large" tip="Đang xử lý..." />
         </div>
       )}
     </div>

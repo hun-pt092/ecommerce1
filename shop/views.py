@@ -331,28 +331,8 @@ class AdminOrderStatusUpdateView(generics.UpdateAPIView):
         print("Is admin:", request.user.is_admin)
         print("Is superuser:", request.user.is_superuser)
         
-        # Get the order and new status
-        order = self.get_object()
-        new_status = request.data.get('status')
-        old_status = order.status
-        
-        # Handle stock return for cancelled/returned orders
-        if new_status in ['cancelled', 'returned'] and old_status not in ['cancelled', 'returned']:
-            with transaction.atomic():
-                for item in order.items.all():
-                    try:
-                        StockService.return_stock(
-                            product_variant=item.product_variant,
-                            quantity=item.quantity,
-                            order=order,
-                            user=request.user,
-                            notes=f"Order #{order.id} {new_status} by admin"
-                        )
-                    except ValueError as e:
-                        return Response(
-                            {"error": f"Failed to return stock: {str(e)}"}, 
-                            status=status.HTTP_500_INTERNAL_SERVER_ERROR
-                        )
+        # Stock sẽ được hoàn tự động qua signal order_status_changed
+        # Không xử lý thủ công ở đây để tránh hoàn kho 2 lần
         
         return super().patch(request, *args, **kwargs)
 
@@ -535,11 +515,8 @@ class CancelOrderView(APIView):
             order.status = 'cancelled'
             order.save()
             
-            # Hoàn lại số lượng sản phẩm vào kho
-            for item in order.items.all():
-                variant = item.product_variant
-                variant.stock_quantity += item.quantity
-                variant.save()
+            # Stock sẽ được hoàn tự động thông qua signal order_status_changed
+            # Không cần xử lý thủ công ở đây để tránh hoàn kho 2 lần
             
             return Response({
                 "message": "Đơn hàng đã được hủy thành công",

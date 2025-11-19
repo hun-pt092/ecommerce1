@@ -21,6 +21,33 @@ const WishlistPage = () => {
         return `http://localhost:8000${imagePath}`;
     };
 
+    // Get main product image - check multiple sources
+    const getProductImage = (item) => {
+        // Priority 1: product_main_image from API
+        if (item.product_main_image) {
+            return getImageUrl(item.product_main_image);
+        }
+        
+        // Priority 2: product.images array (get first is_main=true)
+        if (item.product?.images && item.product.images.length > 0) {
+            const mainImage = item.product.images.find(img => img.is_main);
+            if (mainImage?.image) {
+                return getImageUrl(mainImage.image);
+            }
+            // Fallback to first image
+            if (item.product.images[0]?.image) {
+                return getImageUrl(item.product.images[0].image);
+            }
+        }
+        
+        // Priority 3: product.main_image
+        if (item.product?.main_image) {
+            return getImageUrl(item.product.main_image);
+        }
+        
+        return null;
+    };
+
     useEffect(() => {
         // Scroll to top when component mounts
         window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -221,10 +248,10 @@ const WishlistPage = () => {
                                     bodyStyle={{ padding: '16px' }}
                                     cover={
                                         <div style={{ position: 'relative', height: '200px' }}>
-                                            {getImageUrl(item.product_main_image) ? (
+                                            {getProductImage(item) ? (
                                                 <Image
                                                     alt={item.product_name}
-                                                    src={getImageUrl(item.product_main_image)}
+                                                    src={getProductImage(item)}
                                                     style={{ 
                                                         width: '100%', 
                                                         height: '200px', 
@@ -240,12 +267,14 @@ const WishlistPage = () => {
                                                     onClick={() => navigate(`/products/${item.product.id}`)}
                                                     style={{ 
                                                         height: '200px', 
-                                                        background: 'linear-gradient(45deg, #f0f2f5, #d9d9d9)',
+                                                        background: theme.mode === 'dark' 
+                                                            ? 'linear-gradient(45deg, #2a2a2a, #3a3a3a)' 
+                                                            : 'linear-gradient(45deg, #f0f2f5, #d9d9d9)',
                                                         display: 'flex',
                                                         alignItems: 'center',
                                                         justifyContent: 'center',
                                                         fontSize: '48px',
-                                                        color: '#bfbfbf',
+                                                        color: theme.mode === 'dark' ? '#666' : '#bfbfbf',
                                                         cursor: 'pointer'
                                                     }}
                                                 >
@@ -280,7 +309,10 @@ const WishlistPage = () => {
                                             type="text" 
                                             icon={<EyeOutlined />}
                                             onClick={() => navigate(`/products/${item.product.id}`)}
-                                            style={{ color: theme.textColor }}
+                                            style={{ 
+                                                color: theme.textColor,
+                                                borderColor: 'transparent'
+                                            }}
                                         >
                                             Chi tiết
                                         </Button>,
@@ -324,7 +356,10 @@ const WishlistPage = () => {
                                                     <StarFilled style={{ color: '#fadb14', fontSize: '12px' }} />
                                                     <StarFilled style={{ color: '#fadb14', fontSize: '12px' }} />
                                                     <div style={{ position: 'relative', display: 'inline-block' }}>
-                                                        <StarFilled style={{ color: '#d9d9d9', fontSize: '12px' }} />
+                                                        <StarFilled style={{ 
+                                                            color: theme.mode === 'dark' ? '#3a3a3a' : '#d9d9d9', 
+                                                            fontSize: '12px' 
+                                                        }} />
                                                         <div style={{
                                                             position: 'absolute',
                                                             top: 0,
@@ -361,7 +396,7 @@ const WishlistPage = () => {
                                                 <Text style={{ 
                                                     fontSize: '16px', 
                                                     fontWeight: 'bold', 
-                                                    color: '#1890ff'
+                                                    color: theme.mode === 'dark' ? '#40a9ff' : '#1890ff'
                                                 }}>
                                                     {Number(item.product_price).toLocaleString()}₫
                                                 </Text>

@@ -17,11 +17,14 @@ import {
   CloseOutlined,
   GiftOutlined,
   LockOutlined,
-  DashboardOutlined
+  DashboardOutlined,
+  SearchOutlined,
+  AppstoreOutlined
 } from '@ant-design/icons';
 import { useNavigate, useLocation } from 'react-router-dom';
 import './Navigation.css';
 import authAxios from '../api/AuthAxios';
+import apiClient from '../api/apiClient';
 import { format } from 'date-fns';
 import { vi } from 'date-fns/locale';
 import dayjs from 'dayjs';
@@ -31,6 +34,7 @@ import logoImage from '../logo (2).png';
 
 const { Header } = Layout;
 const { Text } = Typography;
+const { Search } = Input;
 
 const Navigation = () => {
   const navigate = useNavigate();
@@ -43,6 +47,9 @@ const Navigation = () => {
   const [isEditMode, setIsEditMode] = useState(false);
   const [updateLoading, setUpdateLoading] = useState(false);
   const [passwordLoading, setPasswordLoading] = useState(false);
+  const [categories, setCategories] = useState([]);
+  const [searchText, setSearchText] = useState('');
+  const [selectedCategoryId, setSelectedCategoryId] = useState(null); // Track selected category
   const [form] = Form.useForm();
   const [passwordForm] = Form.useForm();
   const { theme } = useTheme();
@@ -58,6 +65,13 @@ const Navigation = () => {
     });
   }, []);
 
+  // Track selected category from URL
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const categoryParam = params.get('category');
+    setSelectedCategoryId(categoryParam);
+  }, [location.search]);
+
   useEffect(() => {
     // Check if user is logged in
     const token = localStorage.getItem('access_token');
@@ -71,7 +85,21 @@ const Navigation = () => {
       setCartItemCount(0);
       setUserInfo(null);
     }
+
+    // Fetch categories
+    fetchCategories();
   }, [location]);
+
+  const fetchCategories = async () => {
+    try {
+      const response = await apiClient.get('categories/');
+      const categoriesData = response.data.results || response.data || [];
+      setCategories(Array.isArray(categoriesData) ? categoriesData : []);
+    } catch (error) {
+      console.error('Error fetching categories:', error);
+      setCategories([]);
+    }
+  };
 
   const fetchCartCount = async () => {
     try {
@@ -276,24 +304,64 @@ const Navigation = () => {
     },
   ];
 
-  const menuItems = [
+  // Menu dropdown cho categories
+  const categoryMenuItems = [
     {
-      key: '/products',
-      label: 'Sản phẩm',
-      icon: <ShoppingCartOutlined />,
+      key: 'all-products',
+      label: (
+        <span style={{ 
+          color: selectedCategoryId === 'all' ? '#1890ff' : 'inherit',
+          fontWeight: selectedCategoryId === 'all' ? 600 : 'normal'
+        }}>
+          Tất cả sản phẩm
+        </span>
+      ),
+      icon: <AppstoreOutlined style={{ color: selectedCategoryId === 'all' ? '#1890ff' : 'inherit' }} />,
       onClick: () => {
-        navigate('/');
-        // Scroll to featured products section
+        navigate('/?category=all');
         setTimeout(() => {
           const featuredSection = document.getElementById('featured-products');
           if (featuredSection) {
             featuredSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
-          } else {
-            // If section doesn't exist, scroll to search/filter area
-            window.scrollTo({ top: 300, behavior: 'smooth' });
           }
         }, 100);
       }
+    },
+    { type: 'divider' },
+    ...categories.map(category => ({
+      key: `category-${category.id}`,
+      label: (
+        <span style={{ 
+          color: selectedCategoryId === category.id.toString() ? '#1890ff' : 'inherit',
+          fontWeight: selectedCategoryId === category.id.toString() ? 600 : 'normal'
+        }}>
+          {category.name}
+        </span>
+      ),
+      onClick: () => {
+        navigate(`/?category=${category.id}`);
+        setTimeout(() => {
+          const featuredSection = document.getElementById('featured-products');
+          if (featuredSection) {
+            featuredSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          }
+        }, 100);
+      }
+    }))
+  ];
+
+  const menuItems = [
+    {
+      key: '/products',
+      label: (
+        <Dropdown menu={{ items: categoryMenuItems }} placement="bottomLeft">
+          <span style={{ cursor: 'pointer' }}>
+            <ShoppingCartOutlined style={{ marginRight: 8 }} />
+            Sản phẩm
+          </span>
+        </Dropdown>
+      ),
+      icon: null
     },
     {
       key: '/about',
@@ -364,7 +432,34 @@ const Navigation = () => {
         />
 
         {/* Right Side Actions */}
-        <Space size="middle">
+        <Space 
+          size="middle" 
+          style={{ 
+            display: 'flex', 
+            alignItems: 'center', 
+            height: '64px' 
+          }}
+          className="nav-right-actions"
+        >
+          {/* Search Box */}
+          <Search
+            placeholder="Tìm kiếm sản phẩm..."
+            value={searchText}
+            onChange={(e) => setSearchText(e.target.value)}
+            onSearch={(value) => {
+              navigate(`/?search=${encodeURIComponent(value)}`);
+              setTimeout(() => {
+                const featuredSection = document.getElementById('featured-products');
+                if (featuredSection) {
+                  featuredSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }
+              }, 100);
+            }}
+            style={{ width: 200 }}
+            size="middle"
+            allowClear
+          />
+
           {/* Wishlist */}
           {isLoggedIn && (
             <Button

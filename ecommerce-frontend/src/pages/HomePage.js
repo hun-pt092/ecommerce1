@@ -2,21 +2,19 @@ import React, { useEffect, useState, useMemo } from 'react';
 import apiClient from '../api/apiClient';
 import { 
   Card, Row, Col, Button, Typography, Space, 
-  Spin, message, Badge, Image, Tag, Input, Select, Affix, Carousel
+  Spin, message, Badge, Image, Tag, Carousel
 } from 'antd';
 import { 
   EyeOutlined, ShoppingCartOutlined, StarFilled, 
   ShopOutlined, TruckOutlined, SafetyOutlined, CustomerServiceOutlined,
   SearchOutlined, HeartOutlined
 } from '@ant-design/icons';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useTheme } from '../contexts/ThemeContext';
 import WishlistButton from '../components/WishlistButton';
 import logoImage from '../logo (2).png';
 
 const { Title, Text } = Typography;
-const { Search } = Input;
-const { Option } = Select;
 
 function HomePage() {
   const [products, setProducts] = useState([]);
@@ -25,9 +23,28 @@ function HomePage() {
   const [searchText, setSearchText] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [sortBy, setSortBy] = useState('newest');
+  const [showAll, setShowAll] = useState(false); // State để điều khiển hiển thị tất cả
 
   const { theme } = useTheme();
   const navigate = useNavigate();
+  const location = useLocation();
+
+  // Get URL params for filtering
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const categoryParam = params.get('category');
+    const searchParam = params.get('search');
+    
+    if (categoryParam) {
+      setSelectedCategory(categoryParam);
+    }
+    if (searchParam) {
+      setSearchText(searchParam);
+    }
+    
+    // Reset showAll when filters change
+    setShowAll(false);
+  }, [location.search]);
 
   // Helper function to get full image URL
   const getImageUrl = (imagePath) => {
@@ -54,8 +71,8 @@ function HomePage() {
     setLoading(true);
     try {
       const [productsRes, categoriesRes] = await Promise.all([
-        apiClient.get('products/'),
-        apiClient.get('categories/').catch(() => ({ data: [] })) // Fallback if categories endpoint doesn't exist
+        apiClient.get('products/?page_size=100'), // Lấy tất cả sản phẩm
+        apiClient.get('categories/?page_size=100').catch(() => ({ data: [] })) // Fallback if categories endpoint doesn't exist
       ]);
       
       // Handle pagination format - extract results if present
@@ -146,6 +163,42 @@ function HomePage() {
         .custom-carousel-dots li.slick-active button {
           background: white !important;
         }
+        
+        @keyframes float {
+          0%, 100% { transform: translateY(0px); }
+          50% { transform: translateY(-20px); }
+        }
+        
+        @keyframes fadeInDown {
+          from {
+            opacity: 0;
+            transform: translateY(-30px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+        
+        @keyframes fadeInUp {
+          from {
+            opacity: 0;
+            transform: translateY(30px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+        
+        @keyframes fadeIn {
+          from {
+            opacity: 0;
+          }
+          to {
+            opacity: 1;
+          }
+        }
       `}</style>
       
       <div style={{ 
@@ -156,279 +209,656 @@ function HomePage() {
         color: theme.textColor,
         minHeight: '100vh'
       }}>
-      {/* Hero Section */}
+      {/* Modern Hero Section */}
       <div style={{
         background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-        padding: '60px 20px',
+        padding: '80px 20px',
         textAlign: 'center',
         color: 'white',
-        marginBottom: '40px'
+        marginBottom: '40px',
+        position: 'relative',
+        overflow: 'hidden'
       }}>
-        <div style={{ marginBottom: '16px' }}>
-          <img src={logoImage} alt="Fashion Store" style={{ height: '60px' }} />
-        </div>
-        <Title level={1} style={{ color: 'white', fontSize: '36px', marginBottom: '16px' }}>
-          Fashion Store
-        </Title>
-        <Text style={{ fontSize: '18px', color: 'rgba(255,255,255,0.9)' }}>
-          Khám phá bộ sưu tập thời trang mới nhất với phong cách độc đáo
-        </Text>
-        <div style={{ marginTop: '30px' }}>
-          <Button 
-            type="primary" 
-            size="large" 
+        {/* Animated Background Shapes */}
+        <div style={{
+          position: 'absolute',
+          width: '500px',
+          height: '500px',
+          borderRadius: '50%',
+          background: 'rgba(255,255,255,0.08)',
+          top: '-200px',
+          right: '-150px',
+          animation: 'float 6s ease-in-out infinite'
+        }} />
+        <div style={{
+          position: 'absolute',
+          width: '400px',
+          height: '400px',
+          borderRadius: '50%',
+          background: 'rgba(255,255,255,0.06)',
+          bottom: '-150px',
+          left: '-100px',
+          animation: 'float 8s ease-in-out infinite'
+        }} />
+        
+        {/* Content Container */}
+        <div style={{ 
+          position: 'relative', 
+          zIndex: 2,
+          maxWidth: '900px',
+          margin: '0 auto'
+        }}>
+          {/* Logo with Animation */}
+          <div style={{ 
+            marginBottom: '32px',
+            animation: 'fadeInDown 1s ease-out'
+          }}>
+            <div style={{
+              display: 'inline-block',
+              padding: '12px 24px',
+              background: 'rgba(255,255,255,0.15)',
+              borderRadius: '50px',
+              backdropFilter: 'blur(10px)',
+              border: '2px solid rgba(255,255,255,0.2)',
+              marginBottom: '20px'
+            }}>
+              <img 
+                src={logoImage} 
+                alt="PKA Shop" 
+                style={{ 
+                  height: '50px',
+                  display: 'block'
+                }} 
+              />
+            </div>
+          </div>
+          
+          {/* Main Heading */}
+          <Title 
+            level={1} 
             style={{ 
-              marginRight: '16px',
-              background: 'rgba(255,255,255,0.2)',
-              borderColor: 'rgba(255,255,255,0.3)'
+              color: 'white', 
+              fontSize: '52px', 
+              marginBottom: '24px',
+              fontWeight: 800,
+              lineHeight: 1.2,
+              textShadow: '0 4px 20px rgba(0,0,0,0.2)',
+              animation: 'fadeInUp 1s ease-out 0.2s both'
             }}
-            onClick={() => navigate('/products')}
           >
-            Khám phá ngay
-          </Button>
-          <Button 
-            type="ghost" 
-            size="large"
-            style={{ color: 'white', borderColor: 'rgba(255,255,255,0.5)' }}
-          >
-            Tìm hiểu thêm
-          </Button>
+            Welcome to <span style={{ 
+              background: 'linear-gradient(135deg, #FFE082 0%, #FFF9C4 100%)',
+              WebkitBackgroundClip: 'text',
+              WebkitTextFillColor: 'transparent',
+              backgroundClip: 'text'
+            }}>PKA Shop</span>
+          </Title>
+          
+          {/* Subtitle */}
+          <Text style={{ 
+            fontSize: '20px', 
+            color: 'rgba(255,255,255,0.95)',
+            display: 'block',
+            marginBottom: '12px',
+            lineHeight: 1.6,
+            fontWeight: 500,
+            textShadow: '0 2px 10px rgba(0,0,0,0.15)',
+            animation: 'fadeInUp 1s ease-out 0.4s both'
+          }}>
+            Khám phá bộ sưu tập thời trang mới nhất
+          </Text>
+          
+          <Text style={{ 
+            fontSize: '16px', 
+            color: 'rgba(255,255,255,0.85)',
+            display: 'block',
+            marginBottom: '40px',
+            animation: 'fadeInUp 1s ease-out 0.6s both'
+          }}>
+            Phong cách độc đáo • Chất lượng cao cấp • Xu hướng 2025
+          </Text>
+          
+          {/* Action Buttons */}
+          <div style={{ 
+            marginTop: '40px',
+            display: 'flex',
+            gap: '16px',
+            justifyContent: 'center',
+            flexWrap: 'wrap',
+            animation: 'fadeInUp 1s ease-out 0.8s both'
+          }}>
+            <Button 
+              type="primary" 
+              size="large" 
+              icon={<ShoppingCartOutlined />}
+              style={{ 
+                height: '56px',
+                padding: '0 40px',
+                fontSize: '16px',
+                fontWeight: 700,
+                background: 'white',
+                borderColor: 'white',
+                color: '#667eea',
+                borderRadius: '28px',
+                boxShadow: '0 8px 24px rgba(0,0,0,0.15)',
+                transition: 'all 0.3s ease'
+              }}
+              onClick={() => {
+                // Scroll to featured products section
+                setTimeout(() => {
+                  const featuredSection = document.getElementById('featured-products');
+                  if (featuredSection) {
+                    featuredSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                  }
+                }, 100);
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.transform = 'translateY(-3px)';
+                e.currentTarget.style.boxShadow = '0 12px 32px rgba(0,0,0,0.25)';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.transform = 'translateY(0)';
+                e.currentTarget.style.boxShadow = '0 8px 24px rgba(0,0,0,0.15)';
+              }}
+            >
+              Khám phá ngay
+            </Button>
+            <Button 
+              size="large"
+              icon={<HeartOutlined />}
+              style={{ 
+                height: '56px',
+                padding: '0 40px',
+                fontSize: '16px',
+                fontWeight: 600,
+                background: 'rgba(255,255,255,0.15)',
+                borderColor: 'rgba(255,255,255,0.4)',
+                color: 'white',
+                borderRadius: '28px',
+                backdropFilter: 'blur(10px)',
+                transition: 'all 0.3s ease'
+              }}
+              onClick={() => {
+                // Navigate to products page to see full collection
+                navigate('/products');
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = 'rgba(255,255,255,0.25)';
+                e.currentTarget.style.transform = 'translateY(-3px)';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = 'rgba(255,255,255,0.15)';
+                e.currentTarget.style.transform = 'translateY(0)';
+              }}
+            >
+              Bộ sưu tập mới
+            </Button>
+          </div>
+          
+          {/* Stats/Features Pills */}
+          <div style={{
+            marginTop: '50px',
+            display: 'flex',
+            gap: '16px',
+            justifyContent: 'center',
+            flexWrap: 'wrap',
+            animation: 'fadeIn 1s ease-out 1s both'
+          }}>
+            <div style={{
+              padding: '10px 20px',
+              background: 'rgba(255,255,255,0.12)',
+              borderRadius: '25px',
+              backdropFilter: 'blur(10px)',
+              border: '1px solid rgba(255,255,255,0.2)',
+              fontSize: '14px',
+              fontWeight: 600
+            }}>
+              ✨ Miễn phí vận chuyển
+            </div>
+            <div style={{
+              padding: '10px 20px',
+              background: 'rgba(255,255,255,0.12)',
+              borderRadius: '25px',
+              backdropFilter: 'blur(10px)',
+              border: '1px solid rgba(255,255,255,0.2)',
+              fontSize: '14px',
+              fontWeight: 600
+            }}>
+              🎁 Ưu đãi đặc biệt
+            </div>
+            <div style={{
+              padding: '10px 20px',
+              background: 'rgba(255,255,255,0.12)',
+              borderRadius: '25px',
+              backdropFilter: 'blur(10px)',
+              border: '1px solid rgba(255,255,255,0.2)',
+              fontSize: '14px',
+              fontWeight: 600
+            }}>
+              🔒 Thanh toán bảo mật
+            </div>
+          </div>
         </div>
       </div>
 
-      {/* Slideshow Banner Section */}
+      {/* Modern Slideshow Banner Section */}
       <div style={{ 
-        marginBottom: '50px',
+        marginBottom: '60px',
         maxWidth: '1400px',
-        margin: '0 auto 50px auto',
-        padding: '0 16px'
+        margin: '0 auto 60px auto',
+        padding: '0 20px'
       }}>
         <Carousel 
           autoplay 
-          autoplaySpeed={3000}
+          autoplaySpeed={2500}
           dots={{ className: 'custom-carousel-dots' }}
           effect="fade"
         >
-          {/* Slide 1 - Quần áo nam */}
+          {/* Slide 1 - Men's Fashion (Quần áo nam) */}
           <div>
             <div 
               style={{
-                height: '400px',
-                background: 'linear-gradient(135deg, #4CAF50 0%, #45a049 100%)',
-                borderRadius: '16px',
+                height: '500px',
+                background: 'linear-gradient(135deg, #2c3e50 0%, #3498db 100%)',
+                borderRadius: '20px',
                 position: 'relative',
                 overflow: 'hidden',
-                cursor: 'pointer'
+                cursor: 'pointer',
+                boxShadow: '0 20px 60px rgba(0,0,0,0.3)'
               }}
               onClick={() => {
-                setSelectedCategory('1'); // Assuming category ID 1 is for men's clothing
-                window.scrollTo({ top: 800, behavior: 'smooth' });
+                // Navigate to men's clothing category on homepage
+                navigate('/?category=2');
+                setTimeout(() => {
+                  const featuredSection = document.getElementById('featured-products');
+                  if (featuredSection) {
+                    featuredSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                  }
+                }, 100);
               }}
             >
+              {/* Decorative circles */}
+              <div style={{
+                position: 'absolute',
+                width: '400px',
+                height: '400px',
+                borderRadius: '50%',
+                background: 'rgba(255,255,255,0.05)',
+                top: '-100px',
+                right: '-100px'
+              }} />
+              <div style={{
+                position: 'absolute',
+                width: '300px',
+                height: '300px',
+                borderRadius: '50%',
+                background: 'rgba(255,255,255,0.08)',
+                bottom: '-50px',
+                right: '150px'
+              }} />
+              
               <div style={{
                 position: 'absolute',
                 top: '50%',
-                left: '60px',
+                left: '80px',
                 transform: 'translateY(-50%)',
                 color: 'white',
-                maxWidth: '500px'
+                maxWidth: '600px',
+                zIndex: 2
               }}>
-                <Title level={1} style={{ color: 'white', fontSize: '48px', marginBottom: '16px' }}>
-                  👔 Thời trang Nam
+                <div style={{
+                  display: 'inline-block',
+                  padding: '8px 20px',
+                  background: 'rgba(255,255,255,0.2)',
+                  borderRadius: '30px',
+                  marginBottom: '20px',
+                  backdropFilter: 'blur(10px)'
+                }}>
+                  <Text style={{ color: 'white', fontSize: '14px', fontWeight: 600, letterSpacing: '1px' }}>
+                    NEW COLLECTION 2025
+                  </Text>
+                </div>
+                <Title level={1} style={{ 
+                  color: 'white', 
+                  fontSize: '56px', 
+                  marginBottom: '20px',
+                  fontWeight: 800,
+                  lineHeight: 1.2,
+                  textShadow: '0 4px 20px rgba(0,0,0,0.3)'
+                }}>
+                  Quần Áo Nam
                 </Title>
-                <Text style={{ fontSize: '20px', color: 'rgba(255,255,255,0.9)', display: 'block', marginBottom: '24px' }}>
-                  Bộ sưu tập mới 2025 - Phong cách lịch lãm, sang trọng
+                <Text style={{ 
+                  fontSize: '20px', 
+                  color: 'rgba(255,255,255,0.95)', 
+                  display: 'block', 
+                  marginBottom: '32px',
+                  lineHeight: 1.6,
+                  textShadow: '0 2px 10px rgba(0,0,0,0.2)'
+                }}>
+                  Bộ sưu tập thời trang nam cao cấp
+                  <br />
+                  Phong cách lịch lãm, nam tính và hiện đại
                 </Text>
                 <Button 
                   type="primary" 
                   size="large"
                   style={{ 
-                    background: 'rgba(255,255,255,0.9)',
-                    borderColor: 'rgba(255,255,255,0.9)',
-                    color: '#4CAF50',
-                    fontWeight: 'bold'
+                    height: '56px',
+                    padding: '0 40px',
+                    background: 'white',
+                    borderColor: 'white',
+                    color: '#2c3e50',
+                    fontWeight: 700,
+                    fontSize: '16px',
+                    borderRadius: '28px',
+                    boxShadow: '0 8px 24px rgba(0,0,0,0.2)',
+                    transition: 'all 0.3s ease'
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.transform = 'translateY(-2px)';
+                    e.currentTarget.style.boxShadow = '0 12px 32px rgba(0,0,0,0.3)';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.transform = 'translateY(0)';
+                    e.currentTarget.style.boxShadow = '0 8px 24px rgba(0,0,0,0.2)';
                   }}
                 >
-                  Khám phá ngay
+                  XEM BỘ SƯU TẬP NAM →
                 </Button>
               </div>
+              
+              {/* Modern icon/illustration */}
               <div style={{
                 position: 'absolute',
-                right: '60px',
+                right: '100px',
                 top: '50%',
                 transform: 'translateY(-50%)',
-                fontSize: '120px',
-                opacity: '0.3'
+                width: '280px',
+                height: '280px',
+                background: 'linear-gradient(135deg, rgba(255,255,255,0.15) 0%, rgba(255,255,255,0.05) 100%)',
+                borderRadius: '50%',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                backdropFilter: 'blur(10px)',
+                border: '3px solid rgba(255,255,255,0.2)'
               }}>
-                👔
+                <ShopOutlined style={{ fontSize: '120px', color: 'rgba(255,255,255,0.9)' }} />
               </div>
             </div>
           </div>
 
-          {/* Slide 2 - Quần áo nữ */}
+          {/* Slide 2 - Women's Fashion (Quần áo nữ) */}
           <div>
             <div 
               style={{
-                height: '400px',
-                background: 'linear-gradient(135deg, #FF6B9D 0%, #FF8E9B 100%)',
-                borderRadius: '16px',
+                height: '500px',
+                background: 'linear-gradient(135deg, #FF6B9D 0%, #C06C84 100%)',
+                borderRadius: '20px',
                 position: 'relative',
                 overflow: 'hidden',
-                cursor: 'pointer'
+                cursor: 'pointer',
+                boxShadow: '0 20px 60px rgba(0,0,0,0.3)'
               }}
               onClick={() => {
-                setSelectedCategory('2'); // Assuming category ID 2 is for women's clothing
-                window.scrollTo({ top: 800, behavior: 'smooth' });
+                // Navigate to women's clothing category on homepage
+                navigate('/?category=3');
+                setTimeout(() => {
+                  const featuredSection = document.getElementById('featured-products');
+                  if (featuredSection) {
+                    featuredSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                  }
+                }, 100);
               }}
             >
+              {/* Decorative elements */}
+              <div style={{
+                position: 'absolute',
+                width: '350px',
+                height: '350px',
+                borderRadius: '50%',
+                background: 'rgba(255,255,255,0.08)',
+                top: '-80px',
+                right: '-80px'
+              }} />
+              <div style={{
+                position: 'absolute',
+                width: '250px',
+                height: '250px',
+                borderRadius: '50%',
+                background: 'rgba(255,255,255,0.1)',
+                bottom: '-60px',
+                left: '200px'
+              }} />
+              
               <div style={{
                 position: 'absolute',
                 top: '50%',
-                left: '60px',
+                left: '80px',
                 transform: 'translateY(-50%)',
                 color: 'white',
-                maxWidth: '500px'
+                maxWidth: '600px',
+                zIndex: 2
               }}>
-                <Title level={1} style={{ color: 'white', fontSize: '48px', marginBottom: '16px' }}>
-                  👗 Thời trang Nữ
+                <div style={{
+                  display: 'inline-block',
+                  padding: '8px 20px',
+                  background: 'rgba(255,255,255,0.2)',
+                  borderRadius: '30px',
+                  marginBottom: '20px',
+                  backdropFilter: 'blur(10px)'
+                }}>
+                  <Text style={{ color: 'white', fontSize: '14px', fontWeight: 600, letterSpacing: '1px' }}>
+                    TRENDING NOW
+                  </Text>
+                </div>
+                <Title level={1} style={{ 
+                  color: 'white', 
+                  fontSize: '56px', 
+                  marginBottom: '20px',
+                  fontWeight: 800,
+                  lineHeight: 1.2,
+                  textShadow: '0 4px 20px rgba(0,0,0,0.3)'
+                }}>
+                  Quần Áo Nữ
                 </Title>
-                <Text style={{ fontSize: '20px', color: 'rgba(255,255,255,0.9)', display: 'block', marginBottom: '24px' }}>
-                  Xu hướng hot nhất 2025 - Thanh lịch, quyến rũ
+                <Text style={{ 
+                  fontSize: '20px', 
+                  color: 'rgba(255,255,255,0.95)', 
+                  display: 'block', 
+                  marginBottom: '32px',
+                  lineHeight: 1.6,
+                  textShadow: '0 2px 10px rgba(0,0,0,0.2)'
+                }}>
+                  Xu hướng thời trang nữ hot nhất 2025
+                  <br />
+                  Thanh lịch, quyến rũ và đầy phong cách
                 </Text>
                 <Button 
                   type="primary" 
                   size="large"
                   style={{ 
-                    background: 'rgba(255,255,255,0.9)',
-                    borderColor: 'rgba(255,255,255,0.9)',
+                    height: '56px',
+                    padding: '0 40px',
+                    background: 'white',
+                    borderColor: 'white',
                     color: '#FF6B9D',
-                    fontWeight: 'bold'
+                    fontWeight: 700,
+                    fontSize: '16px',
+                    borderRadius: '28px',
+                    boxShadow: '0 8px 24px rgba(0,0,0,0.2)',
+                    transition: 'all 0.3s ease'
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.transform = 'translateY(-2px)';
+                    e.currentTarget.style.boxShadow = '0 12px 32px rgba(0,0,0,0.3)';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.transform = 'translateY(0)';
+                    e.currentTarget.style.boxShadow = '0 8px 24px rgba(0,0,0,0.2)';
                   }}
                 >
-                  Mua sắm ngay
+                  XEM BỘ SƯU TẬP NỮ →
                 </Button>
               </div>
+              
               <div style={{
                 position: 'absolute',
-                right: '60px',
+                right: '100px',
                 top: '50%',
                 transform: 'translateY(-50%)',
-                fontSize: '120px',
-                opacity: '0.3'
+                width: '280px',
+                height: '280px',
+                background: 'linear-gradient(135deg, rgba(255,255,255,0.15) 0%, rgba(255,255,255,0.05) 100%)',
+                borderRadius: '50%',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                backdropFilter: 'blur(10px)',
+                border: '3px solid rgba(255,255,255,0.2)'
               }}>
-                👗
+                <ShoppingCartOutlined style={{ fontSize: '120px', color: 'rgba(255,255,255,0.9)' }} />
               </div>
             </div>
           </div>
 
-          {/* Slide 3 - Phụ kiện */}
+          {/* Slide 3 - Featured Products (Sản phẩm nổi bật) */}
           <div>
             <div 
               style={{
-                height: '400px',
-                background: 'linear-gradient(135deg, #9C27B0 0%, #673AB7 100%)',
-                borderRadius: '16px',
-                position: 'relative',
-                overflow: 'hidden',
-                cursor: 'pointer'
-              }}
-              onClick={() => {
-                setSelectedCategory('8'); // Assuming category ID 8 is for accessories
-                window.scrollTo({ top: 800, behavior: 'smooth' });
-              }}
-            >
-              <div style={{
-                position: 'absolute',
-                top: '50%',
-                left: '60px',
-                transform: 'translateY(-50%)',
-                color: 'white',
-                maxWidth: '500px'
-              }}>
-                <Title level={1} style={{ color: 'white', fontSize: '48px', marginBottom: '16px' }}>
-                  👜 Phụ kiện
-                </Title>
-                <Text style={{ fontSize: '20px', color: 'rgba(255,255,255,0.9)', display: 'block', marginBottom: '24px' }}>
-                  Hoàn thiện phong cách với phụ kiện độc đáo
-                </Text>
-                <Button 
-                  type="primary" 
-                  size="large"
-                  style={{ 
-                    background: 'rgba(255,255,255,0.9)',
-                    borderColor: 'rgba(255,255,255,0.9)',
-                    color: '#9C27B0',
-                    fontWeight: 'bold'
-                  }}
-                >
-                  Xem ngay
-                </Button>
-              </div>
-              <div style={{
-                position: 'absolute',
-                right: '60px',
-                top: '50%',
-                transform: 'translateY(-50%)',
-                fontSize: '120px',
-                opacity: '0.3'
-              }}>
-                👜
-              </div>
-            </div>
-          </div>
-
-          {/* Slide 4 - Sale/Promotion */}
-          <div>
-            <div 
-              style={{
-                height: '400px',
+                height: '500px',
                 background: 'linear-gradient(135deg, #FF5722 0%, #FF9800 100%)',
-                borderRadius: '16px',
+                borderRadius: '20px',
                 position: 'relative',
                 overflow: 'hidden',
-                cursor: 'pointer'
+                cursor: 'pointer',
+                boxShadow: '0 20px 60px rgba(0,0,0,0.3)'
               }}
               onClick={() => {
-                setSearchText('sale');
-                window.scrollTo({ top: 800, behavior: 'smooth' });
+                // Scroll to featured products on homepage
+                setTimeout(() => {
+                  const featuredSection = document.getElementById('featured-products');
+                  if (featuredSection) {
+                    featuredSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                  }
+                }, 100);
               }}
             >
+              {/* Animated background patterns */}
+              <div style={{
+                position: 'absolute',
+                width: '400px',
+                height: '400px',
+                borderRadius: '50%',
+                background: 'rgba(255,255,255,0.1)',
+                top: '-100px',
+                left: '-100px',
+                animation: 'pulse 3s ease-in-out infinite'
+              }} />
+              <div style={{
+                position: 'absolute',
+                width: '300px',
+                height: '300px',
+                borderRadius: '50%',
+                background: 'rgba(255,255,255,0.08)',
+                bottom: '-80px',
+                right: '100px'
+              }} />
+              
               <div style={{
                 position: 'absolute',
                 top: '50%',
-                left: '60px',
+                left: '80px',
                 transform: 'translateY(-50%)',
                 color: 'white',
-                maxWidth: '500px'
+                maxWidth: '650px',
+                zIndex: 2
               }}>
-                <Title level={1} style={{ color: 'white', fontSize: '48px', marginBottom: '16px' }}>
-                  🔥 SALE 50%
+                <div style={{
+                  display: 'inline-block',
+                  padding: '8px 20px',
+                  background: 'rgba(255,255,255,0.25)',
+                  borderRadius: '30px',
+                  marginBottom: '20px',
+                  backdropFilter: 'blur(10px)',
+                  animation: 'pulse 2s ease-in-out infinite'
+                }}>
+                  <Text style={{ color: 'white', fontSize: '14px', fontWeight: 700, letterSpacing: '2px' }}>
+                    ⭐ BEST SELLERS
+                  </Text>
+                </div>
+                <Title level={1} style={{ 
+                  color: 'white', 
+                  fontSize: '64px', 
+                  marginBottom: '16px',
+                  fontWeight: 900,
+                  lineHeight: 1.1,
+                  textShadow: '0 4px 20px rgba(0,0,0,0.4)'
+                }}>
+                  Sản Phẩm
+                  <br />
+                  <span style={{ fontSize: '56px', color: '#FFE082' }}>
+                    NỔI BẬT
+                  </span>
                 </Title>
-                <Text style={{ fontSize: '20px', color: 'rgba(255,255,255,0.9)', display: 'block', marginBottom: '24px' }}>
-                  Siêu khuyến mãi cuối năm - Giảm giá cực sốc!
+                <Text style={{ 
+                  fontSize: '20px', 
+                  color: 'rgba(255,255,255,0.95)', 
+                  display: 'block', 
+                  marginBottom: '32px',
+                  lineHeight: 1.6,
+                  textShadow: '0 2px 10px rgba(0,0,0,0.2)',
+                  fontWeight: 500
+                }}>
+                  Top sản phẩm bán chạy nhất - Được yêu thích nhất
+                  <br />
+                  Chất lượng đảm bảo • Giá tốt nhất • Đánh giá 5 sao
                 </Text>
                 <Button 
                   type="primary" 
                   size="large"
                   style={{ 
-                    background: 'rgba(255,255,255,0.9)',
-                    borderColor: 'rgba(255,255,255,0.9)',
+                    height: '56px',
+                    padding: '0 40px',
+                    background: 'white',
+                    borderColor: 'white',
                     color: '#FF5722',
-                    fontWeight: 'bold'
+                    fontWeight: 700,
+                    fontSize: '16px',
+                    borderRadius: '28px',
+                    boxShadow: '0 8px 24px rgba(0,0,0,0.2)',
+                    transition: 'all 0.3s ease'
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.transform = 'translateY(-2px) scale(1.05)';
+                    e.currentTarget.style.boxShadow = '0 12px 32px rgba(0,0,0,0.3)';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.transform = 'translateY(0) scale(1)';
+                    e.currentTarget.style.boxShadow = '0 8px 24px rgba(0,0,0,0.2)';
                   }}
                 >
-                  Mua ngay
+                  XEM SẢN PHẨM NỔI BẬT →
                 </Button>
               </div>
+              
               <div style={{
                 position: 'absolute',
-                right: '60px',
+                right: '100px',
                 top: '50%',
                 transform: 'translateY(-50%)',
-                fontSize: '120px',
-                opacity: '0.3'
+                width: '280px',
+                height: '280px',
+                background: 'linear-gradient(135deg, rgba(255,255,255,0.2) 0%, rgba(255,255,255,0.1) 100%)',
+                borderRadius: '50%',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                backdropFilter: 'blur(10px)',
+                border: '3px solid rgba(255,255,255,0.3)'
               }}>
-                🏷️
+                <StarFilled style={{ fontSize: '120px', color: 'rgba(255,255,255,0.9)' }} />
               </div>
             </div>
           </div>
@@ -479,137 +909,6 @@ function HomePage() {
         maxWidth: '1400px',
         margin: '0 auto'
       }}>
-        {/* Search and Filter Section */}
-        <div style={{ marginBottom: '40px' }}>
-          <div style={{ textAlign: 'center', marginBottom: '24px' }}>
-            <Title level={2} style={{ marginBottom: '8px', color: theme.textColor }}>Tìm kiếm sản phẩm</Title>
-            <Text style={{ fontSize: '14px', color: theme.secondaryText }}>
-              Khám phá bộ sưu tập đa dạng của chúng tôi
-            </Text>
-          </div>
-          
-          <Affix offsetTop={60}>
-            <Card 
-              style={{ 
-                marginBottom: '24px', 
-                borderRadius: '12px',
-                boxShadow: `0 2px 8px ${theme.shadowColor}`,
-                background: theme.cardBackground,
-                border: `1px solid ${theme.borderColor}`,
-                zIndex: 100
-              }}
-              bodyStyle={{ padding: '20px' }}
-            >
-            <Row gutter={[16, 16]} align="middle">
-              <Col xs={24} md={12}>
-                <Search
-                  placeholder="Tìm kiếm sản phẩm..."
-                  value={searchText}
-                  onChange={(e) => setSearchText(e.target.value)}
-                  style={{ width: '100%' }}
-                  size="large"
-                  allowClear
-                />
-              </Col>
-              <Col xs={12} md={5}>
-                <Select
-                  value={selectedCategory}
-                  onChange={setSelectedCategory}
-                  style={{ width: '100%' }}
-                  size="large"
-                  placeholder="Danh mục"
-                >
-                  <Option value="all">Tất cả danh mục</Option>
-                  {Array.isArray(categories) && categories.map(category => (
-                    <Option key={category.id} value={category.id.toString()}>
-                      {category.name}
-                    </Option>
-                  ))}
-                </Select>
-              </Col>
-              <Col xs={12} md={5}>
-                <Select
-                  value={sortBy}
-                  onChange={setSortBy}
-                  style={{ width: '100%' }}
-                  size="large"
-                  placeholder="Sắp xếp"
-                >
-                  <Option value="newest">Mới nhất</Option>
-                  <Option value="price-low">Giá thấp → cao</Option>
-                  <Option value="price-high">Giá cao → thấp</Option>
-                  <Option value="name">Tên A → Z</Option>
-                </Select>
-              </Col>
-              <Col xs={24} md={2}>
-                <div style={{ textAlign: 'center' }}>
-                  <Text strong style={{ color: '#1890ff' }}>
-                    {filteredAndSortedProducts.length}
-                  </Text>
-                  <br />
-                  <Text style={{ fontSize: '12px', color: theme.secondaryText }}>
-                    sản phẩm
-                  </Text>
-                </div>
-              </Col>
-            </Row>
-            </Card>
-          </Affix>
-        </div>
-
-        {/* Categories Section */}
-        {categories.length > 0 && (
-          <div style={{ marginBottom: '50px' }}>
-            <div style={{ marginBottom: '24px' }}>
-              <Title level={3} style={{ marginBottom: '8px', fontSize: '20px', color: theme.textColor }}>
-                Danh mục phổ biến
-              </Title>
-              <Text style={{ fontSize: '14px', color: theme.secondaryText }}>
-                Chọn nhanh theo danh mục yêu thích
-              </Text>
-            </div>
-            <Row gutter={[12, 12]}>
-              {categories.slice(0, 6).map(category => (
-                <Col key={category.id} xs={12} sm={8} md={6} lg={4}>
-                  <Card 
-                    hoverable
-                    size="small"
-                    style={{ 
-                      textAlign: 'center',
-                      background: selectedCategory === category.id.toString() 
-                        ? (theme.backgroundColor === '#001529' ? '#1f4788' : '#e6f7ff') 
-                        : theme.cardBackground,
-                      borderColor: selectedCategory === category.id.toString() ? '#1890ff' : theme.borderColor,
-                      height: '100px',
-                      cursor: 'pointer'
-                    }}
-                    bodyStyle={{ 
-                      padding: '16px 12px',
-                      height: '100%',
-                      display: 'flex',
-                      flexDirection: 'column',
-                      justifyContent: 'center',
-                      alignItems: 'center'
-                    }}
-                    onClick={() => setSelectedCategory(category.id.toString())}
-                  >
-                    <div style={{ fontSize: '24px', marginBottom: '8px' }}>
-                      📂
-                    </div>
-                    <Text style={{ 
-                      fontSize: '12px',
-                      fontWeight: selectedCategory === category.id.toString() ? 'bold' : 'normal',
-                      color: selectedCategory === category.id.toString() ? '#1890ff' : theme.textColor
-                    }}>
-                      {category.name}
-                    </Text>
-                  </Card>
-                </Col>
-              ))}
-            </Row>
-          </div>
-        )}
-
         {/* Products Section */}
         <div id="featured-products" style={{ marginBottom: '60px', scrollMarginTop: '80px' }}>
           <div style={{ textAlign: 'center', marginBottom: '32px' }}>
@@ -625,7 +924,7 @@ function HomePage() {
           </div>
           
           <Row gutter={[16, 16]} justify="start">
-            {filteredAndSortedProducts.slice(0, 12).map(prod => (
+            {filteredAndSortedProducts.slice(0, showAll ? filteredAndSortedProducts.length : 12).map(prod => (
               <Col key={prod.id} xs={24} sm={12} md={8} lg={6}>
                 <Card 
                   hoverable
@@ -682,6 +981,38 @@ function HomePage() {
                           👕
                         </div>
                       )}
+                      
+                      {/* Discount Badge - Top Left */}
+                      {prod.discount_price && (
+                        <div style={{
+                          position: 'absolute',
+                          top: '10px',
+                          left: '10px',
+                          background: 'linear-gradient(135deg, #ff4757 0%, #ff6b81 100%)',
+                          color: 'white',
+                          borderRadius: '50%',
+                          width: '60px',
+                          height: '60px',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          fontSize: '14px',
+                          fontWeight: 'bold',
+                          boxShadow: '0 4px 12px rgba(255, 71, 87, 0.4)',
+                          zIndex: 10,
+                          border: '3px solid white'
+                        }}>
+                          <div style={{ fontSize: '18px', lineHeight: 1 }}>
+                            -{Math.round(((prod.price - prod.discount_price) / prod.price) * 100)}%
+                          </div>
+                          <div style={{ fontSize: '10px', marginTop: '2px' }}>
+                            GIẢM
+                          </div>
+                        </div>
+                      )}
+                      
+                      {/* Featured Badge - Top Right */}
                       {prod.is_featured && (
                         <Badge.Ribbon text="Nổi bật" color="red" />
                       )}
@@ -827,17 +1158,16 @@ function HomePage() {
             </div>
           )}
           
+          {/* Nút Xem thêm / Thu gọn */}
           {filteredAndSortedProducts.length > 12 && (
             <div style={{ textAlign: 'center', marginTop: '40px' }}>
-              <Text style={{ marginRight: '16px', color: theme.secondaryText }}>
-                Hiển thị 12/{filteredAndSortedProducts.length} sản phẩm
-              </Text>
+             
               <Button 
                 type="primary" 
                 size="large"
-                onClick={() => navigate('/products')}
+                onClick={() => setShowAll(!showAll)}
               >
-                Xem tất cả sản phẩm
+                {showAll ? 'Thu gọn' : 'Xem thêm'}
               </Button>
             </div>
           )}

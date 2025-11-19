@@ -14,7 +14,8 @@ import {
   Tag,
   Modal,
   List,
-  message as antdMessage
+  message as antdMessage,
+  Progress
 } from 'antd';
 import { 
   CreditCardOutlined, 
@@ -24,9 +25,12 @@ import {
   MobileOutlined,
   DollarOutlined,
   GiftOutlined,
-  CloseCircleOutlined
+  CloseCircleOutlined,
+  ScanOutlined,
+  ClockCircleOutlined
 } from '@ant-design/icons';
 import apiClient from '../../api/apiClient';
+import momoImage from '../../momo.jpg';
 
 const { Title, Text } = Typography;
 const { TextArea } = Input;
@@ -39,6 +43,11 @@ const PaymentForm = ({ cartData, shippingAddress, onSubmit, onPrevious, loading 
   const [couponLoading, setCouponLoading] = useState(false);
   const [availableCoupons, setAvailableCoupons] = useState([]);
   const [showCouponModal, setShowCouponModal] = useState(false);
+  
+  // MoMo payment states
+  const [showMoMoModal, setShowMoMoModal] = useState(false);
+  const [momoPaymentStatus, setMomoPaymentStatus] = useState('waiting'); // waiting, confirming, success, failed
+  const [momoCountdown, setMomoCountdown] = useState(120); // 120 seconds countdown
 
   // Fetch available coupons on mount
   useEffect(() => {
@@ -191,6 +200,14 @@ const PaymentForm = ({ cartData, shippingAddress, onSubmit, onPrevious, loading 
     console.log('PaymentForm handleSubmit called with:', values);
     console.log('Current paymentMethod:', paymentMethod);
     
+    // If MoMo payment, show QR modal first
+    if (paymentMethod === 'momo') {
+      setShowMoMoModal(true);
+      setMomoPaymentStatus('waiting');
+      setMomoCountdown(120);
+      return;
+    }
+    
     const paymentData = {
       method: paymentMethod,
       details: values,
@@ -201,6 +218,60 @@ const PaymentForm = ({ cartData, shippingAddress, onSubmit, onPrevious, loading 
     console.log('Calling onSubmit with:', paymentData);
     onSubmit(paymentData);
   };
+
+  // Handle MoMo payment confirmation
+  const handleMoMoConfirm = () => {
+    // Prevent double invocation if already confirming/success
+    if (momoPaymentStatus !== 'waiting') return;
+
+    setMomoPaymentStatus('confirming');
+
+    // Simulate payment verification (in production, this would call MoMo API)
+    setTimeout(() => {
+      setMomoPaymentStatus('success');
+      antdMessage.success('Thanh toán MoMo thành công!');
+
+      // Wait a bit then close modal and submit order
+      setTimeout(() => {
+        const values = form.getFieldsValue();
+        const paymentData = {
+          method: 'momo',
+          details: values,
+          notes: values.notes || '',
+          coupon: appliedCoupon ? appliedCoupon.code : null,
+          momo_transaction_id: `MOMO${Date.now()}` // Mock transaction ID
+        };
+
+        // Close modal first
+        setShowMoMoModal(false);
+        // reset state for next time
+        setMomoPaymentStatus('waiting');
+        setMomoCountdown(120);
+
+        // Then submit order
+        onSubmit(paymentData);
+      }, 1000);
+    }, 2000);
+  };
+
+  // Countdown timer for MoMo payment
+  useEffect(() => {
+    let timer;
+    if (showMoMoModal && momoPaymentStatus === 'waiting' && momoCountdown > 0) {
+      timer = setInterval(() => {
+        setMomoCountdown(prev => {
+          if (prev <= 1) {
+            clearInterval(timer);
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+    }
+    return () => {
+      if (timer) clearInterval(timer);
+    };
+  }, [showMoMoModal, momoPaymentStatus, momoCountdown]);
 
   const paymentMethods = [
     {
@@ -222,7 +293,7 @@ const PaymentForm = ({ cartData, shippingAddress, onSubmit, onPrevious, loading 
       title: 'Ví điện tử MoMo',
       description: 'Thanh toán qua ứng dụng MoMo',
       icon: <MobileOutlined style={{ color: '#d63384' }} />,
-      available: false
+      available: true
     },
     {
       key: 'credit_card',
@@ -277,6 +348,46 @@ const PaymentForm = ({ cartData, shippingAddress, onSubmit, onPrevious, loading 
               showIcon
               size="small"
             />
+          </Card>
+        );
+      
+      case 'momo':
+        return (
+          <Card size="small" style={{ marginTop: '16px', background: '#fff0f6', borderColor: '#d63384' }}>
+            <Space direction="vertical" size={12} style={{ width: '100%' }}>
+              <div style={{ textAlign: 'center' }}>
+                <MobileOutlined style={{ fontSize: '32px', color: '#d63384', marginBottom: '8px' }} />
+                <Title level={5} style={{ margin: 0, color: '#d63384' }}>
+                  Thanh toán qua MoMo
+                </Title>
+              </div>
+              <Alert
+                message="Hướng dẫn thanh toán"
+                description={
+                  <ol style={{ margin: '8px 0', paddingLeft: '20px' }}>
+                    <li>Nhấn nút "Đặt hàng ngay" bên dưới</li>
+                    <li>Mở ứng dụng MoMo trên điện thoại</li>
+                    <li>Quét mã QR hiển thị trên màn hình</li>
+                    <li>Xác nhận thanh toán trong ứng dụng MoMo</li>
+                    <li>Chờ hệ thống xác nhận</li>
+                  </ol>
+                }
+                type="info"
+                showIcon
+                size="small"
+              />
+              <div style={{ 
+                padding: '12px', 
+                background: 'linear-gradient(135deg, #d63384 0%, #ff6b9d 100%)',
+                borderRadius: '8px',
+                textAlign: 'center',
+                color: 'white'
+              }}>
+                <Text strong style={{ color: 'white', fontSize: '16px' }}>
+                  💳 Số tiền thanh toán: {totalAmount.toLocaleString()}₫
+                </Text>
+              </div>
+            </Space>
           </Card>
         );
       
@@ -586,6 +697,193 @@ const PaymentForm = ({ cartData, shippingAddress, onSubmit, onPrevious, loading 
             );
           }}
         />
+      </Modal>
+
+      {/* MoMo QR Payment Modal */}
+      <Modal
+        title={
+          <Space>
+            <MobileOutlined style={{ color: '#d63384', fontSize: '20px' }} />
+            <span style={{ color: '#d63384', fontWeight: 'bold' }}>Thanh toán MoMo</span>
+          </Space>
+        }
+        open={showMoMoModal}
+        onCancel={() => {
+          if (momoPaymentStatus !== 'confirming') {
+            setShowMoMoModal(false);
+            setMomoPaymentStatus('waiting');
+            setMomoCountdown(120);
+          }
+        }}
+        footer={null}
+        width={500}
+        centered
+        maskClosable={momoPaymentStatus !== 'confirming'}
+      >
+        <div style={{ textAlign: 'center', padding: '20px 0' }}>
+          {/* Waiting State - Show QR Code */}
+          {momoPaymentStatus === 'waiting' && (
+            <Space direction="vertical" size={24} style={{ width: '100%' }}>
+              {/* MoMo QR Image */}
+              <div style={{
+                padding: '24px',
+                background: 'white',
+                borderRadius: '12px',
+                border: '2px solid #d63384',
+                display: 'inline-block'
+              }}>
+                <img 
+                  src={momoImage} 
+                  alt="MoMo QR Code"
+                  style={{ 
+                    width: '220px',
+                    height: '220px',
+                    objectFit: 'contain'
+                  }}
+                />
+              </div>
+
+              {/* Instructions */}
+              <div style={{
+                background: 'linear-gradient(135deg, #fff0f6 0%, #ffe6f0 100%)',
+                padding: '20px',
+                borderRadius: '12px'
+              }}>
+                <Space direction="vertical" size={12} style={{ width: '100%' }}>
+                  <ScanOutlined style={{ fontSize: '36px', color: '#d63384' }} />
+                  <Title level={4} style={{ margin: 0, color: '#d63384' }}>
+                    Vui lòng quét mã QR
+                  </Title>
+                  <Text style={{ fontSize: '15px', color: '#595959' }}>
+                    Mở ứng dụng MoMo và quét mã QR phía trên để thanh toán
+                  </Text>
+                  
+                  {/* Amount Display */}
+                  <div style={{
+                    marginTop: '12px',
+                    padding: '16px',
+                    background: 'white',
+                    borderRadius: '8px',
+                    border: '2px dashed #d63384'
+                  }}>
+                    <Text type="secondary" style={{ fontSize: '14px', display: 'block', marginBottom: '4px' }}>
+                      Số tiền thanh toán
+                    </Text>
+                    <Text strong style={{ fontSize: '24px', color: '#d63384' }}>
+                      {totalAmount.toLocaleString()}₫
+                    </Text>
+                  </div>
+
+                  {/* Countdown Timer */}
+                  <div style={{ marginTop: '16px' }}>
+                    <Space>
+                      <ClockCircleOutlined style={{ color: '#d63384' }} />
+                      <Text style={{ color: '#595959' }}>
+                        Vui lòng hoàn tất trong <Text strong style={{ color: '#d63384' }}>{momoCountdown}s</Text>
+                      </Text>
+                    </Space>
+                    <Progress
+                      percent={(momoCountdown / 120) * 100}
+                      strokeColor={{
+                        '0%': '#d63384',
+                        '100%': '#ff6b9d',
+                      }}
+                      showInfo={false}
+                      style={{ marginTop: '8px' }}
+                    />
+                  </div>
+                </Space>
+              </div>
+
+              {/* Confirm Button */}
+              <Button
+                type="primary"
+                size="large"
+                icon={<CheckCircleOutlined />}
+                onClick={handleMoMoConfirm}
+                disabled={momoCountdown === 0 || momoPaymentStatus !== 'waiting'}
+                style={{
+                  width: '100%',
+                  height: '48px',
+                  fontSize: '16px',
+                  fontWeight: 'bold',
+                  background: momoCountdown === 0 || momoPaymentStatus !== 'waiting' ? '#d9d9d9' : 'linear-gradient(135deg, #d63384 0%, #ff6b9d 100%)',
+                  border: 'none'
+                }}
+              >
+                {momoPaymentStatus === 'confirming' ? 'Đang xác nhận...' : (momoCountdown === 0 ? 'Hết thời gian' : 'Tôi đã thanh toán')}
+              </Button>
+
+              <Text type="secondary" style={{ fontSize: '12px' }}>
+                💡 Sau khi quét mã và thanh toán trong app MoMo, hãy nhấn nút "Tôi đã thanh toán"
+              </Text>
+            </Space>
+          )}
+
+          {/* Confirming State */}
+          {momoPaymentStatus === 'confirming' && (
+            <Space direction="vertical" size={24} style={{ width: '100%', padding: '40px 0' }}>
+              <div style={{
+                width: '80px',
+                height: '80px',
+                margin: '0 auto',
+                borderRadius: '50%',
+                background: 'linear-gradient(135deg, #d63384 0%, #ff6b9d 100%)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                animation: 'pulse 1.5s ease-in-out infinite'
+              }}>
+                <MobileOutlined style={{ fontSize: '40px', color: 'white' }} />
+              </div>
+              <Title level={4} style={{ color: '#d63384' }}>
+                Đang xác nhận thanh toán...
+              </Title>
+              <Text type="secondary">
+                Vui lòng đợi trong giây lát
+              </Text>
+              <Progress percent={100} status="active" strokeColor="#d63384" showInfo={false} />
+            </Space>
+          )}
+
+          {/* Success State */}
+          {momoPaymentStatus === 'success' && (
+            <Space direction="vertical" size={24} style={{ width: '100%', padding: '40px 0' }}>
+              <div style={{
+                width: '80px',
+                height: '80px',
+                margin: '0 auto',
+                borderRadius: '50%',
+                background: '#52c41a',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center'
+              }}>
+                <CheckCircleOutlined style={{ fontSize: '40px', color: 'white' }} />
+              </div>
+              <Title level={4} style={{ color: '#52c41a' }}>
+                Thanh toán thành công!
+              </Title>
+              <Text type="secondary">
+                Đơn hàng của bạn đang được xử lý
+              </Text>
+            </Space>
+          )}
+        </div>
+
+        {/* Animation Styles */}
+        <style jsx>{`
+          @keyframes pulse {
+            0%, 100% {
+              transform: scale(1);
+              opacity: 1;
+            }
+            50% {
+              transform: scale(1.1);
+              opacity: 0.8;
+            }
+          }
+        `}</style>
       </Modal>
     </Row>
   );
