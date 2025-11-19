@@ -8,11 +8,12 @@ const StockAlertBadge = ({ variant, showText = true }) => {
   const minimumStock = variant.minimum_stock || 5;
   const reorderPoint = variant.reorder_point || 10;
 
+  // Logic giống backend: check theo thứ tự ưu tiên
   let status;
   if (available === 0) {
     status = { color: 'error', text: 'Hết hàng', icon: '🔴' };
   } else if (available <= minimumStock) {
-    status = { color: 'warning', text: 'Sắp hết', icon: '⚠️' };
+    status = { color: 'warning', text: 'Tồn kho thấp', icon: '⚠️' };
   } else if (available <= reorderPoint) {
     status = { color: 'processing', text: 'Cần đặt hàng', icon: '📦' };
   } else {

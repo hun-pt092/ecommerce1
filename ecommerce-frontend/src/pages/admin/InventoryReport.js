@@ -19,10 +19,45 @@ const InventoryReport = () => {
   const fetchData = async () => {
     setLoading(true);
     try {
-      const response = await apiClient.get('/admin/products/variants/');
-      setVariants(response.data.results || response.data);
+      // Fetch all variants with pagination
+      let allVariants = [];
+      let page = 1;
+      let hasMore = true;
+      
+      while (hasMore) {
+        const params = new URLSearchParams({
+          page: page,
+          page_size: 200
+        });
+        
+        const response = await apiClient.get(`/admin/products/variants/?${params.toString()}`);
+        const data = response.data;
+        const results = data.results || [];
+        
+        allVariants = [...allVariants, ...results];
+        
+        // Check if there are more pages - backend trả về links.next
+        hasMore = data.links?.next !== null && data.links?.next !== undefined;
+        page++;
+        
+        console.log(`📄 Page ${page - 1}: ${results.length} variants, Total: ${allVariants.length}, hasMore: ${hasMore}`);
+      }
+      
+      console.log(`✅ Đã tải ${allVariants.length} variants cho báo cáo tồn kho`);
+      setVariants(allVariants);
     } catch (error) {
-      console.error('Error fetching data:', error);
+      console.error('❌ Error fetching data:', error);
+      console.error('Error response:', error.response?.data);
+      
+      // Fallback: Nếu lỗi, thử fetch không có pagination params
+      try {
+        const response = await apiClient.get('/admin/products/variants/');
+        const allData = response.data.results || response.data || [];
+        console.log(`⚠️ Fallback: Loaded ${allData.length} variants`);
+        setVariants(allData);
+      } catch (fallbackError) {
+        console.error('❌ Fallback also failed:', fallbackError);
+      }
     } finally {
       setLoading(false);
     }
@@ -32,9 +67,14 @@ const InventoryReport = () => {
   const stats = {
     totalItems: variants.reduce((sum, v) => sum + (v.stock_quantity || 0), 0),
     totalValue: variants.reduce((sum, v) => sum + (v.stock_quantity || 0) * (v.cost_price || 0), 0),
-    outOfStock: variants.filter(v => (v.available_quantity || 0) === 0).length,
+    outOfStock: variants.filter(v => {
+      // available = stock - reserved
+      const available = (v.stock_quantity || 0) - (v.reserved_quantity || 0);
+      return available === 0;
+    }).length,
     lowStock: variants.filter(v => {
-      const available = v.available_quantity || 0;
+      // available = stock - reserved
+      const available = (v.stock_quantity || 0) - (v.reserved_quantity || 0);
       const minimumStock = v.minimum_stock || 5;
       const reorderPoint = v.reorder_point || 10;
       // Sắp hết = Hết hàng HOẶC dưới mức tối thiểu HOẶC cần đặt hàng
@@ -54,15 +94,16 @@ const InventoryReport = () => {
   // Products need reorder (including out of stock)
   const needReorder = variants
     .filter(v => {
-      const available = v.available_quantity || 0;
+      // available = stock - reserved
+      const available = (v.stock_quantity || 0) - (v.reserved_quantity || 0);
       const reorderPoint = v.reorder_point || 10;
       // Cần đặt hàng = Hết hàng HOẶC dưới điểm đặt hàng
       return available <= reorderPoint;
     })
     .sort((a, b) => {
       // Sắp xếp: Hết hàng trước, sau đó theo số lượng tăng dần
-      const availableA = a.available_quantity || 0;
-      const availableB = b.available_quantity || 0;
+      const availableA = (a.stock_quantity || 0) - (a.reserved_quantity || 0);
+      const availableB = (b.stock_quantity || 0) - (b.reserved_quantity || 0);
       if (availableA === 0 && availableB !== 0) return -1;
       if (availableA !== 0 && availableB === 0) return 1;
       return availableA - availableB;
@@ -132,7 +173,9 @@ const InventoryReport = () => {
 
   return (
     <div>
-      <h2 style={{ marginBottom: 16 }}>📊 Báo cáo tồn kho</h2>
+      <h2 style={{ marginBottom: 16 }}>
+         Báo cáo tồn kho 
+      </h2>
 
       {/* Summary Statistics */}
       <Row gutter={[16, 16]} style={{ marginBottom: 16 }}>

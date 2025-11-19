@@ -35,6 +35,7 @@ import StockManagement from './pages/admin/StockManagement';
 import InventoryReport from './pages/admin/InventoryReport';
 import StockHistory from './pages/admin/StockHistory';
 import StockAlerts from './pages/admin/StockAlerts';
+import AnalyticsDashboardPage from './pages/AnalyticsDashboardPage';
 
 function App() {
   return (
@@ -51,6 +52,7 @@ function App() {
             <AdminLayout>
               <Routes>
                 <Route path="/" element={<AdminDashboard />} />
+                <Route path="/analytics" element={<AnalyticsDashboardPage />} />
                 <Route path="/products/list" element={<ProductList />} />
                 <Route path="/products/add" element={<AddProduct />} />
                 <Route path="/products/edit/:id" element={<AddProduct />} />

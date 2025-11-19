@@ -55,15 +55,46 @@ class StockService:
             created_by=user
         )
         
-        # Resolve alerts if stock is back to normal
-        if product_variant.stock_quantity > product_variant.minimum_stock:
+        # Resolve alerts based on available quantity
+        available = product_variant.available_quantity
+        
+        # Resolve out_of_stock alert nếu có hàng trở lại
+        if available > 0:
             StockAlert.objects.filter(
                 product_variant=product_variant,
+                alert_type='out_of_stock',
                 is_resolved=False
             ).update(
                 is_resolved=True,
                 resolved_at=timezone.now(),
-                resolved_by=user
+                resolved_by=user,
+                current_quantity=available  # Cập nhật số lượng lúc resolve
+            )
+        
+        # Resolve low_stock alert nếu vượt minimum_stock
+        if available > product_variant.minimum_stock:
+            StockAlert.objects.filter(
+                product_variant=product_variant,
+                alert_type='low_stock',
+                is_resolved=False
+            ).update(
+                is_resolved=True,
+                resolved_at=timezone.now(),
+                resolved_by=user,
+                current_quantity=available  # Cập nhật số lượng lúc resolve
+            )
+        
+        # Resolve reorder_needed alert nếu vượt reorder_point
+        if available > product_variant.reorder_point:
+            StockAlert.objects.filter(
+                product_variant=product_variant,
+                alert_type='reorder_needed',
+                is_resolved=False
+            ).update(
+                is_resolved=True,
+                resolved_at=timezone.now(),
+                resolved_by=user,
+                current_quantity=available  # Cập nhật số lượng lúc resolve
             )
         
         return product_variant
@@ -151,15 +182,46 @@ class StockService:
             created_by=user
         )
         
-        # Resolve alerts if stock is back to normal
-        if product_variant.stock_quantity > product_variant.minimum_stock:
+        # Resolve alerts based on available quantity (same logic as import_stock)
+        available = product_variant.available_quantity
+        
+        # Resolve out_of_stock alert nếu có hàng trở lại
+        if available > 0:
             StockAlert.objects.filter(
                 product_variant=product_variant,
+                alert_type='out_of_stock',
                 is_resolved=False
             ).update(
                 is_resolved=True,
                 resolved_at=timezone.now(),
-                resolved_by=user
+                resolved_by=user,
+                current_quantity=available  # Cập nhật số lượng lúc resolve
+            )
+        
+        # Resolve low_stock alert nếu vượt minimum_stock
+        if available > product_variant.minimum_stock:
+            StockAlert.objects.filter(
+                product_variant=product_variant,
+                alert_type='low_stock',
+                is_resolved=False
+            ).update(
+                is_resolved=True,
+                resolved_at=timezone.now(),
+                resolved_by=user,
+                current_quantity=available  # Cập nhật số lượng lúc resolve
+            )
+        
+        # Resolve reorder_needed alert nếu vượt reorder_point
+        if available > product_variant.reorder_point:
+            StockAlert.objects.filter(
+                product_variant=product_variant,
+                alert_type='reorder_needed',
+                is_resolved=False
+            ).update(
+                is_resolved=True,
+                resolved_at=timezone.now(),
+                resolved_by=user,
+                current_quantity=available  # Cập nhật số lượng lúc resolve
             )
         
         return product_variant

@@ -347,7 +347,7 @@ const Navigation = () => {
             window.scrollTo(0, 0);
           }}
         >
-          <img src={logoImage} alt="Fashion Store" style={{ height: '50px', marginRight: '8px', verticalAlign: 'middle' }} /> PKA
+          <img src={logoImage} alt="Fashion Store" style={{ height: '48px', marginRight: '8px',marginBottom: '8px', verticalAlign: 'middle' }} /> PKA
         </div>
 
         {/* Main Menu */}

@@ -27,8 +27,35 @@ const StockManagement = () => {
   const fetchVariants = async () => {
     setLoading(true);
     try {
-      const response = await apiClient.get('/admin/products/variants/');
-      setVariants(response.data.results || response.data);
+      // Fetch all variants - Backend cho phép max 200 items/page
+      let allVariants = [];
+      let page = 1;
+      let hasMore = true;
+      
+      while (hasMore) {
+        const response = await apiClient.get('/admin/products/variants/', {
+          params: {
+            page,
+            page_size: 200 // Max allowed by AdminPagination
+          }
+        });
+        
+        const data = response.data;
+        
+        if (data.results) {
+          // Response có pagination
+          allVariants = [...allVariants, ...data.results];
+          hasMore = data.links.next !== null;
+          page++;
+        } else {
+          // Response không có pagination (trường hợp đặc biệt)
+          allVariants = data;
+          hasMore = false;
+        }
+      }
+      
+      setVariants(allVariants);
+      console.log(`✅ Loaded ${allVariants.length} product variants`);
     } catch (error) {
       message.error('Không thể tải danh sách sản phẩm');
       console.error('Error fetching variants:', error);
@@ -56,9 +83,10 @@ const StockManagement = () => {
     const minimumStock = variant.minimum_stock || 5;
     const reorderPoint = variant.reorder_point || 10;
 
+    // Logic giống backend: check theo thứ tự ưu tiên
     if (available === 0) return 'out_of_stock';
-    if (available <= minimumStock) return 'low';
-    if (available <= reorderPoint) return 'warning';
+    if (available <= minimumStock) return 'low_stock';
+    if (available <= reorderPoint) return 'reorder_needed';
     return 'good';
   };
 
@@ -124,8 +152,8 @@ const StockManagement = () => {
       align: 'center',
       filters: [
         { text: 'Hết hàng', value: 'out_of_stock' },
-        { text: 'Sắp hết', value: 'low' },
-        { text: 'Cảnh báo', value: 'warning' },
+        { text: 'Tồn kho thấp', value: 'low_stock' },
+        { text: 'Cần đặt hàng', value: 'reorder_needed' },
         { text: 'Đủ hàng', value: 'good' },
       ],
       onFilter: (value, record) => getStockLevel(record) === value,

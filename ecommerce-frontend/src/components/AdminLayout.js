@@ -47,6 +47,11 @@ const AdminLayout = ({ children }) => {
       label: 'Dashboard',
     },
     {
+      key: '/admin/analytics',
+      icon: <BarChartOutlined />,
+      label: 'Analytics',
+    },
+    {
       key: '/admin/products',
       icon: <ShoppingOutlined />,
       label: 'Quản lý sản phẩm',
@@ -59,16 +64,6 @@ const AdminLayout = ({ children }) => {
           key: '/admin/products/add',
           icon: <PlusOutlined />,
           label: 'Thêm sản phẩm',
-        },
-        {
-          key: '/admin/products/categories',
-          icon: <TagsOutlined />,
-          label: 'Danh mục',
-        },
-        {
-          key: '/admin/products/brands',
-          icon: <TagsOutlined />,
-          label: 'Thương hiệu',
         },
       ],
     },

@@ -59,7 +59,7 @@ const StockAlerts = () => {
     const colors = {
       'out_of_stock': 'red',
       'low_stock': 'orange',
-      'reorder_point': 'gold',
+      'reorder_needed': 'gold',
     };
     return colors[type] || 'default';
   };
@@ -68,7 +68,7 @@ const StockAlerts = () => {
     const icons = {
       'out_of_stock': '🔴',
       'low_stock': '⚠️',
-      'reorder_point': '📦',
+      'reorder_needed': '📦',
     };
     return icons[type] || '⚠️';
   };
@@ -95,8 +95,8 @@ const StockAlerts = () => {
       ),
       filters: [
         { text: '🔴 Hết hàng', value: 'out_of_stock' },
-        { text: '⚠️ Sắp hết', value: 'low_stock' },
-        { text: '📦 Cần đặt hàng', value: 'reorder_point' },
+        { text: '⚠️ Tồn kho thấp', value: 'low_stock' },
+        { text: '📦 Cần đặt hàng', value: 'reorder_needed' },
       ],
       onFilter: (value, record) => record.alert_type === value,
     },
@@ -227,7 +227,7 @@ const StockAlerts = () => {
             </div>
           </div>
           <div style={{ padding: 16, background: '#fffbe6', borderRadius: 8 }}>
-            <div style={{ fontSize: 12, color: '#666' }}>⚠️ Sắp hết</div>
+            <div style={{ fontSize: 12, color: '#666' }}>⚠️ Tồn kho thấp</div>
             <div style={{ fontSize: 24, fontWeight: 'bold', color: '#faad14' }}>
               {stats.lowStock}
             </div>

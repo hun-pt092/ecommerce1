@@ -265,23 +265,26 @@ const AdminDashboard = () => {
         
         <Col xs={24} sm={12} lg={6}>
           <Card
+            hoverable
+            onClick={() => navigate('/admin/analytics')}
             style={{ 
+              cursor: 'pointer',
               borderLeft: '4px solid #52c41a',
               background: 'linear-gradient(135deg, #f6ffed 0%, #f6ffed 100%)'
             }}
           >
             <Statistic
               title="Doanh thu tháng này"
-              value={statistics.monthlyRevenue}
+              value={Number(statistics.monthlyRevenue).toLocaleString()}
               prefix={<DollarOutlined />}
-              suffix="VND"
+              suffix="₫"
               valueStyle={{ color: '#52c41a' }}
               loading={loading}
             />
             <div style={{ marginTop: 8 }}>
               <Space>
                 <span style={{ fontSize: '12px', color: '#666' }}>
-                  Tổng: {Number(statistics.revenue).toLocaleString()} VND
+                  Đơn hàng: {statistics.monthlyOrders}
                 </span>
                 <ArrowUpOutlined style={{ color: '#52c41a', fontSize: '12px' }} />
               </Space>

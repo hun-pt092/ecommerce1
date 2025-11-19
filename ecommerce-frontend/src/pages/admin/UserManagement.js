@@ -48,11 +48,11 @@ const UserManagement = () => {
     is_staff: '',
   });
   const [statistics, setStatistics] = useState({
-    total: 0,
-    active: 0,
-    inactive: 0,
-    staff: 0,
-    customers: 0,
+    total_users: 0,
+    active_users: 0,
+    inactive_users: 0,
+    admin_users: 0,
+    monthly_new_users: 0,
   });
 
   const [form] = Form.useForm();
@@ -106,6 +106,8 @@ const UserManagement = () => {
       email: user.email,
       first_name: user.first_name,
       last_name: user.last_name,
+      phone_number: user.phone_number,
+      date_of_birth: user.date_of_birth,
       is_active: user.is_active,
       is_staff: user.is_staff,
     });
@@ -120,7 +122,7 @@ const UserManagement = () => {
         await apiClient.put(`/users/${editingUser.id}/`, values);
         message.success('Cập nhật người dùng thành công');
       } else {
-        await apiClient.post('/api/users/', values);
+        await apiClient.post('/users/', values);
         message.success('Thêm người dùng thành công');
       }
       setModalVisible(false);
@@ -128,14 +130,14 @@ const UserManagement = () => {
       fetchStatistics();
     } catch (error) {
       console.error('Error saving user:', error);
-      message.error('Lỗi khi lưu thông tin người dùng');
+      message.error(error.response?.data?.message || 'Lỗi khi lưu thông tin người dùng');
     }
   };
 
   const handleToggleStatus = async (userId, currentStatus) => {
     try {
-      await apiClient.patch(`/users/${userId}/`, {
-        is_active: !currentStatus
+      await apiClient.patch(`/users/${userId}/status/`, {
+        action: currentStatus ? 'deactivate' : 'activate'
       });
       message.success(`${!currentStatus ? 'Kích hoạt' : 'Vô hiệu hóa'} người dùng thành công`);
       fetchUsers();
@@ -161,12 +163,13 @@ const UserManagement = () => {
           <Avatar 
             size={48}
             style={{ 
-              backgroundColor: record.is_admin ? '#722ed1' : record.is_staff ? '#fa8c16' : '#1890ff',
-              fontSize: '18px'
+              backgroundColor: record.is_admin ? '#ff4d4f' : record.is_staff ? '#722ed1' : '#1890ff',
+              fontSize: '18px',
+              fontWeight: 'bold'
             }}
             icon={<UserOutlined />}
           >
-            {record.username.charAt(0).toUpperCase()}
+            {(record.first_name?.[0] || record.username[0]).toUpperCase()}
           </Avatar>
           <div>
             <div style={{ fontWeight: 'bold', fontSize: '14px', marginBottom: '2px' }}>
@@ -188,18 +191,23 @@ const UserManagement = () => {
     {
       title: 'Vai trò & Trạng thái',
       key: 'roleStatus',
-      width: 180,
+      width: 200,
       render: (_, record) => (
         <Space direction="vertical" size="small">
           <Tag 
             color={record.is_admin ? 'red' : record.is_staff ? 'purple' : 'blue'}
-            style={{ marginBottom: '4px' }}
+            style={{ marginBottom: '4px', fontWeight: '500' }}
           >
-            {record.is_admin ? 'Super Admin' : record.is_staff ? 'Quản trị' : 'Khách hàng'}
+            {record.is_admin ? '👑 Super Admin' : record.is_staff ? '⚙️ Quản trị' : '👤 Khách hàng'}
           </Tag>
           <Tag color={record.is_active ? 'green' : 'volcano'}>
-            {record.is_active ? 'Hoạt động' : 'Vô hiệu hóa'}
+            {record.is_active ? '✓ Hoạt động' : '✕ Vô hiệu hóa'}
           </Tag>
+          {record.phone_number && (
+            <div style={{ fontSize: '12px', color: '#666' }}>
+              📱 {record.phone_number}
+            </div>
+          )}
         </Space>
       ),
     },
@@ -269,12 +277,31 @@ const UserManagement = () => {
         borderRadius: '8px',
         color: 'white'
       }}>
-        <Title level={2} style={{ color: 'white', margin: 0 }}>
-          <UserOutlined /> Quản lý người dùng
-        </Title>
-        <p style={{ margin: '8px 0 0 0', opacity: 0.9 }}>
-          Quản lý tài khoản người dùng và phân quyền trong hệ thống
-        </p>
+        <Row justify="space-between" align="middle">
+          <Col>
+            <Title level={2} style={{ color: 'white', margin: 0 }}>
+              <UserOutlined /> Quản lý người dùng
+            </Title>
+            <p style={{ margin: '8px 0 0 0', opacity: 0.9 }}>
+              Quản lý tài khoản người dùng và phân quyền trong hệ thống
+            </p>
+          </Col>
+          <Col>
+            <div style={{ 
+              background: 'rgba(255,255,255,0.2)', 
+              padding: '12px 20px', 
+              borderRadius: '8px',
+              textAlign: 'center'
+            }}>
+              <div style={{ fontSize: '24px', fontWeight: 'bold' }}>
+                +{statistics.monthly_new_users}
+              </div>
+              <div style={{ fontSize: '12px', opacity: 0.9 }}>
+                Người dùng mới tháng này
+              </div>
+            </div>
+          </Col>
+        </Row>
       </div>
 
       {/* Statistics */}
@@ -283,7 +310,7 @@ const UserManagement = () => {
           <Card hoverable style={{ borderLeft: '4px solid #1890ff' }}>
             <Statistic
               title="Tổng người dùng"
-              value={statistics.total}
+              value={statistics.total_users}
               prefix={<UserOutlined style={{ color: '#1890ff' }} />}
               valueStyle={{ color: '#1890ff' }}
             />
@@ -293,7 +320,7 @@ const UserManagement = () => {
           <Card hoverable style={{ borderLeft: '4px solid #52c41a' }}>
             <Statistic
               title="Đang hoạt động"
-              value={statistics.active}
+              value={statistics.active_users}
               prefix={<UserOutlined style={{ color: '#52c41a' }} />}
               valueStyle={{ color: '#52c41a' }}
             />
@@ -303,7 +330,7 @@ const UserManagement = () => {
           <Card hoverable style={{ borderLeft: '4px solid #f5222d' }}>
             <Statistic
               title="Bị khóa"
-              value={statistics.inactive}
+              value={statistics.inactive_users}
               prefix={<LockOutlined style={{ color: '#f5222d' }} />}
               valueStyle={{ color: '#f5222d' }}
             />
@@ -313,7 +340,7 @@ const UserManagement = () => {
           <Card hoverable style={{ borderLeft: '4px solid #722ed1' }}>
             <Statistic
               title="Quản trị viên"
-              value={statistics.staff}
+              value={statistics.admin_users}
               prefix={<UserOutlined style={{ color: '#722ed1' }} />}
               valueStyle={{ color: '#722ed1' }}
             />
@@ -461,6 +488,25 @@ const UserManagement = () => {
             </Col>
           </Row>
 
+          <Row gutter={16}>
+            <Col span={12}>
+              <Form.Item
+                name="phone_number"
+                label="Số điện thoại"
+              >
+                <Input placeholder="Nhập số điện thoại" />
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+              <Form.Item
+                name="date_of_birth"
+                label="Ngày sinh"
+              >
+                <Input type="date" />
+              </Form.Item>
+            </Col>
+          </Row>
+
           {!editingUser && (
             <Form.Item
               name="password"
@@ -518,7 +564,12 @@ const UserManagement = () => {
 
       {/* User Detail Modal */}
       <Modal
-        title={`Thông tin chi tiết - ${selectedUser?.username}`}
+        title={
+          <Space>
+            <UserOutlined />
+            <span>Thông tin chi tiết - {selectedUser?.username}</span>
+          </Space>
+        }
         visible={detailModalVisible}
         onCancel={() => setDetailModalVisible(false)}
         footer={null}
@@ -530,44 +581,68 @@ const UserManagement = () => {
               <Col span={6}>
                 <Avatar
                   size={100}
-                  src={selectedUser.avatar}
+                  style={{ 
+                    backgroundColor: selectedUser.is_admin ? '#ff4d4f' : selectedUser.is_staff ? '#722ed1' : '#1890ff',
+                    fontSize: '36px',
+                    fontWeight: 'bold'
+                  }}
                   icon={<UserOutlined />}
-                />
+                >
+                  {(selectedUser.first_name?.[0] || selectedUser.username[0]).toUpperCase()}
+                </Avatar>
               </Col>
               <Col span={18}>
-                <Descriptions column={1}>
+                <Descriptions column={1} size="small">
                   <Descriptions.Item label="Tên đăng nhập">
-                    {selectedUser.username}
+                    <strong>{selectedUser.username}</strong>
                   </Descriptions.Item>
                   <Descriptions.Item label="Họ tên">
-                    {`${selectedUser.first_name || ''} ${selectedUser.last_name || ''}`.trim() || 'Chưa cập nhật'}
+                    {`${selectedUser.first_name || ''} ${selectedUser.last_name || ''}`.trim() || 
+                      <span style={{ color: '#999' }}>Chưa cập nhật</span>
+                    }
                   </Descriptions.Item>
                   <Descriptions.Item label="Email">
-                    {selectedUser.email}
+                    <a href={`mailto:${selectedUser.email}`}>{selectedUser.email}</a>
                   </Descriptions.Item>
+                  {selectedUser.phone_number && (
+                    <Descriptions.Item label="Số điện thoại">
+                      <a href={`tel:${selectedUser.phone_number}`}>{selectedUser.phone_number}</a>
+                    </Descriptions.Item>
+                  )}
                 </Descriptions>
               </Col>
             </Row>
 
-            <Descriptions bordered style={{ marginTop: 24 }} column={2}>
+            <Descriptions 
+              bordered 
+              style={{ marginTop: 24 }} 
+              column={2}
+              size="small"
+            >
               <Descriptions.Item label="ID">{selectedUser.id}</Descriptions.Item>
               <Descriptions.Item label="Vai trò">
-                <Tag color={selectedUser.is_staff ? 'purple' : 'blue'}>
-                  {selectedUser.is_staff ? 'Quản trị viên' : 'Khách hàng'}
+                <Tag color={selectedUser.is_admin ? 'red' : selectedUser.is_staff ? 'purple' : 'blue'}>
+                  {selectedUser.is_admin ? '👑 Super Admin' : selectedUser.is_staff ? '⚙️ Quản trị viên' : '👤 Khách hàng'}
                 </Tag>
               </Descriptions.Item>
               <Descriptions.Item label="Trạng thái">
                 <Tag color={selectedUser.is_active ? 'green' : 'red'}>
-                  {selectedUser.is_active ? 'Hoạt động' : 'Vô hiệu hóa'}
+                  {selectedUser.is_active ? '✓ Hoạt động' : '✕ Vô hiệu hóa'}
                 </Tag>
+              </Descriptions.Item>
+              <Descriptions.Item label="Ngày sinh">
+                {selectedUser.date_of_birth 
+                  ? formatDate(new Date(selectedUser.date_of_birth), 'dd/MM/yyyy')
+                  : <span style={{ color: '#999' }}>Chưa cập nhật</span>
+                }
               </Descriptions.Item>
               <Descriptions.Item label="Ngày tham gia">
                 {formatDate(new Date(selectedUser.date_joined), 'dd/MM/yyyy HH:mm')}
               </Descriptions.Item>
-              <Descriptions.Item label="Lần cuối đăng nhập" span={2}>
+              <Descriptions.Item label="Lần cuối đăng nhập">
                 {selectedUser.last_login
                   ? formatDate(new Date(selectedUser.last_login), 'dd/MM/yyyy HH:mm')
-                  : 'Chưa đăng nhập'
+                  : <span style={{ color: '#999' }}>Chưa đăng nhập</span>
                 }
               </Descriptions.Item>
             </Descriptions>

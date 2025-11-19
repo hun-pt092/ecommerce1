@@ -24,6 +24,10 @@ from .views import (
     # Coupon & Birthday views
     UserCouponListView, ApplyCouponView,
     AdminCouponListCreateView, AdminCouponDetailView, AdminUserCouponListView,
+    # Analytics views
+    RevenueAnalyticsView, RevenueTimelineView,
+    TopCustomersView, NewCustomersStatsView,
+    BestSellingProductsView, CategoryRevenueView,
 )
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 
@@ -122,4 +126,12 @@ urlpatterns = [
     path('admin/coupons/', AdminCouponListCreateView.as_view(), name='admin_coupon_list'),
     path('admin/coupons/<int:pk>/', AdminCouponDetailView.as_view(), name='admin_coupon_detail'),
     path('admin/user-coupons/', AdminUserCouponListView.as_view(), name='admin_user_coupon_list'),
+    
+    # Analytics APIs
+    path('admin/analytics/revenue/', RevenueAnalyticsView.as_view(), name='analytics_revenue'),
+    path('admin/analytics/revenue/timeline/', RevenueTimelineView.as_view(), name='analytics_timeline'),
+    path('admin/analytics/customers/top/', TopCustomersView.as_view(), name='analytics_top_customers'),
+    path('admin/analytics/customers/new/', NewCustomersStatsView.as_view(), name='analytics_new_customers'),
+    path('admin/analytics/products/best-sellers/', BestSellingProductsView.as_view(), name='analytics_best_sellers'),
+    path('admin/analytics/categories/revenue/', CategoryRevenueView.as_view(), name='analytics_category_revenue'),
 ]
