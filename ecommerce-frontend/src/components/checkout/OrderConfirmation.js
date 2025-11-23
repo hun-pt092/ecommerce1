@@ -70,7 +70,7 @@ const OrderConfirmation = ({ orderData, onContinueShopping, onViewOrders }) => {
             <Text strong>#{orderData?.id || orderData?.order_number}</Text>
             <br />
             <Text type="secondary">
-              Cảm ơn bạn đã mua sắm tại Fashion Store. Chúng tôi sẽ liên hệ với bạn sớm nhất.
+              Cảm ơn bạn đã mua sắm tại PKA Shop. Chúng tôi sẽ liên hệ với bạn sớm nhất.
             </Text>
           </div>
         }

@@ -59,7 +59,7 @@ const Layout = ({ children }) => {
             {/* Company Info */}
             <div>
               <h3 style={{ color: '#1890ff', marginBottom: '16px', fontSize: '18px' }}>
-                Fashion Store
+                PKA Shop
               </h3>
               <p style={{ marginBottom: '8px', lineHeight: '1.6' }}>
                 Thời trang chất lượng cao với phong cách hiện đại
@@ -139,10 +139,10 @@ const Layout = ({ children }) => {
             gap: '10px'
           }}>
             <div style={{ fontSize: '14px', color: '#ccc' }}>
-              © 2025 Fashion Store. Tất cả quyền được bảo lưu.
+              © 2025 PKA Shop. Tất cả quyền được bảo lưu.
             </div>
             <div style={{ fontSize: '14px', color: '#ccc' }}>
-              Thiết kế bởi Fashion Store Team | Phiên bản 1.0
+              Thiết kế bởi PKA Shop Team | Phiên bản 1.0
             </div>
           </div>
         </div>

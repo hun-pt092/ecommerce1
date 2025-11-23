@@ -27,7 +27,7 @@ const AboutPage = () => {
         <Card style={{ marginBottom: '30px', background: 'linear-gradient(135deg, #1890ff 0%, #722ed1 100%)', border: 'none' }}>
           <div style={{ textAlign: 'center', color: 'white', padding: '40px 20px' }}>
             <Title level={1} style={{ color: 'white', marginBottom: '16px' }}>
-              Về Fashion Store
+              Về PKA Shop
             </Title>
             <Paragraph style={{ fontSize: '18px', color: 'rgba(255,255,255,0.9)', maxWidth: '800px', margin: '0 auto' }}>
               Chúng tôi là điểm đến hàng đầu cho những ai đam mê thời trang, 
@@ -110,7 +110,7 @@ const AboutPage = () => {
                 <TeamOutlined /> Câu chuyện của chúng tôi
               </Title>
               <Paragraph style={{ color: theme.textColor }}>
-                Fashion Store được thành lập vào năm 2016 với sứ mệnh mang đến những sản phẩm thời trang 
+                PKA Shop được thành lập vào năm 2016 với sứ mệnh mang đến những sản phẩm thời trang 
                 chất lượng cao, phù hợp với xu hướng hiện đại và phong cách cá nhân của từng khách hàng.
               </Paragraph>
               <Paragraph style={{ color: theme.textColor }}>

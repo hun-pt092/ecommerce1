@@ -2,12 +2,13 @@ import React, { useEffect, useState, useMemo } from 'react';
 import apiClient from '../api/apiClient';
 import { 
   Card, Row, Col, Button, Typography, Space, 
-  Spin, message, Badge, Image, Tag, Carousel
+  Spin, message, Badge, Image, Tag, Carousel,
+  Select, Slider, Checkbox, Divider, Input
 } from 'antd';
 import { 
   EyeOutlined, ShoppingCartOutlined, StarFilled, 
   ShopOutlined, TruckOutlined, SafetyOutlined, CustomerServiceOutlined,
-  SearchOutlined, HeartOutlined
+  SearchOutlined, HeartOutlined, FilterOutlined, ClearOutlined
 } from '@ant-design/icons';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useTheme } from '../contexts/ThemeContext';
@@ -15,15 +16,19 @@ import WishlistButton from '../components/WishlistButton';
 import logoImage from '../logo (2).png';
 
 const { Title, Text } = Typography;
+const { Option } = Select;
 
 function HomePage() {
   const [products, setProducts] = useState([]);
   const [categories, setCategories] = useState([]);
+  const [brands, setBrands] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchText, setSearchText] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');
+  const [selectedBrands, setSelectedBrands] = useState([]);
+  const [priceRange, setPriceRange] = useState([0, 10000000]);
   const [sortBy, setSortBy] = useState('newest');
-  const [showAll, setShowAll] = useState(false); // State để điều khiển hiển thị tất cả
+  const [showAll, setShowAll] = useState(false);
 
   const { theme } = useTheme();
   const navigate = useNavigate();
@@ -70,17 +75,26 @@ function HomePage() {
   const fetchData = async () => {
     setLoading(true);
     try {
-      const [productsRes, categoriesRes] = await Promise.all([
-        apiClient.get('products/?page_size=100'), // Lấy tất cả sản phẩm
-        apiClient.get('categories/?page_size=100').catch(() => ({ data: [] })) // Fallback if categories endpoint doesn't exist
+      const [productsRes, categoriesRes, brandsRes] = await Promise.all([
+        apiClient.get('products/?page_size=100'),
+        apiClient.get('categories/?page_size=100').catch(() => ({ data: [] })),
+        apiClient.get('brands/?page_size=100').catch(() => ({ data: [] }))
       ]);
       
       // Handle pagination format - extract results if present
       const productsData = productsRes.data.results ? productsRes.data.results : productsRes.data;
       const categoriesData = categoriesRes.data.results ? categoriesRes.data.results : categoriesRes.data;
+      const brandsData = brandsRes.data.results ? brandsRes.data.results : brandsRes.data;
       
       setProducts(Array.isArray(productsData) ? productsData : []);
       setCategories(Array.isArray(categoriesData) ? categoriesData : []);
+      setBrands(Array.isArray(brandsData) ? brandsData : []);
+      
+      // Set max price for slider
+      if (Array.isArray(productsData) && productsData.length > 0) {
+        const maxPrice = Math.max(...productsData.map(p => p.discount_price || p.price || 0));
+        setPriceRange([0, maxPrice]);
+      }
     } catch (error) {
       console.error('Error fetching data:', error);
       message.error('Không thể tải dữ liệu sản phẩm');
@@ -113,6 +127,19 @@ function HomePage() {
       );
     }
 
+    // Filter by brands
+    if (selectedBrands.length > 0) {
+      filtered = filtered.filter(product =>
+        product.brand && selectedBrands.includes(product.brand.id)
+      );
+    }
+
+    // Filter by price range
+    filtered = filtered.filter(product => {
+      const price = product.discount_price || product.price || 0;
+      return price >= priceRange[0] && price <= priceRange[1];
+    });
+
     // Sort products - ensure filtered is array before spreading
     if (!Array.isArray(filtered)) {
       filtered = [];
@@ -133,7 +160,19 @@ function HomePage() {
     });
 
     return sorted;
-  }, [products, searchText, selectedCategory, sortBy]);
+  }, [products, searchText, selectedCategory, selectedBrands, priceRange, sortBy]);
+
+  // Reset filters
+  const handleResetFilters = () => {
+    setSearchText('');
+    setSelectedCategory('all');
+    setSelectedBrands([]);
+    setSortBy('newest');
+    if (Array.isArray(products) && products.length > 0) {
+      const maxPrice = Math.max(...products.map(p => p.discount_price || p.price || 0));
+      setPriceRange([0, maxPrice]);
+    }
+  };
 
   if (loading) {
     return (
@@ -198,6 +237,43 @@ function HomePage() {
           to {
             opacity: 1;
           }
+        }
+        
+        @keyframes pulse-glow {
+          0%, 100% {
+            box-shadow: 0 0 20px rgba(102, 126, 234, 0.6), 0 0 40px rgba(118, 75, 162, 0.4);
+            transform: scale(1);
+          }
+          50% {
+            box-shadow: 0 0 30px rgba(102, 126, 234, 0.8), 0 0 60px rgba(118, 75, 162, 0.6);
+            transform: scale(1.05);
+          }
+        }
+        
+        .buy-now-button {
+          animation: pulse-glow 2s ease-in-out infinite;
+        }
+        
+        /* Override Slider colors to keep consistent in both themes */
+        .ant-slider-rail {
+          background-color: #f0f0f0 !important;
+        }
+        
+        .ant-slider-track {
+          background-color: #1890ff !important;
+        }
+        
+        .ant-slider-handle {
+          border-color: #1890ff !important;
+        }
+        
+        .ant-slider-handle:focus {
+          border-color: #40a9ff !important;
+          box-shadow: 0 0 0 5px rgba(24, 144, 255, 0.2) !important;
+        }
+        
+        .ant-slider-dot-active {
+          border-color: #1890ff !important;
         }
       `}</style>
       
@@ -913,15 +989,153 @@ function HomePage() {
         <div id="featured-products" style={{ marginBottom: '60px', scrollMarginTop: '80px' }}>
           <div style={{ textAlign: 'center', marginBottom: '32px' }}>
             <Title level={2} style={{ color: theme.textColor }}>
-              {searchText || selectedCategory !== 'all' ? 'Kết quả tìm kiếm' : 'Sản phẩm nổi bật'}
+              {searchText || selectedCategory !== 'all' || selectedBrands.length > 0 ? 'Kết quả tìm kiếm' : 'Sản phẩm nổi bật'}
             </Title>
             <Text style={{ fontSize: '14px', color: theme.secondaryText }}>
-              {searchText || selectedCategory !== 'all' 
+              {searchText || selectedCategory !== 'all' || selectedBrands.length > 0
                 ? `Tìm thấy ${filteredAndSortedProducts.length} sản phẩm`
                 : 'Những sản phẩm được yêu thích nhất'
               }
             </Text>
           </div>
+
+          {/* Filter Section */}
+          <Card 
+            style={{
+              marginBottom: '32px',
+              background: theme.cardBackground,
+              borderColor: theme.borderColor,
+              boxShadow: theme.mode === 'dark' 
+                ? '0 4px 16px rgba(0,0,0,0.3)' 
+                : '0 4px 16px rgba(0,0,0,0.08)',
+              borderRadius: '12px'
+            }}
+          >
+            <Row gutter={[16, 16]} align="middle">
+              <Col xs={24} sm={24} md={24} lg={24}>
+                <Space direction="vertical" style={{ width: '100%' }} size="middle">
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <FilterOutlined style={{ fontSize: '18px', color: '#1890ff' }} />
+                      <Title level={4} style={{ margin: 0, color: theme.textColor }}>Bộ lọc sản phẩm</Title>
+                    </div>
+                    <Button 
+                      icon={<ClearOutlined />} 
+                      onClick={handleResetFilters}
+                      size="small"
+                    >
+                      Xóa bộ lọc
+                    </Button>
+                  </div>
+                  
+                  <Row gutter={[16, 16]}>
+                    {/* Search */}
+                    <Col xs={24} sm={12} md={6}>
+                      <div>
+                        <Text strong style={{ display: 'block', marginBottom: '8px', color: theme.textColor }}>
+                          Tìm kiếm
+                        </Text>
+                        <Input
+                          placeholder="Tìm sản phẩm..."
+                          prefix={<SearchOutlined />}
+                          value={searchText}
+                          onChange={(e) => setSearchText(e.target.value)}
+                          allowClear
+                        />
+                      </div>
+                    </Col>
+
+                    {/* Category */}
+                    <Col xs={24} sm={12} md={6}>
+                      <div>
+                        <Text strong style={{ display: 'block', marginBottom: '8px', color: theme.textColor }}>
+                          Danh mục
+                        </Text>
+                        <Select
+                          style={{ width: '100%' }}
+                          value={selectedCategory}
+                          onChange={setSelectedCategory}
+                        >
+                          <Option value="all">Tất cả danh mục</Option>
+                          {categories.map(cat => (
+                            <Option key={cat.id} value={cat.id.toString()}>
+                              {cat.name}
+                            </Option>
+                          ))}
+                        </Select>
+                      </div>
+                    </Col>
+
+                    {/* Brand */}
+                    <Col xs={24} sm={12} md={6}>
+                      <div>
+                        <Text strong style={{ display: 'block', marginBottom: '8px', color: theme.textColor }}>
+                          Thương hiệu
+                        </Text>
+                        <Select
+                          mode="multiple"
+                          style={{ width: '100%' }}
+                          placeholder="Chọn thương hiệu"
+                          value={selectedBrands}
+                          onChange={setSelectedBrands}
+                          maxTagCount={1}
+                        >
+                          {brands.map(brand => (
+                            <Option key={brand.id} value={brand.id}>
+                              {brand.name}
+                            </Option>
+                          ))}
+                        </Select>
+                      </div>
+                    </Col>
+
+                    {/* Sort */}
+                    <Col xs={24} sm={12} md={6}>
+                      <div>
+                        <Text strong style={{ display: 'block', marginBottom: '8px', color: theme.textColor }}>
+                          Sắp xếp
+                        </Text>
+                        <Select
+                          style={{ width: '100%' }}
+                          value={sortBy}
+                          onChange={setSortBy}
+                        >
+                          <Option value="newest">Mới nhất</Option>
+                          <Option value="price-low">Giá: Thấp đến cao</Option>
+                          <Option value="price-high">Giá: Cao đến thấp</Option>
+                          <Option value="name">Tên A-Z</Option>
+                        </Select>
+                      </div>
+                    </Col>
+
+                    {/* Price Range */}
+                    <Col xs={24}>
+                      <div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                          <Text strong style={{ color: theme.textColor }}>Khoảng giá</Text>
+                          <Text style={{ color: theme.secondaryText, fontSize: '13px' }}>
+                            {priceRange[0].toLocaleString()}₫ - {priceRange[1].toLocaleString()}₫
+                          </Text>
+                        </div>
+                        <Slider
+                          range
+                          min={0}
+                          max={Math.max(...products.map(p => p.discount_price || p.price || 0), 10000000)}
+                          step={100000}
+                          value={priceRange}
+                          onChange={setPriceRange}
+                          marks={{
+                            0: <span style={{ color: theme.textColor }}>0₫</span>,
+                            [Math.max(...products.map(p => p.discount_price || p.price || 0), 10000000)]: <span style={{ color: theme.textColor }}>{`${(Math.max(...products.map(p => p.discount_price || p.price || 0), 10000000) / 1000000).toFixed(0)}M₫`}</span>
+                          }}
+                        />
+                      </div>
+                    </Col>
+                  </Row>
+                </Space>
+              </Col>
+            </Row>
+          </Card>
           
           <Row gutter={[16, 16]} justify="start">
             {filteredAndSortedProducts.slice(0, showAll ? filteredAndSortedProducts.length : 12).map(prod => (
@@ -1037,6 +1251,12 @@ function HomePage() {
                       icon={<ShoppingCartOutlined />}
                       onClick={() => navigate(`/products/${prod.id}`)}
                       size="small"
+                      className="buy-now-button"
+                      style={{
+                        background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                        border: 'none',
+                        fontWeight: 600
+                      }}
                     >
                       Mua
                     </Button>

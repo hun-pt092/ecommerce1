@@ -57,7 +57,7 @@ const PrivacyPolicyPage = () => {
               <ClockCircleOutlined /> Cập nhật lần cuối: 15/10/2025
             </>
           }
-          description="Chính sách này có hiệu lực từ ngày 01/01/2025 và áp dụng cho tất cả người dùng của Fashion Store."
+          description="Chính sách này có hiệu lực từ ngày 01/01/2025 và áp dụng cho tất cả người dùng của PKA Shop."
           type="info"
           showIcon
           style={{ marginBottom: '30px' }}
@@ -75,7 +75,7 @@ const PrivacyPolicyPage = () => {
           
           <Alert
             message="Cam kết bảo mật"
-            description="Fashion Store chỉ thu thập thông tin cần thiết để phục vụ quá trình mua hàng và cải thiện trải nghiệm khách hàng. Tất cả thông tin được bảo mật theo tiêu chuẩn quốc tế."
+            description="PKA Shop chỉ thu thập thông tin cần thiết để phục vụ quá trình mua hàng và cải thiện trải nghiệm khách hàng. Tất cả thông tin được bảo mật theo tiêu chuẩn quốc tế."
             type="success"
             showIcon
             style={{ marginBottom: '20px' }}
@@ -153,7 +153,7 @@ const PrivacyPolicyPage = () => {
               
               <Alert
                 message="Cam kết bảo mật"
-                description="Fashion Store sử dụng các biện pháp bảo mật tiêu chuẩn để bảo vệ thông tin khách hàng."
+                description="PKA Shop sử dụng các biện pháp bảo mật tiêu chuẩn để bảo vệ thông tin khách hàng."
                 type="success"
                 showIcon
                 style={{ marginBottom: '16px' }}

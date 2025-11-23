@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Card, Row, Col, Statistic, Table, Select, DatePicker, Button, Space } from 'antd';
-import { DollarOutlined, InboxOutlined, WarningOutlined, ShoppingOutlined } from '@ant-design/icons';
+import { Card, Row, Col, Statistic, Table, Select, DatePicker, Button, Space, Input } from 'antd';
+import { DollarOutlined, InboxOutlined, WarningOutlined, ShoppingOutlined, SearchOutlined } from '@ant-design/icons';
 import apiClient from '../../api/apiClient';
 import StockAlertBadge from '../../components/admin/StockAlertBadge';
 
@@ -11,6 +11,7 @@ const InventoryReport = () => {
   const [variants, setVariants] = useState([]);
   const [loading, setLoading] = useState(false);
   const [sortBy, setSortBy] = useState('value_desc');
+  const [searchText, setSearchText] = useState('');
 
   useEffect(() => {
     fetchData();
@@ -67,18 +68,18 @@ const InventoryReport = () => {
   const stats = {
     totalItems: variants.reduce((sum, v) => sum + (v.stock_quantity || 0), 0),
     totalValue: variants.reduce((sum, v) => sum + (v.stock_quantity || 0) * (v.cost_price || 0), 0),
+    // Hết hàng: available = 0
     outOfStock: variants.filter(v => {
-      // available = stock - reserved
       const available = (v.stock_quantity || 0) - (v.reserved_quantity || 0);
       return available === 0;
     }).length,
+    // Sắp hết hàng: available > 0 NHƯNG available <= minimum_stock HOẶC <= reorder_point
     lowStock: variants.filter(v => {
-      // available = stock - reserved
       const available = (v.stock_quantity || 0) - (v.reserved_quantity || 0);
       const minimumStock = v.minimum_stock || 5;
       const reorderPoint = v.reorder_point || 10;
-      // Sắp hết = Hết hàng HOẶC dưới mức tối thiểu HOẶC cần đặt hàng
-      return available === 0 || available <= minimumStock || available <= reorderPoint;
+      // Sắp hết = Còn hàng NHƯNG dưới ngưỡng
+      return available > 0 && (available <= minimumStock || available <= reorderPoint);
     }).length,
   };
 
@@ -94,21 +95,31 @@ const InventoryReport = () => {
   // Products need reorder (including out of stock)
   const needReorder = variants
     .filter(v => {
-      // available = stock - reserved
       const available = (v.stock_quantity || 0) - (v.reserved_quantity || 0);
       const reorderPoint = v.reorder_point || 10;
-      // Cần đặt hàng = Hết hàng HOẶC dưới điểm đặt hàng
       return available <= reorderPoint;
     })
     .sort((a, b) => {
-      // Sắp xếp: Hết hàng trước, sau đó theo số lượng tăng dần
       const availableA = (a.stock_quantity || 0) - (a.reserved_quantity || 0);
       const availableB = (b.stock_quantity || 0) - (b.reserved_quantity || 0);
       if (availableA === 0 && availableB !== 0) return -1;
       if (availableA !== 0 && availableB === 0) return 1;
       return availableA - availableB;
-    })
-    .slice(0, 6); // Chỉ lấy 6 sản phẩm cần đặt hàng nhất
+    });
+
+  // Filtered need reorder by search
+  const filteredNeedReorder = needReorder.filter(v => {
+    if (!searchText) return true;
+    const searchLower = searchText.toLowerCase();
+    const productName = (v.product?.name || v.product_name || '').toLowerCase();
+    const sku = (v.sku || '').toLowerCase();
+    const size = (v.size || '').toLowerCase();
+    const color = (v.color || '').toLowerCase();
+    return productName.includes(searchLower) || 
+           sku.includes(searchLower) || 
+           size.includes(searchLower) || 
+           color.includes(searchLower);
+  });
 
   const columns = [
     {
@@ -213,7 +224,7 @@ const InventoryReport = () => {
         <Col xs={24} sm={12} lg={6}>
           <Card>
             <Statistic
-              title="Sắp hết hàng"
+              title="Cần đặt hàng"
               value={stats.lowStock}
               prefix={<ShoppingOutlined />}
               valueStyle={{ color: '#faad14' }}
@@ -236,13 +247,30 @@ const InventoryReport = () => {
 
       {/* Products need reorder */}
       {needReorder.length > 0 && (
-        <Card title="📦 Sản phẩm cần đặt hàng" style={{ marginBottom: 16 }}>
+        <Card 
+          title={`📦 Sản phẩm cần đặt hàng (${filteredNeedReorder.length})`}
+          style={{ marginBottom: 16 }}
+          extra={
+            <Input
+              placeholder="Tìm kiếm sản phẩm..."
+              prefix={<SearchOutlined />}
+              value={searchText}
+              onChange={(e) => setSearchText(e.target.value)}
+              style={{ width: 250 }}
+              allowClear
+            />
+          }
+        >
           <Table
             columns={columns}
-            dataSource={needReorder}
+            dataSource={filteredNeedReorder}
             loading={loading}
             rowKey="id"
-            pagination={false}
+            pagination={{
+              pageSize: 10,
+              showSizeChanger: true,
+              showTotal: (total) => `Tổng ${total} sản phẩm`,
+            }}
             size="small"
           />
         </Card>

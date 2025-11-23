@@ -103,7 +103,7 @@ const LoginPage = () => {
       >
         <div style={{ textAlign: 'center', marginBottom: '30px' }}>
           <div style={{ marginBottom: '16px' }}>
-            <img src={logoImage} alt="Fashion Store" style={{ height: '50px' }} />
+            <img src={logoImage} alt="PKA Shop" style={{ height: '50px' }} />
           </div>
           <Title level={2} style={{ color: '#06131fff', marginBottom: '8px' }}>
             PKA

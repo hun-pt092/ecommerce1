@@ -203,7 +203,33 @@ const CheckoutPage = () => {
     } catch (error) {
       console.error('Error creating order:', error);
       console.error('Error response:', error.response?.data);
-      message.error('Có lỗi xảy ra khi đặt hàng. Vui lòng thử lại!');
+      
+      // Handle authentication errors
+      if (error.response?.status === 401) {
+        message.error('Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại!');
+        // Redirect to login after a short delay
+        setTimeout(() => {
+          navigate('/login');
+        }, 1500);
+      } else {
+        // Extract detailed error message
+        let errorMessage = 'Có lỗi xảy ra khi đặt hàng. Vui lòng thử lại!';
+        
+        if (error.response?.data) {
+          const errorData = error.response.data;
+          if (errorData.detail) {
+            errorMessage = errorData.detail;
+          } else if (errorData.error) {
+            errorMessage = errorData.error;
+          } else if (errorData.message) {
+            errorMessage = errorData.message;
+          } else if (typeof errorData === 'string') {
+            errorMessage = errorData;
+          }
+        }
+        
+        message.error(errorMessage);
+      }
     } finally {
       setLoading(false);
     }

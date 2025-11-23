@@ -668,7 +668,8 @@ class ApplyCouponSerializer(serializers.Serializer):
     
     def validate_coupon_code(self, value):
         try:
-            coupon = Coupon.objects.get(code=value.upper())
+            # Tìm kiếm không phân biệt hoa thường
+            coupon = Coupon.objects.get(code__iexact=value)
             return coupon
         except Coupon.DoesNotExist:
             raise serializers.ValidationError("Mã giảm giá không tồn tại")

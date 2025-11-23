@@ -22,7 +22,7 @@ const TermsOfServicePage = () => {
     'Sử dụng website một cách hợp pháp và không vi phạm quy định',
     'Không sử dụng website để thực hiện các hành vi bất hợp pháp',
     'Tuân thủ các quy định về thanh toán và nhận hàng',
-    'Thông báo kịp thời cho Fashion Store về mọi vấn đề phát sinh'
+    'Thông báo kịp thời cho PKA Shop về mọi vấn đề phát sinh'
   ];
 
   const prohibitedActivities = [
@@ -30,7 +30,7 @@ const TermsOfServicePage = () => {
     'Sử dụng robot, bot hoặc các công cụ tự động không được phép',
     'Tạo tài khoản giả mạo hoặc cung cấp thông tin sai lệch',
     'Spam, gửi thông tin quảng cáo không mong muốn',
-    'Vi phạm bản quyền, sở hữu trí tuệ của Fashion Store hoặc bên thứ ba',
+    'Vi phạm bản quyền, sở hữu trí tuệ của PKA Shop hoặc bên thứ ba',
     'Sử dụng website cho mục đích thương mại mà không được phép'
   ];
 
@@ -43,7 +43,7 @@ const TermsOfServicePage = () => {
               <FileTextOutlined /> Điều khoản sử dụng
             </Title>
             <Paragraph style={{ fontSize: '18px', color: 'rgba(255,255,255,0.9)', maxWidth: '800px', margin: '0 auto' }}>
-              Vui lòng đọc kỹ các điều khoản và điều kiện sử dụng dịch vụ của Fashion Store. 
+              Vui lòng đọc kỹ các điều khoản và điều kiện sử dụng dịch vụ của PKA Shop. 
               Việc sử dụng website đồng nghĩa với việc bạn đồng ý với các điều khoản này.
             </Paragraph>
           </div>
@@ -71,23 +71,23 @@ const TermsOfServicePage = () => {
           <Collapse defaultActiveKey={['1']} ghost>
             <Panel header="📋 Định nghĩa và giải thích" key="1">
               <ul>
-                <li><Text strong>"Fashion Store"</Text> là trang thương mại điện tử được vận hành bởi Công ty Fashion Store</li>
+                <li><Text strong>"PKA Shop"</Text> là trang thương mại điện tử được vận hành bởi Công ty PKA Shop</li>
                 <li><Text strong>"Người dùng"/"Khách hàng"</Text> là cá nhân hoặc tổ chức sử dụng dịch vụ của chúng tôi</li>
                 <li><Text strong>"Dịch vụ"</Text> bao gồm website, ứng dụng mobile và các dịch vụ liên quan</li>
                 <li><Text strong>"Sản phẩm"</Text> là các mặt hàng thời trang được bán trên website</li>
-                <li><Text strong>"Đơn hàng"</Text> là yêu cầu mua hàng được khách hàng gửi đến Fashion Store</li>
+                <li><Text strong>"Đơn hàng"</Text> là yêu cầu mua hàng được khách hàng gửi đến PKA Shop</li>
               </ul>
             </Panel>
             
             <Panel header="✅ Chấp nhận điều khoản" key="2">
               <Paragraph>
-                Bằng việc truy cập và sử dụng website Fashion Store, bạn xác nhận rằng:
+                Bằng việc truy cập và sử dụng website PKA Shop, bạn xác nhận rằng:
               </Paragraph>
               <ul>
                 <li>Bạn đã đọc, hiểu và đồng ý tuân thủ các điều khoản này</li>
                 <li>Bạn có đủ năng lực hành vi dân sự theo pháp luật Việt Nam</li>
                 <li>Bạn cam kết sử dụng dịch vụ một cách hợp pháp và có trách nhiệm</li>
-                <li>Bạn đồng ý nhận thông báo từ Fashion Store qua email hoặc SMS</li>
+                <li>Bạn đồng ý nhận thông báo từ PKA Shop qua email hoặc SMS</li>
               </ul>
             </Panel>
           </Collapse>
@@ -190,7 +190,7 @@ const TermsOfServicePage = () => {
           
           <Alert
             message="Hậu quả vi phạm"
-            description="Việc vi phạm các quy định trên có thể dẫn đến việc tạm khóa hoặc xóa vĩnh viễn tài khoản, đồng thời Fashion Store có quyền khởi kiện pháp lý nếu cần thiết."
+            description="Việc vi phạm các quy định trên có thể dẫn đến việc tạm khóa hoặc xóa vĩnh viễn tài khoản, đồng thời PKA Shop có quyền khởi kiện pháp lý nếu cần thiết."
             type="error"
             showIcon
             style={{ marginTop: '16px' }}
@@ -205,7 +205,7 @@ const TermsOfServicePage = () => {
           
           <Row gutter={[24, 24]}>
             <Col xs={24} md={12}>
-              <Title level={4} style={{ color: '#1890ff' }}>Quyền sở hữu của Fashion Store:</Title>
+              <Title level={4} style={{ color: '#1890ff' }}>Quyền sở hữu của PKA Shop:</Title>
               <ul>
                 <li>Logo, tên thương hiệu và nhận diện thương hiệu</li>
                 <li>Thiết kế, giao diện và trải nghiệm người dùng</li>
@@ -226,7 +226,7 @@ const TermsOfServicePage = () => {
               
               <Alert
                 message="Lưu ý"
-                description="Không được sao chép, phân phối hoặc sử dụng nội dung của Fashion Store cho mục đích thương mại mà không có sự đồng ý bằng văn bản."
+                description="Không được sao chép, phân phối hoặc sử dụng nội dung của PKA Shop cho mục đích thương mại mà không có sự đồng ý bằng văn bản."
                 type="warning"
                 showIcon
               />
@@ -241,7 +241,7 @@ const TermsOfServicePage = () => {
           </Title>
           
           <Collapse ghost>
-            <Panel header="⚠️ Trách nhiệm của Fashion Store" key="1">
+            <Panel header="⚠️ Trách nhiệm của PKA Shop" key="1">
               <Paragraph><Text strong>Chúng tôi cam kết:</Text></Paragraph>
               <ul>
                 <li>Cung cấp sản phẩm chất lượng như mô tả</li>
@@ -261,7 +261,7 @@ const TermsOfServicePage = () => {
             
             <Panel header="🔧 Thay đổi dịch vụ" key="2">
               <Paragraph>
-                Fashion Store có quyền thay đổi, tạm ngưng hoặc chấm dứt dịch vụ 
+                PKA Shop có quyền thay đổi, tạm ngưng hoặc chấm dứt dịch vụ 
                 với thông báo trước hợp lý. Chúng tôi sẽ cố gắng giảm thiểu 
                 tác động đến khách hàng.
               </Paragraph>

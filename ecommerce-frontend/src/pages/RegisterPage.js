@@ -110,7 +110,7 @@ const RegisterPage = () => {
       >
         <div style={{ textAlign: 'center', marginBottom: '30px' }}>
           <div style={{ marginBottom: '16px' }}>
-            <img src={logoImage} alt="Fashion Store" style={{ height: '50px' }} />
+            <img src={logoImage} alt="PKA Shop" style={{ height: '50px' }} />
           </div>
           <Title level={2} style={{ color: '#06131fff', marginBottom: '8px' }}>
             PKA
@@ -308,7 +308,7 @@ const RegisterPage = () => {
           
           <Typography.Paragraph>
             <Typography.Text strong>1. Chấp nhận điều khoản:</Typography.Text><br />
-            Khi sử dụng Fashion Store, bạn đồng ý tuân thủ tất cả các điều khoản và điều kiện được nêu trong tài liệu này.
+            Khi sử dụng PKA Shop, bạn đồng ý tuân thủ tất cả các điều khoản và điều kiện được nêu trong tài liệu này.
           </Typography.Paragraph>
 
           <Typography.Paragraph>
@@ -322,7 +322,7 @@ const RegisterPage = () => {
             <Typography.Text strong>3. Quyền và nghĩa vụ:</Typography.Text><br />
             • Cung cấp thông tin chính xác khi đăng ký<br />
             • Không sử dụng dịch vụ cho mục đích bất hợp pháp<br />
-            • Tôn trọng quyền sở hữu trí tuệ của Fashion Store
+            • Tôn trọng quyền sở hữu trí tuệ của PKA Shop
           </Typography.Paragraph>
 
           <Typography.Title level={4} style={{ color: '#52c41a', marginTop: '20px' }}>
@@ -366,7 +366,7 @@ const RegisterPage = () => {
             marginTop: '20px'
           }}>
             <Typography.Text type="secondary">
-              Điều khoản này có hiệu lực từ ngày 01/01/2025. Fashion Store có quyền cập nhật 
+              Điều khoản này có hiệu lực từ ngày 01/01/2025. PKA Shop có quyền cập nhật 
               điều khoản này và sẽ thông báo trước cho người dùng.
             </Typography.Text>
           </Typography.Paragraph>

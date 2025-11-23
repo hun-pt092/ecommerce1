@@ -914,11 +914,11 @@ class AdminDashboardStatsView(APIView):
             'monthly_orders': Order.objects.filter(
                 created_at__gte=start_of_month,
                 payment_status='paid'  # Chỉ đếm đơn đã thanh toán (khớp với Analytics)
-            ).count(),
+            ).exclude(status='cancelled').count(),  # Loại trừ đơn đã hủy
             'monthly_revenue': Order.objects.filter(
                 created_at__gte=start_of_month,
                 payment_status='paid'  # Đổi từ 'completed' sang 'paid' để khớp với Analytics API
-            ).aggregate(
+            ).exclude(status='cancelled').aggregate(  # Loại trừ đơn đã hủy
                 total=Sum('total_price')
             )['total'] or 0,
             
@@ -1933,12 +1933,14 @@ class RevenueAnalyticsView(APIView):
         else:  # month (default)
             start_date = now.replace(day=1, hour=0, minute=0, second=0)
         
-        # Lấy đơn hàng đã thanh toán
+        # Lấy đơn hàng đã thanh toán VÀ CHƯA BỊ HỦY
+        # Logic: Chỉ tính đơn đã thanh toán (paid) và không bị hủy (cancelled)
+        # Vì nếu hủy đơn đã thanh toán thì phải hoàn tiền, không tính vào doanh thu
         completed_orders = Order.objects.filter(
             created_at__gte=start_date,
             created_at__lte=now,
             payment_status='paid'
-        )
+        ).exclude(status='cancelled')
         
         # TÍNH TOÁN METRICS
         # 1. Doanh thu thực tế (đã trừ voucher)
@@ -1974,7 +1976,7 @@ class RevenueAnalyticsView(APIView):
             created_at__gte=previous_start,
             created_at__lt=previous_end,
             payment_status='paid'
-        ).aggregate(total=Sum('total_price'))['total'] or 0
+        ).exclude(status='cancelled').aggregate(total=Sum('total_price'))['total'] or 0
         
         revenue_growth = 0
         if previous_revenue > 0:
@@ -2015,11 +2017,11 @@ class RevenueTimelineView(APIView):
         now = timezone.now()
         start_date = now - timedelta(days=days)
         
-        # Lấy doanh thu theo ngày
+        # Lấy doanh thu theo ngày (chỉ đơn đã thanh toán và chưa hủy)
         daily_revenue = Order.objects.filter(
             created_at__gte=start_date,
             payment_status='paid'
-        ).annotate(
+        ).exclude(status='cancelled').annotate(
             date=TruncDate('created_at')
         ).values('date').annotate(
             revenue=Sum('total_price'),
@@ -2082,12 +2084,14 @@ class TopCustomersView(APIView):
         limit = int(request.query_params.get('limit', 20))
         sort_by = request.query_params.get('sort', 'spent')
         
-        # Lấy tất cả khách hàng có đơn hàng
+        # Lấy tất cả khách hàng có đơn hàng (đã thanh toán và chưa bị hủy)
         customers = User.objects.filter(
             orders__payment_status='paid'
+        ).exclude(
+            orders__status='cancelled'
         ).annotate(
-            total_spent=Sum('orders__total_price'),
-            total_orders=Count('orders', filter=Q(orders__payment_status='paid'))
+            total_spent=Sum('orders__total_price', filter=Q(orders__payment_status='paid') & ~Q(orders__status='cancelled')),
+            total_orders=Count('orders', filter=Q(orders__payment_status='paid') & ~Q(orders__status='cancelled'))
         ).filter(
             total_orders__gt=0
         )
@@ -2213,9 +2217,11 @@ class BestSellingProductsView(APIView):
         
         limit = int(request.query_params.get('limit', 20))
         
-        # Lấy sản phẩm bán chạy
+        # Lấy sản phẩm bán chạy (chỉ tính đơn đã thanh toán và chưa hủy)
         best_sellers = OrderItem.objects.filter(
             order__payment_status='paid'
+        ).exclude(
+            order__status='cancelled'
         ).values(
             'product_variant__product__id',
             'product_variant__product__name',
@@ -2255,9 +2261,11 @@ class CategoryRevenueView(APIView):
     def get(self, request):
         from django.db.models import Sum, Count, F
         
-        # Doanh thu theo category
+        # Doanh thu theo category (chỉ tính đơn đã thanh toán và chưa hủy)
         category_revenue = OrderItem.objects.filter(
             order__payment_status='paid'
+        ).exclude(
+            order__status='cancelled'
         ).values(
             'product_variant__product__category__id',
             'product_variant__product__category__name'

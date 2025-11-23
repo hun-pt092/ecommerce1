@@ -65,8 +65,11 @@ const PaymentForm = ({ cartData, shippingAddress, onSubmit, onPrevious, loading 
   }, []);
 
   // Apply coupon
-  const applyCoupon = async (code) => {
-    console.log('applyCoupon called with code:', code);
+  const applyCoupon = async (coupon) => {
+    console.log('applyCoupon called with coupon object:', coupon);
+    // Extract the actual code from coupon object
+    const code = coupon.coupon_code || coupon.code;
+    console.log('Using code:', code);
     setCouponLoading(true);
     try {
       const subTotal = calculateSubTotal();
@@ -89,7 +92,29 @@ const PaymentForm = ({ cartData, shippingAddress, onSubmit, onPrevious, loading 
       setShowCouponModal(false);
     } catch (error) {
       console.error('Error applying coupon:', error);
-      const errorMsg = error.response?.data?.error || 'Không thể áp dụng mã giảm giá';
+      
+      // Extract detailed error messages from backend
+      let errorMsg = 'Không thể áp dụng mã giảm giá';
+      
+      if (error.response?.data) {
+        const errorData = error.response.data;
+        
+        // Check for specific field errors
+        if (errorData.coupon_code) {
+          errorMsg = Array.isArray(errorData.coupon_code) 
+            ? errorData.coupon_code[0] 
+            : errorData.coupon_code;
+        } else if (errorData.order_amount) {
+          errorMsg = Array.isArray(errorData.order_amount) 
+            ? errorData.order_amount[0] 
+            : errorData.order_amount;
+        } else if (errorData.error) {
+          errorMsg = errorData.error;
+        } else if (typeof errorData === 'string') {
+          errorMsg = errorData;
+        }
+      }
+      
       antdMessage.error(errorMsg);
     } finally {
       setCouponLoading(false);
@@ -322,7 +347,7 @@ const PaymentForm = ({ cartData, shippingAddress, onSubmit, onPrevious, loading 
             </div>
             <div style={{ marginBottom: '8px' }}>
               <Text strong>Chủ tài khoản: </Text>
-              <Text>FASHION STORE COMPANY</Text>
+              <Text>PKA Shop COMPANY</Text>
             </div>
             <div style={{ marginBottom: '12px' }}>
               <Text strong>Nội dung chuyển khoản: </Text>
@@ -650,28 +675,28 @@ const PaymentForm = ({ cartData, shippingAddress, onSubmit, onPrevious, loading 
                 e.currentTarget.style.borderColor = '#d9d9d9';
                 e.currentTarget.style.boxShadow = 'none';
               }}
-              onClick={() => applyCoupon(coupon.coupon_code)}
+              onClick={() => applyCoupon(coupon)}
             >
               <div style={{ width: '100%' }}>
                 <Row justify="space-between" align="middle">
                   <Col span={16}>
                     <Space direction="vertical" size={4}>
                       <Text strong style={{ fontSize: '16px', color: '#1890ff' }}>
-                        {coupon.coupon_name}
+                        {coupon.coupon_name || coupon.name}
                       </Text>
-                      <Tag color="blue">{coupon.coupon_code}</Tag>
+                      <Tag color="blue">{coupon.coupon_code || coupon.code}</Tag>
                       <Text type="secondary" style={{ fontSize: '13px' }}>
-                        {coupon.coupon_type === 'percentage' 
-                          ? `Giảm ${coupon.coupon_discount_value}%`
-                          : `Giảm ${Number(coupon.coupon_discount_value || 0).toLocaleString()}₫`
+                        {(coupon.coupon_type || coupon.type) === 'percentage' 
+                          ? `Giảm ${coupon.discount_value || coupon.coupon_discount_value}%`
+                          : `Giảm ${Number(coupon.discount_value || coupon.coupon_discount_value || 0).toLocaleString()}₫`
                         }
-                        {coupon.coupon_max_discount_amount && 
-                          ` (tối đa ${Number(coupon.coupon_max_discount_amount).toLocaleString()}₫)`
+                        {(coupon.max_discount_amount || coupon.coupon_max_discount_amount) && 
+                          ` (tối đa ${Number(coupon.max_discount_amount || coupon.coupon_max_discount_amount).toLocaleString()}₫)`
                         }
                       </Text>
-                      {coupon.coupon_min_purchase_amount > 0 && (
+                      {(coupon.min_purchase_amount || coupon.coupon_min_purchase_amount || 0) > 0 && (
                         <Text type="secondary" style={{ fontSize: '12px' }}>
-                          Đơn tối thiểu: {Number(coupon.coupon_min_purchase_amount).toLocaleString()}₫
+                          Đơn tối thiểu: {Number(coupon.min_purchase_amount || coupon.coupon_min_purchase_amount).toLocaleString()}₫
                         </Text>
                       )}
                       <Text type="secondary" style={{ fontSize: '12px' }}>
@@ -685,7 +710,7 @@ const PaymentForm = ({ cartData, shippingAddress, onSubmit, onPrevious, loading 
                       loading={couponLoading}
                       onClick={(e) => {
                         e.stopPropagation();
-                        applyCoupon(coupon.coupon_code);
+                        applyCoupon(coupon);
                       }}
                     >
                       Áp dụng

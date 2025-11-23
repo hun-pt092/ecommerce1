@@ -1,5 +1,6 @@
 // src/pages/AnalyticsDashboardPage.js
 import React, { useState, useEffect } from 'react';
+import { Tabs } from 'antd';
 import { 
   getRevenueAnalytics, 
   getRevenueTimeline, 
@@ -15,6 +16,8 @@ import TopCustomersCard from '../components/analytics/TopCustomersCard';
 import TopProductsTable from '../components/analytics/TopProductsTable';
 import './AnalyticsDashboardPage.css';
 
+const { TabPane } = Tabs;
+
 const AnalyticsDashboardPage = () => {
   const [loading, setLoading] = useState(true);
   const [period, setPeriod] = useState('month');
@@ -25,6 +28,7 @@ const AnalyticsDashboardPage = () => {
   const [customersData, setCustomersData] = useState(null);
   const [productsData, setProductsData] = useState(null);
   const [categoriesData, setCategoriesData] = useState(null);
+  const [monthlyComparisonData, setMonthlyComparisonData] = useState(null);
 
   useEffect(() => {
     fetchAllData();
@@ -33,12 +37,14 @@ const AnalyticsDashboardPage = () => {
   const fetchAllData = async () => {
     setLoading(true);
     try {
-      const [revenue, timeline, customers, products, categories] = await Promise.all([
+      const [revenue, timeline, customers, products, categories, currentMonth, lastMonth] = await Promise.all([
         getRevenueAnalytics(period),
         getRevenueTimeline(timelineDays),
         getTopCustomers(10, 'spent'),
         getBestSellingProducts(10),
-        getCategoryRevenue()
+        getCategoryRevenue(),
+        getRevenueAnalytics('month'),
+        getRevenueAnalytics('month') // We'll calculate last month differently
       ]);
 
       setRevenueData(revenue);
@@ -46,6 +52,24 @@ const AnalyticsDashboardPage = () => {
       setCustomersData(customers);
       setProductsData(products);
       setCategoriesData(categories);
+      
+      // Create monthly comparison data
+      const comparisonData = {
+        labels: ['Tháng trước', 'Tháng này'],
+        datasets: [
+          {
+            label: 'Doanh thu',
+            data: [
+              currentMonth.summary.previous_period_revenue || 0,
+              currentMonth.summary.total_revenue || 0
+            ],
+            backgroundColor: ['rgba(255, 159, 64, 0.6)', 'rgba(102, 126, 234, 0.6)'],
+            borderColor: ['rgba(255, 159, 64, 1)', 'rgba(102, 126, 234, 1)'],
+            borderWidth: 2
+          }
+        ]
+      };
+      setMonthlyComparisonData(comparisonData);
     } catch (error) {
       console.error('Error fetching analytics data:', error);
       alert('Không thể tải dữ liệu analytics. Vui lòng thử lại!');
@@ -182,32 +206,70 @@ const AnalyticsDashboardPage = () => {
         </div>
       </div>
 
-      {/* Revenue Timeline Chart */}
-      <div className="analytics-section">
-        <div className="section-header">
-          <h2>📈 Doanh thu theo thời gian</h2>
-          <div className="section-controls">
-            <select 
-              value={timelineDays} 
-              onChange={(e) => setTimelineDays(Number(e.target.value))}
-              className="period-select"
-            >
-              <option value={7}>7 ngày</option>
-              <option value={30}>30 ngày</option>
-              <option value={60}>60 ngày</option>
-              <option value={90}>90 ngày</option>
-            </select>
+      {/* Tabs for organized sections */}
+      <Tabs defaultActiveKey="1" style={{ marginTop: '20px' }}>
+        {/* Tab 1: Revenue Overview */}
+        <TabPane tab="Tổng quan doanh thu" key="1">
+          {/* Revenue Timeline Chart */}
+          <div className="analytics-section">
+            <div className="section-header">
+              <h2>📈 Doanh thu theo thời gian</h2>
+              <div className="section-controls">
+                <select 
+                  value={timelineDays} 
+                  onChange={(e) => setTimelineDays(Number(e.target.value))}
+                  className="period-select"
+                >
+                  <option value={7}>7 ngày</option>
+                  <option value={30}>30 ngày</option>
+                  <option value={60}>60 ngày</option>
+                  <option value={90}>90 ngày</option>
+                </select>
+              </div>
+            </div>
+            <div className="chart-container">
+              <RevenueChart data={timelineData} type="area" />
+            </div>
           </div>
-        </div>
-        <div className="chart-container">
-          <RevenueChart data={timelineData} type="area" />
-        </div>
-      </div>
 
-      {/* Two Column Layout */}
-      <div className="analytics-grid">
-        {/* Left Column */}
-        <div className="analytics-column">
+          {/* Monthly Comparison Chart */}
+          <div className="analytics-section">
+            <div className="section-header">
+              <h2> So sánh doanh thu: Tháng này vs Tháng trước</h2>
+            </div>
+            <div className="chart-container" style={{ maxWidth: '600px', margin: '0 auto' }}>
+              {monthlyComparisonData && (
+                <RevenueChart data={monthlyComparisonData} type="bar" />
+              )}
+            </div>
+          </div>
+        </TabPane>
+
+        {/* Tab 2: Products */}
+        <TabPane tab="🔥 Sản phẩm" key="2">
+          {/* Best Selling Products */}
+          <div className="analytics-section">
+            <div className="section-header">
+              <h2>🔥 Top Sản Phẩm Bán Chạy</h2>
+            </div>
+            <div className="section-content">
+              <TopProductsTable data={productsData} />
+            </div>
+          </div>
+
+          {/* Category Revenue */}
+          <div className="analytics-section">
+            <div className="section-header">
+              <h2>🏷️ Doanh thu theo danh mục</h2>
+            </div>
+            <div className="section-content" style={{ maxWidth: '600px', margin: '0 auto' }}>
+              <CategoryPieChart data={categoriesData} />
+            </div>
+          </div>
+        </TabPane>
+
+        {/* Tab 3: Customers */}
+        <TabPane tab="💎 Khách hàng" key="3">
           {/* Top Customers */}
           <div className="analytics-section">
             <div className="section-header">
@@ -217,31 +279,8 @@ const AnalyticsDashboardPage = () => {
               <TopCustomersCard data={customersData} />
             </div>
           </div>
-        </div>
-
-        {/* Right Column */}
-        <div className="analytics-column">
-          {/* Category Revenue */}
-          <div className="analytics-section">
-            <div className="section-header">
-              <h2>🏷️ Doanh thu theo danh mục</h2>
-            </div>
-            <div className="section-content">
-              <CategoryPieChart data={categoriesData} />
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Best Selling Products */}
-      <div className="analytics-section">
-        <div className="section-header">
-          <h2>🔥 Top Sản Phẩm Bán Chạy</h2>
-        </div>
-        <div className="section-content">
-          <TopProductsTable data={productsData} />
-        </div>
-      </div>
+        </TabPane>
+      </Tabs>
 
       {/* Period Selector at Bottom */}
       <div className="period-selector">
