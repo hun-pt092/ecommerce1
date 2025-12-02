@@ -291,7 +291,7 @@ for c in coupons:
 
 ---
 
-## 🎉 Kết luận
+##  Kết luận
 
 Tính năng mã giảm giá sinh nhật đã hoàn thành! 
 
@@ -309,4 +309,3 @@ Tính năng mã giảm giá sinh nhật đã hoàn thành!
 0 6 * * * cd /path/to/project && python manage.py notify_birthday_coupons
 ```
 
-**Chúc mừng! 🎂🎉🎁**

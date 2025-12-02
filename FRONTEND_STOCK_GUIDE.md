@@ -458,4 +458,3 @@ Nếu gặp vấn đề, check:
 
 ---
 
-**Chúc bạn quản lý kho thành công! 🎉**

@@ -144,4 +144,4 @@ GET /api/shop/admin/stock/variants/1/history/
 
 ---
 
-**Ghi chú:** File `views_stock_addition.py` chỉ là temporary file để chứa code. Bạn cần copy nội dung vào `views.py` và xóa file này đi.
+**Ghi chú:** File `views_stock_addition.py` chỉ là temporary file để chứa code. Cần copy nội dung vào `views.py` và xóa file này đi.

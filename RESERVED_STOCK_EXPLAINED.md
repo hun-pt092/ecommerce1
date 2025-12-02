@@ -400,5 +400,3 @@ useEffect(() => {
 🤖 **Giữ hệ thống hoạt động tốt**
 
 ---
-
-Bạn có muốn tôi tạo **Management Command** để chạy cleanup_reservations ngay không? 🚀
