@@ -78,12 +78,13 @@ const ProductList = () => {
       key: 'price',
       render: (_, record) => (
         <div>
-          <div style={{ fontWeight: 500 }}>
-            {parseInt(record.price).toLocaleString('vi-VN')}đ
-          </div>
-          {record.discount_price && (
-            <div style={{ fontSize: 12, color: '#ff4d4f', textDecoration: 'line-through' }}>
-              {parseInt(record.discount_price).toLocaleString('vi-VN')}đ
+          {record.price_range ? (
+            <div style={{ fontWeight: 500 }}>
+              {record.price_range}
+            </div>
+          ) : (
+            <div style={{ fontWeight: 500 }}>
+              {record.price ? parseInt(record.price).toLocaleString('vi-VN') + 'đ' : 'Chưa có giá'}
             </div>
           )}
         </div>
@@ -148,8 +149,8 @@ const ProductList = () => {
       // Process data để thêm main_image
       const processedData = Array.isArray(productsData) ? productsData.map(product => ({
         ...product,
-        main_image: product.images?.find(img => img.is_main)?.image || 
-                   product.images?.[0]?.image || null
+        main_image: product.display_image || 
+                   (product.variants && product.variants.length > 0 ? product.variants[0].image : null)
       })) : [];
       
       setProducts(processedData);

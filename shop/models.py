@@ -6,11 +6,7 @@ import uuid
 import os
 
 
-def product_image_path(instance, filename):
-    """Tạo đường dẫn upload ảnh sản phẩm"""
-    ext = filename.split('.')[-1]
-    filename = f'{uuid.uuid4().hex}.{ext}'
-    return os.path.join('products', str(instance.product.id), filename)
+
 
 
 # Custom User model để dễ mở rộng (thêm is_admin,...)
@@ -48,8 +44,6 @@ class Product(models.Model):
     category = models.ForeignKey(Category, on_delete=models.CASCADE, related_name='products')
     brand = models.ForeignKey(Brand, on_delete=models.SET_NULL, null=True, blank=True, related_name='products')
     material = models.CharField(max_length=100, blank=True)  # Chất liệu
-    price = models.DecimalField(max_digits=10, decimal_places=2)
-    discount_price = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
     
     # Trạng thái sản phẩm
     is_active = models.BooleanField(default=True)  # Hiển thị hay không
@@ -68,47 +62,53 @@ class Product(models.Model):
             self.sku = f"PRD-{uuid.uuid4().hex[:8].upper()}"
         super().save(*args, **kwargs)
     
-    def get_main_image(self):
-        """Lấy ảnh chính của sản phẩm"""
-        main_image = self.images.filter(is_main=True).first()
-        return main_image.image.url if main_image else None
+    def get_price(self):
+        """Lấy giá từ variant đầu tiên"""
+        first_variant = self.variants.first()
+        return first_variant.price if first_variant else 0
     
-    def get_all_images(self):
-        """Lấy tất cả ảnh của sản phẩm theo thứ tự"""
-        return self.images.all().order_by('order', 'id')
+    def get_display_image(self):
+        """Lấy ảnh từ variant đầu tiên"""
+        first_variant = self.variants.first()
+        if first_variant and first_variant.image:
+            return first_variant.image.url
+        return None
+    
+    def get_price_range(self):
+        """Lấy khoảng giá của tất cả variants dạng string"""
+        prices = self.variants.values_list('price', flat=True)
+        if prices:
+            min_price = min(prices)
+            max_price = max(prices)
+            if min_price == max_price:
+                return f"{int(min_price):,}₫"
+            return f"{int(min_price):,}₫ - {int(max_price):,}₫"
+        return "0₫"
 
     class Meta:
         ordering = ['-created_at']
 
-class ProductImage(models.Model):
-    product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name='images')
-    image = models.ImageField(upload_to=product_image_path)
-    alt_text = models.CharField(max_length=200, blank=True)  # Mô tả ảnh cho SEO
-    is_main = models.BooleanField(default=False)  # Ảnh chính
-    order = models.PositiveIntegerField(default=0)  # Thứ tự hiển thị
-    created_at = models.DateTimeField(auto_now_add=True)
-    
-    def __str__(self):
-        status = "Main" if self.is_main else "Additional"
-        return f"{self.product.name} - {status} Image #{self.order}"
-    
-    def save(self, *args, **kwargs):
-        # Nếu đây là ảnh chính, bỏ đánh dấu ảnh chính cũ
-        if self.is_main:
-            ProductImage.objects.filter(
-                product=self.product, 
-                is_main=True
-            ).exclude(id=self.id).update(is_main=False)
-        super().save(*args, **kwargs)
-    
-    class Meta:
-        ordering = ['order', 'id']
+
+
+def variant_image_path(instance, filename):
+    """Tạo đường dẫn upload ảnh variant (theo màu)"""
+    ext = filename.split('.')[-1]
+    filename = f'{uuid.uuid4().hex}.{ext}'
+    return os.path.join('products', str(instance.product.id), 'variants', filename)
+
 
 class ProductVariant(models.Model):
     product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name='variants')
-    sku = models.CharField(max_length=50, blank=True, null=True, db_index=True)  # SKU riêng cho variant (không unique để tránh lỗi migration)
+    sku = models.CharField(max_length=50, blank=True, null=True, db_index=True)  # SKU riêng cho variant
+    
+    # Thuộc tính cơ bản
     size = models.CharField(max_length=10)
     color = models.CharField(max_length=30)
+    
+    # Ảnh và giá cho từng variant
+    image = models.ImageField(upload_to=variant_image_path, blank=True, null=True, verbose_name='Ảnh variant')
+    price = models.DecimalField(max_digits=10, decimal_places=2, verbose_name='Giá bán')
+    discount_price = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True, verbose_name='Giá khuyến mãi')
     
     # --- STOCK MANAGEMENT ---
     stock_quantity = models.PositiveIntegerField(default=0)  # Tồn kho thực tế
@@ -149,6 +149,10 @@ class ProductVariant(models.Model):
     def need_reorder(self):
         """Cần đặt hàng thêm"""
         return self.available_quantity <= self.reorder_point
+    
+    def get_final_price(self):
+        """Lấy giá cuối cùng (ưu tiên discount_price)"""
+        return self.discount_price if self.discount_price else self.price
     
     class Meta:
         unique_together = ['product', 'size', 'color']
@@ -515,4 +519,74 @@ class UserCoupon(models.Model):
         ordering = ['-assigned_at']
         verbose_name = 'Voucher của khách'
         verbose_name_plural = 'Voucher của khách'
+
+
+class ProductVoucher(models.Model):
+    """Voucher riêng cho sản phẩm"""
+    product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name='vouchers')
+    code = models.CharField(max_length=50, unique=True, verbose_name='Mã voucher')
+    name = models.CharField(max_length=200, verbose_name='Tên voucher')
+    description = models.TextField(blank=True, verbose_name='Mô tả')
+    
+    # Loại giảm giá
+    DISCOUNT_TYPE_CHOICES = [
+        ('percentage', 'Phần trăm'),
+        ('fixed', 'Số tiền cố định'),
+    ]
+    discount_type = models.CharField(max_length=20, choices=DISCOUNT_TYPE_CHOICES, default='percentage')
+    discount_value = models.DecimalField(max_digits=10, decimal_places=2, verbose_name='Giá trị giảm')
+    max_discount_amount = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True, 
+                                              verbose_name='Giảm tối đa (cho phần trăm)')
+    
+    # Số lượng
+    max_uses = models.PositiveIntegerField(null=True, blank=True, verbose_name='Số lần sử dụng tối đa')
+    current_uses = models.PositiveIntegerField(default=0, verbose_name='Đã sử dụng')
+    
+    # Thời gian
+    valid_from = models.DateTimeField(verbose_name='Có hiệu lực từ')
+    valid_to = models.DateTimeField(verbose_name='Có hiệu lực đến')
+    
+    # Trạng thái
+    is_active = models.BooleanField(default=True, verbose_name='Kích hoạt')
+    
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    def __str__(self):
+        return f"{self.product.name} - {self.code}"
+    
+    def is_valid(self):
+        """Kiểm tra voucher còn hiệu lực không"""
+        now = timezone.now()
+        
+        if not self.is_active:
+            return False, "Voucher không còn hoạt động"
+        
+        if now < self.valid_from:
+            return False, "Voucher chưa có hiệu lực"
+        
+        if now > self.valid_to:
+            return False, "Voucher đã hết hạn"
+        
+        if self.max_uses and self.current_uses >= self.max_uses:
+            return False, "Voucher đã hết lượt sử dụng"
+        
+        return True, "Voucher hợp lệ"
+    
+    def calculate_discount(self, price):
+        """Tính số tiền giảm cho sản phẩm"""
+        if self.discount_type == 'percentage':
+            discount = price * (self.discount_value / 100)
+            if self.max_discount_amount:
+                discount = min(discount, self.max_discount_amount)
+            return discount
+        elif self.discount_type == 'fixed':
+            return min(self.discount_value, price)
+        return 0
+    
+    class Meta:
+        ordering = ['-created_at']
+        verbose_name = 'Voucher sản phẩm'
+        verbose_name_plural = 'Voucher sản phẩm'
+
 

@@ -92,7 +92,7 @@ function HomePage() {
       
       // Set max price for slider
       if (Array.isArray(productsData) && productsData.length > 0) {
-        const maxPrice = Math.max(...productsData.map(p => p.discount_price || p.price || 0));
+        const maxPrice = Math.max(...productsData.map(p => p.price || 0));
         setPriceRange([0, maxPrice]);
       }
     } catch (error) {
@@ -134,9 +134,9 @@ function HomePage() {
       );
     }
 
-    // Filter by price range
+    // Filter by price range - use price from API (backend returns variant price)
     filtered = filtered.filter(product => {
-      const price = product.discount_price || product.price || 0;
+      const price = product.price || 0; // Backend's get_price() returns first variant's price
       return price >= priceRange[0] && price <= priceRange[1];
     });
 
@@ -148,9 +148,9 @@ function HomePage() {
     const sorted = [...filtered].sort((a, b) => {
       switch (sortBy) {
         case 'price-low':
-          return (a.discount_price || a.price) - (b.discount_price || b.price);
+          return (a.price || 0) - (b.price || 0); // Backend returns variant price
         case 'price-high':
-          return (b.discount_price || b.price) - (a.discount_price || a.price);
+          return (b.price || 0) - (a.price || 0); // Backend returns variant price
         case 'name':
           return a.name.localeCompare(b.name);
         case 'newest':
@@ -169,7 +169,7 @@ function HomePage() {
     setSelectedBrands([]);
     setSortBy('newest');
     if (Array.isArray(products) && products.length > 0) {
-      const maxPrice = Math.max(...products.map(p => p.discount_price || p.price || 0));
+      const maxPrice = Math.max(...products.map(p => p.price || 0));
       setPriceRange([0, maxPrice]);
     }
   };
@@ -1162,7 +1162,7 @@ function HomePage() {
                       style={{ position: 'relative', cursor: 'pointer' }}
                       onClick={() => navigate(`/products/${prod.id}`)}
                     >
-                      {prod.images && prod.images.length > 0 ? (
+                      {prod.display_image || (prod.variants && prod.variants.length > 0 && prod.variants[0].image) ? (
                         <div style={{ 
                           height: '200px', 
                           width: '100%',
@@ -1170,7 +1170,7 @@ function HomePage() {
                         }}>
                           <Image
                             alt={prod.name}
-                            src={getImageUrl(prod.images[0].image)}
+                            src={getImageUrl(prod.display_image || prod.variants[0].image)}
                             style={{ 
                               height: '100%', 
                               width: '100%',
@@ -1196,35 +1196,7 @@ function HomePage() {
                         </div>
                       )}
                       
-                      {/* Discount Badge - Top Left */}
-                      {prod.discount_price && (
-                        <div style={{
-                          position: 'absolute',
-                          top: '10px',
-                          left: '10px',
-                          background: 'linear-gradient(135deg, #ff4757 0%, #ff6b81 100%)',
-                          color: 'white',
-                          borderRadius: '50%',
-                          width: '60px',
-                          height: '60px',
-                          display: 'flex',
-                          flexDirection: 'column',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          fontSize: '14px',
-                          fontWeight: 'bold',
-                          boxShadow: '0 4px 12px rgba(255, 71, 87, 0.4)',
-                          zIndex: 10,
-                          border: '3px solid white'
-                        }}>
-                          <div style={{ fontSize: '18px', lineHeight: 1 }}>
-                            -{Math.round(((prod.price - prod.discount_price) / prod.price) * 100)}%
-                          </div>
-                          <div style={{ fontSize: '10px', marginTop: '2px' }}>
-                            GIẢM
-                          </div>
-                        </div>
-                      )}
+                      {/* Note: Discount badge removed as price is now at variant level */}
                       
                       {/* Featured Badge - Top Right */}
                       {prod.is_featured && (
@@ -1307,27 +1279,21 @@ function HomePage() {
                     </div>
                     
                     <div style={{ marginBottom: '8px' }}>
-                      {prod.discount_price ? (
-                        <div>
-                          <Text style={{ 
-                            fontSize: '16px', 
-                            fontWeight: 'bold', 
-                            color: '#f5222d',
-                            display: 'block'
-                          }}>
-                            {Number(prod.discount_price).toLocaleString()}₫
-                          </Text>
-                          <Text delete style={{ fontSize: '12px', color: theme.secondaryText }}>
-                            {Number(prod.price).toLocaleString()}₫
-                          </Text>
-                        </div>
+                      {prod.price_range ? (
+                        <Text style={{ 
+                          fontSize: '16px', 
+                          fontWeight: 'bold', 
+                          color: '#1890ff'
+                        }}>
+                          {prod.price_range}
+                        </Text>
                       ) : (
                         <Text style={{ 
                           fontSize: '16px', 
                           fontWeight: 'bold', 
                           color: '#1890ff'
                         }}>
-                          {Number(prod.price).toLocaleString()}₫
+                          {Number(prod.price || 0).toLocaleString()}₫
                         </Text>
                       )}
                     </div>

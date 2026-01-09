@@ -28,6 +28,7 @@ import {
   HeartOutlined, 
   StarFilled,
   ArrowLeftOutlined,
+  ArrowRightOutlined,
   ShareAltOutlined,
   ShoppingOutlined,
   SafetyCertificateOutlined,
@@ -66,12 +67,57 @@ const ProductDetailPage = () => {
   const [activeImageIndex, setActiveImageIndex] = useState(0);
   const [carouselRef, setCarouselRef] = useState(null);
   const [reviewRefresh, setReviewRefresh] = useState(0);
+  const [currentColorIndex, setCurrentColorIndex] = useState(0);
 
   // Helper function to get full image URL
   const getImageUrl = (imagePath) => {
     if (!imagePath) return null;
     if (imagePath.startsWith('http')) return imagePath;
     return `http://localhost:8000${imagePath}`;
+  };
+
+  // Lấy ảnh của màu đang chọn
+  const getCurrentColorImage = () => {
+    if (!selectedColor || !product?.variants) return null;
+    const variantWithImage = product.variants.find(v => v.color === selectedColor && v.image);
+    return variantWithImage ? getImageUrl(variantWithImage.image) : null;
+  };
+
+  // Lấy tất cả màu và ảnh của chúng (không trùng lặp)
+  const getAllColorImages = () => {
+    if (!product?.variants) return [];
+    const colorImageMap = {};
+    
+    product.variants.forEach(variant => {
+      if (variant.color && variant.image && !colorImageMap[variant.color]) {
+        colorImageMap[variant.color] = {
+          color: variant.color,
+          image: getImageUrl(variant.image)
+        };
+      }
+    });
+    
+    return Object.values(colorImageMap);
+  };
+
+  // Di chuyển tới màu trước
+  const handlePrevColor = () => {
+    const colorImages = getAllColorImages();
+    if (colorImages.length === 0) return;
+    
+    const newIndex = currentColorIndex > 0 ? currentColorIndex - 1 : colorImages.length - 1;
+    setCurrentColorIndex(newIndex);
+    handleColorChange(colorImages[newIndex].color);
+  };
+
+  // Di chuyển tới màu tiếp theo
+  const handleNextColor = () => {
+    const colorImages = getAllColorImages();
+    if (colorImages.length === 0) return;
+    
+    const newIndex = currentColorIndex < colorImages.length - 1 ? currentColorIndex + 1 : 0;
+    setCurrentColorIndex(newIndex);
+    handleColorChange(colorImages[newIndex].color);
   };
 
   useEffect(() => {
@@ -86,12 +132,17 @@ const ProductDetailPage = () => {
       const response = await apiClient.get(`products/${id}/`);
       setProduct(response.data);
       
-      // Tự động chọn variant đầu tiên nếu có
+      // Tự động chọn màu đầu tiên nếu có
       if (response.data.variants && response.data.variants.length > 0) {
-        const firstVariant = response.data.variants[0];
-        setSelectedVariant(firstVariant);
-        setSelectedSize(firstVariant.size);
-        setSelectedColor(firstVariant.color);
+        const firstColor = response.data.variants[0].color;
+        setSelectedColor(firstColor);
+        
+        // Chọn size đầu tiên của màu này
+        const firstVariantOfColor = response.data.variants.find(v => v.color === firstColor);
+        if (firstVariantOfColor) {
+          setSelectedVariant(firstVariantOfColor);
+          setSelectedSize(firstVariantOfColor.size);
+        }
       }
     } catch (error) {
       message.error('Không thể tải thông tin sản phẩm');
@@ -101,14 +152,34 @@ const ProductDetailPage = () => {
     }
   };
 
-  const handleVariantChange = (size, color) => {
-    const variant = product.variants.find(v => v.size === size && v.color === color);
+  const handleColorChange = (color) => {
+    setSelectedColor(color);
+    // Cập nhật index của màu
+    const colorImages = getAllColorImages();
+    const colorIndex = colorImages.findIndex(item => item.color === color);
+    if (colorIndex !== -1) {
+      setCurrentColorIndex(colorIndex);
+    }
+    // Reset size và tự động chọn size đầu tiên của màu này
+    const firstVariantOfColor = product.variants.find(v => v.color === color);
+    if (firstVariantOfColor) {
+      setSelectedVariant(firstVariantOfColor);
+      setSelectedSize(firstVariantOfColor.size);
+    } else {
+      setSelectedVariant(null);
+      setSelectedSize(null);
+    }
+    setQuantity(1);
+  };
+
+  const handleSizeChange = (size) => {
+    setSelectedSize(size);
+    // Tìm variant với color và size đã chọn
+    const variant = product.variants.find(v => v.color === selectedColor && v.size === size);
     if (variant) {
       setSelectedVariant(variant);
-      setSelectedSize(size);
-      setSelectedColor(color);
-      setQuantity(1); // Reset quantity khi đổi variant
     }
+    setQuantity(1);
   };
 
   const addToCart = async () => {
@@ -165,7 +236,7 @@ const ProductDetailPage = () => {
     }
 
     // Tạo temporary cart data với cấu trúc đúng và ensure giá được lưu
-    const finalPrice = product.discount_price || product.price;
+    const finalPrice = selectedVariant.discount_price || selectedVariant.price;
     const tempCartData = {
       items: [{
         id: `temp_${selectedVariant.id}`,
@@ -174,23 +245,16 @@ const ProductDetailPage = () => {
           size: selectedVariant.size,
           color: selectedVariant.color,
           stock_quantity: selectedVariant.stock_quantity,
-          product: {
-            ...product,
-            // Đảm bảo giá được lưu chính xác với type conversion
-            price: parseFloat(product.price) || 0,
-            discount_price: product.discount_price ? parseFloat(product.discount_price) : null
-          }
+          price: parseFloat(selectedVariant.price) || 0,
+          discount_price: selectedVariant.discount_price ? parseFloat(selectedVariant.discount_price) : null,
+          product: product
         },
         // Thêm product trực tiếp cho trường hợp fallback
-        product: {
-          ...product,
-          price: parseFloat(product.price) || 0,
-          discount_price: product.discount_price ? parseFloat(product.discount_price) : null
-        },
+        product: product,
         quantity: parseInt(quantity) || 1,
         // Thêm price trực tiếp vào item để dễ dàng truy cập
         price: parseFloat(finalPrice) || 0,
-        discount_price: product.discount_price ? parseFloat(product.discount_price) : null
+        discount_price: selectedVariant.discount_price ? parseFloat(selectedVariant.discount_price) : null
       }]
     };
     
@@ -208,31 +272,62 @@ const ProductDetailPage = () => {
     navigate('/checkout?buyNow=true');
   };
 
-  const getAvailableSizes = () => {
-    if (!product || !product.variants) return [];
-    return [...new Set(product.variants.map(v => v.size))];
-  };
-
   const getAvailableColors = () => {
     if (!product || !product.variants) return [];
-    if (!selectedSize) return [...new Set(product.variants.map(v => v.color))];
+    // Lấy tất cả màu không trùng lặp
+    return [...new Set(product.variants.map(v => v.color))];
+  };
+
+  const getAvailableSizes = () => {
+    if (!product || !product.variants) return [];
+    if (!selectedColor) return [];
     
+    // Chỉ lấy sizes của màu đang chọn
     return [...new Set(product.variants
-      .filter(v => v.size === selectedSize)
-      .map(v => v.color))];
+      .filter(v => v.color === selectedColor)
+      .map(v => v.size))];
   };
 
   const getCurrentPrice = () => {
-    return product?.discount_price || product?.price;
+    // Get price from selected variant
+    if (selectedVariant) {
+      return selectedVariant.discount_price || selectedVariant.price;
+    }
+    // Fallback to first variant if no variant selected
+    if (product?.variants && product.variants.length > 0) {
+      const firstVariant = product.variants[0];
+      return firstVariant.discount_price || firstVariant.price;
+    }
+    return 0;
   };
 
   const hasDiscount = () => {
-    return product?.discount_price && product?.discount_price < product?.price;
+    if (selectedVariant) {
+      return selectedVariant.discount_price && selectedVariant.discount_price < selectedVariant.price;
+    }
+    if (product?.variants && product.variants.length > 0) {
+      const firstVariant = product.variants[0];
+      return firstVariant.discount_price && firstVariant.discount_price < firstVariant.price;
+    }
+    return false;
   };
 
   const getDiscountPercentage = () => {
     if (!hasDiscount()) return 0;
-    return Math.round((1 - product.discount_price / product.price) * 100);
+    let originalPrice, discountPrice;
+    
+    if (selectedVariant) {
+      originalPrice = selectedVariant.price;
+      discountPrice = selectedVariant.discount_price;
+    } else if (product?.variants && product.variants.length > 0) {
+      const firstVariant = product.variants[0];
+      originalPrice = firstVariant.price;
+      discountPrice = firstVariant.discount_price;
+    } else {
+      return 0;
+    }
+    
+    return Math.round((1 - discountPrice / originalPrice) * 100);
   };
 
   const getStockStatus = () => {
@@ -339,42 +434,106 @@ const ProductDetailPage = () => {
                   : '0 4px 24px rgba(0,0,0,0.08)'
               }}
             >
-              {product?.images && product.images.length > 0 ? (
-                <div>
-                  <Image.PreviewGroup>
-                    <Carousel 
-                      ref={setCarouselRef}
-                      arrows 
-                      beforeChange={(from, to) => setActiveImageIndex(to)}
-                      style={{ backgroundColor: theme.cardBackground }}
-                    >
-                      {product.images.map((image, index) => (
-                        <div key={index}>
-                          <Image
-                            width="100%"
-                            height="500px"
-                            src={getImageUrl(image.image)}
-                            alt={image.alt_text || product.name}
-                            style={{ objectFit: 'cover' }}
-                            placeholder={
-                              <div style={{ 
-                                height: '500px', 
-                                background: theme.mode === 'dark' ? '#2a2a2a' : '#f0f0f0',
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center'
-                              }}>
-                                <Spin size="large" />
-                              </div>
-                            }
-                          />
-                        </div>
-                      ))}
-                    </Carousel>
-                  </Image.PreviewGroup>
+              {getCurrentColorImage() ? (
+                <div style={{ position: 'relative' }}>
+                  <Image
+                    width="100%"
+                    height="500px"
+                    src={getCurrentColorImage()}
+                    alt={`${product.name} - ${selectedColor}`}
+                    style={{ objectFit: 'cover' }}
+                    placeholder={
+                      <div style={{ 
+                        height: '500px', 
+                        background: theme.mode === 'dark' ? '#2a2a2a' : '#f0f0f0',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center'
+                      }}>
+                        <Spin size="large" />
+                      </div>
+                    }
+                  />
                   
-                  {/* Thumbnails */}
-                  {product.images.length > 1 && (
+                  {/* Nút Previous/Next nếu có nhiều màu */}
+                  {getAllColorImages().length > 1 && (
+                    <>
+                      <Button
+                        shape="circle"
+                        size="large"
+                        icon={<ArrowLeftOutlined style={{ fontSize: '20px' }} />}
+                        onClick={handlePrevColor}
+                        className="image-nav-button"
+                        style={{
+                          position: 'absolute',
+                          top: '50%',
+                          left: '20px',
+                          transform: 'translateY(-50%)',
+                          zIndex: 10,
+                          width: '50px',
+                          height: '50px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          background: 'rgba(0, 0, 0, 0.3)',
+                          backdropFilter: 'blur(10px)',
+                          border: '1px solid rgba(255, 255, 255, 0.2)',
+                          boxShadow: '0 4px 12px rgba(0,0,0,0.2)',
+                          color: '#fff',
+                          opacity: 0.7,
+                          transition: 'all 0.3s ease'
+                        }}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.opacity = '1';
+                          e.currentTarget.style.background = 'rgba(0, 0, 0, 0.5)';
+                          e.currentTarget.style.transform = 'translateY(-50%) scale(1.1)';
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.opacity = '0.7';
+                          e.currentTarget.style.background = 'rgba(0, 0, 0, 0.3)';
+                          e.currentTarget.style.transform = 'translateY(-50%) scale(1)';
+                        }}
+                      />
+                      <Button
+                        shape="circle"
+                        size="large"
+                        icon={<ArrowRightOutlined style={{ fontSize: '20px' }} />}
+                        onClick={handleNextColor}
+                        className="image-nav-button"
+                        style={{
+                          position: 'absolute',
+                          top: '50%',
+                          right: '20px',
+                          transform: 'translateY(-50%)',
+                          zIndex: 10,
+                          width: '50px',
+                          height: '50px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          background: 'rgba(0, 0, 0, 0.3)',
+                          backdropFilter: 'blur(10px)',
+                          border: '1px solid rgba(255, 255, 255, 0.2)',
+                          boxShadow: '0 4px 12px rgba(0,0,0,0.2)',
+                          color: '#fff',
+                          opacity: 0.7,
+                          transition: 'all 0.3s ease'
+                        }}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.opacity = '1';
+                          e.currentTarget.style.background = 'rgba(0, 0, 0, 0.5)';
+                          e.currentTarget.style.transform = 'translateY(-50%) scale(1.1)';
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.opacity = '0.7';
+                          e.currentTarget.style.background = 'rgba(0, 0, 0, 0.3)';
+                          e.currentTarget.style.transform = 'translateY(-50%) scale(1)';
+                        }}
+                      />
+                    </>
+                  )}
+                  {/* Thumbnails của các màu sắc */}
+                  {getAllColorImages().length > 1 && (
                     <div style={{ 
                       padding: '20px',
                       display: 'flex',
@@ -384,37 +543,38 @@ const ProductDetailPage = () => {
                       WebkitOverflowScrolling: 'touch',
                       justifyContent: 'center'
                     }}>
-                      {product.images.map((image, index) => (
+                      {getAllColorImages().map((item, index) => (
                         <div
-                          key={index}
+                          key={item.color}
                           style={{ 
                             minWidth: '80px',
                             height: '80px',
-                            border: activeImageIndex === index 
+                            border: selectedColor === item.color
                               ? '3px solid #1890ff' 
                               : `2px solid ${theme.borderColor}`,
                             borderRadius: '12px',
                             overflow: 'hidden',
                             cursor: 'pointer',
                             transition: 'all 0.3s ease',
-                            opacity: activeImageIndex === index ? 1 : 0.6,
-                            transform: activeImageIndex === index ? 'scale(1.05)' : 'scale(1)'
+                            opacity: selectedColor === item.color ? 1 : 0.6,
+                            transform: selectedColor === item.color ? 'scale(1.05)' : 'scale(1)',
+                            position: 'relative'
                           }}
-                          onClick={() => handleThumbnailClick(index)}
+                          onClick={() => handleColorChange(item.color)}
                           onMouseEnter={(e) => {
                             e.currentTarget.style.opacity = '1';
                             e.currentTarget.style.transform = 'scale(1.05)';
                           }}
                           onMouseLeave={(e) => {
-                            if (activeImageIndex !== index) {
+                            if (selectedColor !== item.color) {
                               e.currentTarget.style.opacity = '0.6';
                               e.currentTarget.style.transform = 'scale(1)';
                             }
                           }}
                         >
                           <img
-                            src={getImageUrl(image.image)}
-                            alt={`${product.name} ${index + 1}`}
+                            src={item.image}
+                            alt={`${product.name} - ${item.color}`}
                             style={{ 
                               width: '100%',
                               height: '100%',
@@ -422,6 +582,21 @@ const ProductDetailPage = () => {
                               transition: 'transform 0.3s ease'
                             }}
                           />
+                          {/* Label màu sắc */}
+                          <div style={{
+                            position: 'absolute',
+                            bottom: 0,
+                            left: 0,
+                            right: 0,
+                            background: 'rgba(0,0,0,0.7)',
+                            color: '#fff',
+                            padding: '4px',
+                            fontSize: '11px',
+                            textAlign: 'center',
+                            fontWeight: 600
+                          }}>
+                            {item.color}
+                          </div>
                         </div>
                       ))}
                     </div>
@@ -606,12 +781,16 @@ const ProductDetailPage = () => {
                       fontWeight: 500
                     }}
                   >
-                    {Number(product.price).toLocaleString()}₫
+                    {Number(selectedVariant ? selectedVariant.price : (product?.variants?.[0]?.price || 0)).toLocaleString()}₫
                   </Text>
                   <Space align="center" style={{ marginTop: '8px' }}>
                     <CheckCircleOutlined style={{ color: '#52c41a', fontSize: '16px' }} />
                     <Text style={{ fontSize: '14px', color: '#52c41a', fontWeight: 600 }}>
-                      Tiết kiệm: {Number(product.price - product.discount_price).toLocaleString()}₫
+                      Tiết kiệm: {Number(
+                        selectedVariant 
+                          ? (selectedVariant.price - selectedVariant.discount_price)
+                          : (product?.variants?.[0] ? (product.variants[0].price - product.variants[0].discount_price) : 0)
+                      ).toLocaleString()}₫
                     </Text>
                   </Space>
                 </Space>
@@ -664,42 +843,71 @@ const ProductDetailPage = () => {
                 Tùy chọn sản phẩm
               </Title>
               
-              <Row gutter={[16, 20]}>
-                <Col span={12}>
-                  <Text strong style={{ display: 'block', marginBottom: '12px', color: theme.textColor, fontSize: '15px' }}>
-                    Kích cỡ
-                  </Text>
-                  <Select
-                    value={selectedSize}
-                    onChange={(size) => handleVariantChange(size, selectedColor)}
-                    style={{ width: '100%' }}
-                    placeholder="Chọn kích cỡ"
-                    size="large"
-                  >
-                    {getAvailableSizes().map(size => (
-                      <Option key={size} value={size}>{size}</Option>
-                    ))}
-                  </Select>
-                </Col>
+              <div style={{ marginBottom: '24px' }}>
+                <Text strong style={{ display: 'block', marginBottom: '12px', color: theme.textColor, fontSize: '15px' }}>
+                  Màu sắc: <Text type="secondary">{selectedColor || 'Chưa chọn'}</Text>
+                </Text>
+                <Space wrap size={[12, 12]}>
+                  {getAvailableColors().map(color => (
+                    <Button
+                      key={color}
+                      type={selectedColor === color ? 'primary' : 'default'}
+                      size="large"
+                      onClick={() => handleColorChange(color)}
+                      style={{
+                        height: '48px',
+                        minWidth: '100px',
+                        borderRadius: '8px',
+                        fontWeight: 600,
+                        fontSize: '15px',
+                        border: selectedColor === color ? '2px solid #1890ff' : `1px solid ${theme.borderColor}`,
+                        background: selectedColor === color 
+                          ? '#1890ff' 
+                          : theme.cardBackground,
+                        color: selectedColor === color ? '#fff' : theme.textColor,
+                      }}
+                    >
+                      {color}
+                    </Button>
+                  ))}
+                </Space>
+              </div>
 
-                <Col span={12}>
-                  <Text strong style={{ display: 'block', marginBottom: '12px', color: theme.textColor, fontSize: '15px' }}>
-                    Màu sắc
+              <div>
+                <Text strong style={{ display: 'block', marginBottom: '12px', color: theme.textColor, fontSize: '15px' }}>
+                  Kích cỡ: <Text type="secondary">{selectedSize || 'Chưa chọn'}</Text>
+                </Text>
+                <Space wrap size={[12, 12]}>
+                  {getAvailableSizes().map(size => (
+                    <Button
+                      key={size}
+                      type={selectedSize === size ? 'primary' : 'default'}
+                      size="large"
+                      onClick={() => handleSizeChange(size)}
+                      disabled={!selectedColor}
+                      style={{
+                        height: '48px',
+                        minWidth: '80px',
+                        borderRadius: '8px',
+                        fontWeight: 600,
+                        fontSize: '15px',
+                        border: selectedSize === size ? '2px solid #1890ff' : `1px solid ${theme.borderColor}`,
+                        background: selectedSize === size 
+                          ? '#1890ff' 
+                          : theme.cardBackground,
+                        color: selectedSize === size ? '#fff' : theme.textColor,
+                      }}
+                    >
+                      {size}
+                    </Button>
+                  ))}
+                </Space>
+                {!selectedColor && (
+                  <Text type="secondary" style={{ display: 'block', marginTop: '8px', fontSize: '13px', color: theme.secondaryText }}>
+                    Vui lòng chọn màu sắc trước
                   </Text>
-                  <Select
-                    value={selectedColor}
-                    onChange={(color) => handleVariantChange(selectedSize, color)}
-                    style={{ width: '100%' }}
-                    placeholder="Chọn màu sắc"
-                    disabled={!selectedSize}
-                    size="large"
-                  >
-                    {getAvailableColors().map(color => (
-                      <Option key={color} value={color}>{color}</Option>
-                    ))}
-                  </Select>
-                </Col>
-              </Row>
+                )}
+              </div>
             </div>
 
             {/* Số lượng */}

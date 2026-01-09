@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Layout, Menu, Badge, Button, Space, Dropdown, Avatar, Modal, Descriptions, Tag, Form, Input, message as antMessage, Typography, DatePicker } from 'antd';
+import { Layout, Menu, Badge, Button, Space, Dropdown, Avatar, Modal, Descriptions, Tag, Form, Input, message as antMessage, Typography, DatePicker, Drawer } from 'antd';
 import { 
   HomeOutlined, 
   ShoppingCartOutlined, 
@@ -19,7 +19,8 @@ import {
   LockOutlined,
   DashboardOutlined,
   SearchOutlined,
-  AppstoreOutlined
+  AppstoreOutlined,
+  MenuOutlined
 } from '@ant-design/icons';
 import { useNavigate, useLocation } from 'react-router-dom';
 import './Navigation.css';
@@ -50,6 +51,7 @@ const Navigation = () => {
   const [categories, setCategories] = useState([]);
   const [searchText, setSearchText] = useState('');
   const [selectedCategoryId, setSelectedCategoryId] = useState(null); // Track selected category
+  const [mobileDrawerVisible, setMobileDrawerVisible] = useState(false);
   const [form] = Form.useForm();
   const [passwordForm] = Form.useForm();
   const { theme } = useTheme();
@@ -392,15 +394,17 @@ const Navigation = () => {
         width: '100%',
         background: '#fff',
         borderBottom: '1px solid #f0f0f0',
-        boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
+        boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+        padding: '0 16px'
       }}
     >
       <div style={{ 
         display: 'flex', 
         alignItems: 'center', 
         justifyContent: 'space-between',
-        maxWidth: '1200px',
-        margin: '0 auto'
+        maxWidth: '1400px',
+        margin: '0 auto',
+        height: '64px'
       }}>
         {/* Logo */}
         <div 
@@ -408,17 +412,29 @@ const Navigation = () => {
             fontSize: '24px', 
             fontWeight: 'bold', 
             color: '#06131fff',
-            cursor: 'pointer'
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            flexShrink: 0
           }}
           onClick={() => {
             navigate('/');
             window.scrollTo(0, 0);
           }}
         >
-          <img src={logoImage} alt="PKA Shop" style={{ height: '48px', marginRight: '8px',marginBottom: '8px', verticalAlign: 'middle' }} /> PKA
+          <img 
+            src={logoImage} 
+            alt="PKA Shop" 
+            style={{ 
+              height: '48px', 
+              marginRight: '8px',
+              verticalAlign: 'middle'
+            }} 
+          />
+          <span className="logo-text">PKA</span>
         </div>
 
-        {/* Main Menu */}
+        {/* Desktop Menu */}
         <Menu
           mode="horizontal"
           selectedKeys={[location.pathname]}
@@ -429,21 +445,21 @@ const Navigation = () => {
             flex: 1,
             justifyContent: 'center'
           }}
+          className="desktop-menu"
         />
 
         {/* Right Side Actions */}
         <Space 
-          size="middle" 
+          size="small"
           style={{ 
             display: 'flex', 
-            alignItems: 'center', 
-            height: '64px' 
+            alignItems: 'center'
           }}
           className="nav-right-actions"
         >
-          {/* Search Box */}
+          {/* Search Box - Desktop only */}
           <Search
-            placeholder="Tìm kiếm sản phẩm..."
+            placeholder="Tìm kiếm..."
             value={searchText}
             onChange={(e) => setSearchText(e.target.value)}
             onSearch={(value) => {
@@ -455,12 +471,13 @@ const Navigation = () => {
                 }
               }, 100);
             }}
-            style={{ width: 200 }}
+            style={{ width: 180 }}
             size="middle"
             allowClear
+            className="desktop-search"
           />
 
-          {/* Wishlist */}
+          {/* Wishlist - Desktop & Tablet */}
           {isLoggedIn && (
             <Button
               type="text"
@@ -471,6 +488,7 @@ const Navigation = () => {
               }}
               style={{ display: 'flex', alignItems: 'center' }}
               title="Sản phẩm yêu thích"
+              className="desktop-wishlist"
             />
           )}
 
@@ -484,60 +502,243 @@ const Navigation = () => {
             />
           </Badge>
 
-          {/* Theme Toggle */}
-          <ThemeToggle />
+          {/* Theme Toggle - Desktop only */}
+          <div className="desktop-theme">
+            <ThemeToggle inNavigation={true} />
+          </div>
 
-          {/* User Actions */}
-          {isLoggedIn ? (
-            <Dropdown 
-              menu={{ items: userMenuItems }} 
-              placement="bottomRight"
-              arrow
-            >
-              <div style={{ 
-                display: 'flex', 
-                alignItems: 'center', 
-                cursor: 'pointer',
-                padding: '4px 8px',
-                borderRadius: '6px',
-                transition: 'background-color 0.3s',
-                ':hover': { backgroundColor: '#f0f0f0' }
-              }}>
-                <Avatar size="small" icon={<UserOutlined />} />
-                <span style={{ 
-                  marginLeft: '8px',
-                  color: '#595959',
-                  fontSize: '14px',
-                  fontWeight: '500'
+          {/* User Actions - Desktop */}
+          <div className="desktop-user">
+            {isLoggedIn ? (
+              <Dropdown 
+                menu={{ items: userMenuItems }} 
+                placement="bottomRight"
+                arrow
+              >
+                <div style={{ 
+                  display: 'flex', 
+                  alignItems: 'center', 
+                  cursor: 'pointer',
+                  padding: '4px 8px',
+                  borderRadius: '6px',
+                  transition: 'background-color 0.3s'
                 }}>
+                  <Avatar size="small" icon={<UserOutlined />} />
+                  <span style={{ 
+                    marginLeft: '8px',
+                    color: '#595959',
+                    fontSize: '14px',
+                    fontWeight: '500'
+                  }}>
+                    {userInfo?.first_name ? 
+                      `${userInfo.first_name} ${userInfo.last_name || ''}`.trim() : 
+                      userInfo?.username || 'User'
+                    }
+                  </span>
+                </div>
+              </Dropdown>
+            ) : (
+              <Space size="small">
+                <Button
+                  type="text"
+                  icon={<LoginOutlined />}
+                  onClick={() => navigate('/login')}
+                  size="small"
+                >
+                  Đăng nhập
+                </Button>
+                <Button
+                  type="primary"
+                  icon={<UserAddOutlined />}
+                  onClick={() => navigate('/register')}
+                  size="small"
+                >
+                  Đăng ký
+                </Button>
+              </Space>
+            )}
+          </div>
+
+          {/* Mobile Menu Button */}
+          <Button
+            type="text"
+            icon={<MenuOutlined style={{ fontSize: '20px' }} />}
+            onClick={() => setMobileDrawerVisible(true)}
+            className="mobile-menu-button"
+            style={{ display: 'none' }}
+          />
+        </Space>
+      </div>
+
+      {/* Mobile Drawer */}
+      <Drawer
+        title={
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <div style={{ display: 'flex', alignItems: 'center' }}>
+              <img src={logoImage} alt="PKA Shop" style={{ height: '32px', marginRight: '8px' }} />
+              <span style={{ fontSize: '18px', fontWeight: 'bold', color: '#06131fff' }}>PKA Shop</span>
+            </div>
+            <ThemeToggle inNavigation={true} size="middle" />
+          </div>
+        }
+        placement="right"
+        onClose={() => setMobileDrawerVisible(false)}
+        open={mobileDrawerVisible}
+        width={280}
+      >
+        {/* Mobile Search */}
+        <div style={{ marginBottom: '16px' }}>
+          <Search
+            placeholder="Tìm kiếm..."
+            value={searchText}
+            onChange={(e) => setSearchText(e.target.value)}
+            onSearch={(value) => {
+              navigate(`/?search=${encodeURIComponent(value)}`);
+              setMobileDrawerVisible(false);
+              setTimeout(() => {
+                const featuredSection = document.getElementById('featured-products');
+                if (featuredSection) {
+                  featuredSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }
+              }, 100);
+            }}
+            style={{ width: '100%' }}
+            allowClear
+          />
+        </div>
+
+        {/* Mobile Menu Items */}
+        <Menu
+          mode="vertical"
+          selectedKeys={[location.pathname]}
+          style={{ border: 'none' }}
+        >
+          <Menu.Item 
+            key="/" 
+            icon={<HomeOutlined />}
+            onClick={() => {
+              navigate('/');
+              setMobileDrawerVisible(false);
+            }}
+          >
+            Trang chủ
+          </Menu.Item>
+          
+          <Menu.SubMenu 
+            key="products" 
+            icon={<ShoppingCartOutlined />}
+            title="Sản phẩm"
+          >
+            {categoryMenuItems.filter(item => item.type !== 'divider').map(item => (
+              <Menu.Item 
+                key={item.key}
+                icon={item.icon}
+                onClick={() => {
+                  item.onClick();
+                  setMobileDrawerVisible(false);
+                }}
+              >
+                {item.label}
+              </Menu.Item>
+            ))}
+          </Menu.SubMenu>
+          
+          {isLoggedIn && (
+            <Menu.Item 
+              key="/wishlist" 
+              icon={<HeartOutlined />}
+              onClick={() => {
+                navigate('/wishlist');
+                setMobileDrawerVisible(false);
+              }}
+            >
+              Yêu thích
+            </Menu.Item>
+          )}
+          
+          <Menu.Item 
+            key="/about" 
+            icon={<UserOutlined />}
+            onClick={() => {
+              navigate('/about');
+              setMobileDrawerVisible(false);
+            }}
+          >
+            Giới thiệu
+          </Menu.Item>
+          
+          <Menu.Item 
+            key="/contact" 
+            icon={<PhoneOutlined />}
+            onClick={() => {
+              navigate('/contact');
+              setMobileDrawerVisible(false);
+            }}
+          >
+            Liên hệ
+          </Menu.Item>
+        </Menu>
+
+        {/* Mobile User Section */}
+        <div style={{ marginTop: '24px', paddingTop: '16px', borderTop: '1px solid #f0f0f0' }}>
+          {isLoggedIn ? (
+            <Space direction="vertical" style={{ width: '100%' }} size="middle">
+              <div style={{ display: 'flex', alignItems: 'center', padding: '8px' }}>
+                <Avatar icon={<UserOutlined />} />
+                <span style={{ marginLeft: '12px', fontWeight: '500' }}>
                   {userInfo?.first_name ? 
                     `${userInfo.first_name} ${userInfo.last_name || ''}`.trim() : 
                     userInfo?.username || 'User'
                   }
                 </span>
               </div>
-            </Dropdown>
+              
+              {userMenuItems.map(item => {
+                if (item.type === 'divider') return null;
+                return (
+                  <Button
+                    key={item.key}
+                    type="text"
+                    icon={item.icon}
+                    onClick={() => {
+                      item.onClick();
+                      setMobileDrawerVisible(false);
+                    }}
+                    block
+                    style={{ textAlign: 'left' }}
+                  >
+                    {item.label}
+                  </Button>
+                );
+              })}
+            </Space>
           ) : (
-            <Space>
+            <Space direction="vertical" style={{ width: '100%' }}>
               <Button
-                type="text"
+                type="primary"
                 icon={<LoginOutlined />}
-                onClick={() => navigate('/login')}
+                onClick={() => {
+                  navigate('/login');
+                  setMobileDrawerVisible(false);
+                }}
+                block
               >
                 Đăng nhập
               </Button>
               <Button
-                type="primary"
                 icon={<UserAddOutlined />}
-                onClick={() => navigate('/register')}
-                size="small"
+                onClick={() => {
+                  navigate('/register');
+                  setMobileDrawerVisible(false);
+                }}
+                block
               >
                 Đăng ký
               </Button>
             </Space>
           )}
-        </Space>
-      </div>
+        </div>
+      </Drawer>
 
       {/* Profile Modal */}
       <Modal

@@ -21,3 +21,64 @@
   display: flex;
   align-items: center;
 }
+
+/* Mobile Menu Button - Hidden by default */
+.mobile-menu-button {
+  display: none !important;
+}
+
+/* Responsive Styles */
+@media screen and (max-width: 992px) {
+  /* Hide desktop menu on tablet and below */
+  .desktop-menu {
+    display: none !important;
+  }
+  
+  /* Hide desktop search */
+  .desktop-search {
+    display: none !important;
+  }
+  
+  /* Hide desktop wishlist */
+  .desktop-wishlist {
+    display: none !important;
+  }
+  
+  /* Hide desktop theme toggle */
+  .desktop-theme {
+    display: none !important;
+  }
+  
+  /* Show mobile menu button */
+  .mobile-menu-button {
+    display: flex !important;
+  }
+}
+
+@media screen and (max-width: 768px) {
+  /* Hide desktop user section on mobile */
+  .desktop-user {
+    display: none !important;
+  }
+  
+  /* Reduce logo text on very small screens */
+  .logo-text {
+    display: none;
+  }
+  
+  /* Adjust header padding */
+  .ant-layout-header {
+    padding: 0 12px !important;
+  }
+}
+
+@media screen and (max-width: 576px) {
+  /* Further adjustments for very small screens */
+  .nav-right-actions {
+    gap: 4px !important;
+  }
+  
+  .nav-right-actions .ant-space-item {
+    margin-right: 4px !important;
+  }
+}

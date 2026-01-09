@@ -1,9 +1,9 @@
 
 from django.contrib import admin
 from .models import (
-    User, Category, Brand, Product, ProductImage, ProductVariant, 
+    User, Category, Brand, Product, ProductVariant, 
     Order, OrderItem, Review, Wishlist, Cart, CartItem,
-    StockHistory, StockAlert, Coupon, UserCoupon
+    StockHistory, StockAlert, Coupon, UserCoupon, ProductVoucher
 )
 
 # Custom admin cho User
@@ -43,42 +43,32 @@ class BrandAdmin(admin.ModelAdmin):
     search_fields = ['name']
     prepopulated_fields = {'description': ('name',)}
 
-# Inline cho ProductImage
-class ProductImageInline(admin.TabularInline):
-    model = ProductImage
-    extra = 1
-    fields = ['image', 'alt_text', 'is_main', 'order']
-    readonly_fields = ['image_preview']
-    
-    def image_preview(self, obj):
-        if obj.image:
-            return f'<img src="{obj.image.url}" style="max-height: 100px; max-width: 150px;" />'
-        return "No image"
-    image_preview.short_description = 'Preview'
-    image_preview.allow_tags = True
-
 # Inline cho ProductVariant
 class ProductVariantInline(admin.TabularInline):
     model = ProductVariant
     extra = 1
-    fields = ['sku', 'size', 'color', 'stock_quantity', 'reserved_quantity', 'minimum_stock', 'cost_price', 'is_active']
+    fields = ['image', 'size', 'color', 'price', 'discount_price', 'stock_quantity', 'reserved_quantity', 'minimum_stock', 'cost_price', 'is_active']
     readonly_fields = ['sku']
+
+# Inline cho ProductVoucher
+class ProductVoucherInline(admin.TabularInline):
+    model = ProductVoucher
+    extra = 0
+    fields = ['code', 'name', 'discount_type', 'discount_value', 'max_discount_amount', 'valid_from', 'valid_to', 'is_active']
+    readonly_fields = []
 
 # Custom admin cho Product
 @admin.register(Product)
 class ProductAdmin(admin.ModelAdmin):
-    list_display = ['name', 'sku', 'category', 'brand', 'price', 'discount_price', 'is_active', 'is_featured', 'created_at']
+    list_display = ['name', 'sku', 'category', 'brand', 'is_active', 'is_featured', 'created_at']
     list_filter = ['category', 'brand', 'is_active', 'is_featured', 'is_new', 'created_at']
     search_fields = ['name', 'sku', 'description']
     readonly_fields = ['sku', 'created_at', 'updated_at']
-    inlines = [ProductImageInline, ProductVariantInline]
+    inlines = [ProductVariantInline, ProductVoucherInline]
     
     fieldsets = (
         ('Thông tin cơ bản', {
             'fields': ('name', 'sku', 'short_description', 'description', 'category', 'brand', 'material')
-        }),
-        ('Giá cả', {
-            'fields': ('price', 'discount_price')
         }),
         ('Trạng thái', {
             'fields': ('is_active', 'is_featured', 'is_new')
@@ -89,31 +79,20 @@ class ProductAdmin(admin.ModelAdmin):
         }),
     )
 
-# Custom admin cho ProductImage
-@admin.register(ProductImage)
-class ProductImageAdmin(admin.ModelAdmin):
-    list_display = ['product', 'alt_text', 'is_main', 'order', 'image_preview']
-    list_filter = ['is_main', 'created_at']
-    search_fields = ['product__name', 'alt_text']
-    
-    def image_preview(self, obj):
-        if obj.image:
-            return f'<img src="{obj.image.url}" style="max-height: 50px; max-width: 75px;" />'
-        return "No image"
-    image_preview.short_description = 'Preview'
-    image_preview.allow_tags = True
-
 # Custom admin cho ProductVariant  
 @admin.register(ProductVariant)
 class ProductVariantAdmin(admin.ModelAdmin):
-    list_display = ['sku', 'product', 'size', 'color', 'stock_quantity', 'reserved_quantity', 'available_quantity', 'is_low_stock', 'cost_price', 'is_active']
+    list_display = ['sku', 'product', 'size', 'color', 'price', 'discount_price', 'stock_quantity', 'reserved_quantity', 'available_quantity', 'is_low_stock', 'is_active']
     list_filter = ['size', 'color', 'is_active', 'product__category', 'product__brand']
     search_fields = ['product__name', 'sku', 'size', 'color']
-    readonly_fields = ['sku', 'available_quantity', 'is_low_stock', 'need_reorder', 'created_at', 'updated_at']
+    readonly_fields = ['sku', 'available_quantity', 'is_low_stock', 'need_reorder', 'created_at', 'updated_at', 'image_preview']
     
     fieldsets = (
         ('Thông tin sản phẩm', {
             'fields': ('product', 'sku', 'size', 'color')
+        }),
+        ('Ảnh và giá', {
+            'fields': ('image', 'image_preview', 'price', 'discount_price')
         }),
         ('Quản lý kho', {
             'fields': ('stock_quantity', 'reserved_quantity', 'available_quantity', 'minimum_stock', 'reorder_point', 'cost_price')
@@ -126,6 +105,13 @@ class ProductVariantAdmin(admin.ModelAdmin):
             'classes': ('collapse',)
         }),
     )
+    
+    def image_preview(self, obj):
+        if obj.image:
+            return f'<img src="{obj.image.url}" style="max-height: 100px; max-width: 150px;" />'
+        return "No image"
+    image_preview.short_description = 'Preview'
+    image_preview.allow_tags = True
     
     def available_quantity(self, obj):
         return obj.available_quantity
@@ -283,3 +269,34 @@ class UserCouponAdmin(admin.ModelAdmin):
         )
         self.message_user(request, f'{updated} coupon(s) marked as notified.')
     mark_as_notified.short_description = 'Mark selected as notified'
+
+
+# Custom admin cho ProductVoucher
+@admin.register(ProductVoucher)
+class ProductVoucherAdmin(admin.ModelAdmin):
+    list_display = ['code', 'product', 'name', 'discount_type', 'discount_value', 'current_uses', 'max_uses', 'is_active', 'valid_from', 'valid_to']
+    list_filter = ['discount_type', 'is_active', 'valid_from', 'valid_to']
+    search_fields = ['code', 'name', 'product__name']
+    readonly_fields = ['current_uses', 'created_at', 'updated_at']
+    
+    fieldsets = (
+        ('Thông tin voucher', {
+            'fields': ('product', 'code', 'name', 'description')
+        }),
+        ('Giảm giá', {
+            'fields': ('discount_type', 'discount_value', 'max_discount_amount')
+        }),
+        ('Số lượng', {
+            'fields': ('max_uses', 'current_uses')
+        }),
+        ('Thời gian', {
+            'fields': ('valid_from', 'valid_to')
+        }),
+        ('Trạng thái', {
+            'fields': ('is_active',)
+        }),
+        ('Timestamp', {
+            'fields': ('created_at', 'updated_at'),
+            'classes': ('collapse',)
+        }),
+    )

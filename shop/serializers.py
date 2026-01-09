@@ -1,8 +1,8 @@
 from rest_framework import serializers
 from .models import (
     User, Product, ProductVariant, Order, OrderItem, Category, Brand, 
-    ProductImage, Review, Wishlist, StockHistory, StockAlert, Cart, CartItem,
-    Coupon, UserCoupon
+    Review, Wishlist, StockHistory, StockAlert, Cart, CartItem,
+    Coupon, UserCoupon, ProductVoucher
 )
 from django.contrib.auth.password_validation import validate_password
 from rest_framework.validators import UniqueValidator
@@ -50,36 +50,61 @@ class BrandSerializer(serializers.ModelSerializer):
         model = Brand
         fields = '__all__'
 
-# ProductImage serializer
-class ProductImageSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = ProductImage
-        fields = '__all__'
-
 # Product serializers
 class ProductVariantSerializer(serializers.ModelSerializer):
     product_name = serializers.CharField(source='product.name', read_only=True)
-    product_price = serializers.DecimalField(source='product.price', max_digits=10, decimal_places=2, read_only=True)
     available_quantity = serializers.IntegerField(read_only=True)
+    final_price = serializers.SerializerMethodField()
     
     class Meta:
         model = ProductVariant
         fields = '__all__'
+    
+    def get_final_price(self, obj):
+        return obj.get_final_price()
+
+class ProductVoucherSerializer(serializers.ModelSerializer):
+    is_valid_now = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = ProductVoucher
+        fields = '__all__'
+    
+    def get_is_valid_now(self, obj):
+        valid, message = obj.is_valid()
+        return valid
 
 class ProductSerializer(serializers.ModelSerializer):
     variants = ProductVariantSerializer(many=True, read_only=True)
-    images = ProductImageSerializer(many=True, read_only=True)
+    vouchers = ProductVoucherSerializer(many=True, read_only=True)
     category = CategorySerializer(read_only=True)
     brand = BrandSerializer(read_only=True)
+    price = serializers.SerializerMethodField()
+    display_image = serializers.SerializerMethodField()
+    price_range = serializers.SerializerMethodField()
 
     class Meta:
         model = Product
         fields = '__all__'
+    
+    def get_price(self, obj):
+        return obj.get_price()
+    
+    def get_display_image(self, obj):
+        image_url = obj.get_display_image()
+        if image_url:
+            request = self.context.get('request')
+            if request:
+                return request.build_absolute_uri(image_url)
+        return None
+    
+    def get_price_range(self, obj):
+        return obj.get_price_range()
 
 # Admin product serializer with create/update functionality
 class AdminProductSerializer(serializers.ModelSerializer):
     variants = ProductVariantSerializer(many=True, required=False)
-    images = ProductImageSerializer(many=True, read_only=True)
+    vouchers = ProductVoucherSerializer(many=True, read_only=True)
     
     # For reading - return nested objects
     category = CategorySerializer(read_only=True)
@@ -195,12 +220,11 @@ class OrderItemProductSerializer(serializers.ModelSerializer):
         fields = ['id', 'size', 'color', 'product_name', 'image']
     
     def get_image(self, obj):
-        # Lấy ảnh đầu tiên của product
-        if obj.product.images.exists():
-            first_image = obj.product.images.first()
+        # Lấy ảnh từ variant (vì giờ ảnh lưu ở ProductVariant)
+        if obj.image:
             request = self.context.get('request')
-            if request and first_image.image:
-                return request.build_absolute_uri(first_image.image.url)
+            if request:
+                return request.build_absolute_uri(obj.image.url)
         return None
 
 # Order Item serializer
@@ -479,8 +503,8 @@ class WishlistSerializer(serializers.ModelSerializer):
 class WishlistItemSerializer(serializers.ModelSerializer):
     product = ProductSerializer(read_only=True)  # Trả về full product object
     product_name = serializers.CharField(source='product.name', read_only=True)
-    product_price = serializers.DecimalField(source='product.price', max_digits=10, decimal_places=2, read_only=True)
-    product_discount_price = serializers.DecimalField(source='product.discount_price', max_digits=10, decimal_places=2, read_only=True)
+    product_price = serializers.SerializerMethodField()  # Lấy từ variant
+    product_discount_price = serializers.SerializerMethodField()  # Lấy từ variant
     product_main_image = serializers.SerializerMethodField()
     
     class Meta:
@@ -490,8 +514,25 @@ class WishlistItemSerializer(serializers.ModelSerializer):
             'product_discount_price', 'product_main_image', 'created_at'
         ]
     
+    def get_product_price(self, obj):
+        # Lấy giá từ variant đầu tiên
+        return obj.product.get_price()
+    
+    def get_product_discount_price(self, obj):
+        # Kiểm tra variant đầu tiên có discount không
+        if obj.product.variants.exists():
+            first_variant = obj.product.variants.first()
+            return first_variant.discount_price
+        return None
+    
     def get_product_main_image(self, obj):
-        return obj.product.get_main_image()
+        # Lấy ảnh từ display_image method của product
+        image_url = obj.product.get_display_image()
+        if image_url:
+            request = self.context.get('request')
+            if request:
+                return request.build_absolute_uri(image_url)
+        return None
 
 
 #-----------------------------Stock Management Serializers-----------------------------------------------

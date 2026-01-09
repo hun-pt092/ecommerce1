@@ -17,8 +17,8 @@ import {
 import { useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeftOutlined, SaveOutlined } from '@ant-design/icons';
 import authAxios from '../../api/AuthAxios';
-import ProductImageUpload from '../../components/admin/ProductImageUpload';
 import ProductVariantsForm from '../../components/admin/ProductVariantsForm';
+import ProductVouchersForm from '../../components/admin/ProductVouchersForm';
 
 const { Title } = Typography;
 const { TextArea } = Input;
@@ -34,9 +34,8 @@ const AddProduct = () => {
   const [pageLoading, setPageLoading] = useState(isEditMode);
   const [categories, setCategories] = useState([]);
   const [brands, setBrands] = useState([]);
-  const [images, setImages] = useState([]);
   const [variants, setVariants] = useState([]);
-  const [deletedImageIds, setDeletedImageIds] = useState([]); // Track deleted existing images
+  const [vouchers, setVouchers] = useState([]);
   const [isDataLoaded, setIsDataLoaded] = useState(false); // Prevent duplicate API calls
 
   // Fetch categories, brands và product data (nếu edit mode)
@@ -66,8 +65,6 @@ const AddProduct = () => {
           category: productData.category?.id,
           brand: productData.brand?.id,
           material: productData.material,
-          price: productData.price,
-          discount_price: productData.discount_price,
           is_active: productData.is_active,
           is_featured: productData.is_featured,
           is_new: productData.is_new,
@@ -130,8 +127,6 @@ const AddProduct = () => {
           category: product.category?.id,
           brand: product.brand?.id,
           material: product.material,
-          price: product.price,
-          discount_price: product.discount_price,
           is_active: product.is_active,
           is_featured: product.is_featured,
           is_new: product.is_new,
@@ -152,24 +147,14 @@ const AddProduct = () => {
           console.log('Current form values after set:', currentValues);
         }, 100);
 
-        // Set images
-        if (product.images && product.images.length > 0) {
-          const imageList = product.images.map((img, index) => ({
-            uid: `existing-${img.id}`, // String uid for existing images
-            name: img.alt_text || `Product Image ${index + 1}`,
-            url: img.image,
-            status: 'done', // Mark as uploaded
-            is_main: img.is_main,
-            alt_text: img.alt_text || '',
-            order: img.order || index,
-            existingImageId: img.id, // Keep track of existing image ID
-          }));
-          setImages(imageList);
-        }
-
-        // Set variants
+        // Set variants (bao gồm cả ảnh vì ảnh giờ nằm trong variant)
         if (product.variants && product.variants.length > 0) {
           setVariants(product.variants);
+        }
+
+        // Set vouchers
+        if (product.vouchers && product.vouchers.length > 0) {
+          setVouchers(product.vouchers);
         }
       }
       
@@ -192,7 +177,6 @@ const AddProduct = () => {
       console.log('Brand value specifically:', values.brand);
       console.log('Category value specifically:', values.category);
       console.log('All form fields from form.getFieldsValue():', form.getFieldsValue());
-      console.log('Images:', images);
       console.log('Variants:', variants);
       
       // Tạo FormData để gửi cả text và file
@@ -241,41 +225,27 @@ const AddProduct = () => {
         console.log(`FormData contains: ${key} = ${value}`);
       }
       
-      // Thêm ảnh (mới và cũ)
-      const newImages = [];
-      const existingImages = [];
+      // Thêm variants (bao gồm cả ảnh - mỗi màu có ảnh riêng)
+      console.log('=== VARIANTS DEBUG ===');
+      console.log('Variants to send:', variants);
       
-      images.forEach((image) => {
-        if (image.file) {
-          // Ảnh mới (có file)
-          newImages.push(image);
-          formData.append('images', image.file);
-          formData.append(`image_${image.uid}_is_main`, image.is_main);
-          formData.append(`image_${image.uid}_alt_text`, image.alt_text || '');
-          formData.append(`image_${image.uid}_order`, image.order || 0);
-        } else if (image.existingImageId) {
-          // Ảnh cũ (cập nhật thông tin)
-          existingImages.push({
-            id: image.existingImageId,
-            is_main: image.is_main,
-            alt_text: image.alt_text || '',
-            order: image.order || 0
-          });
+      formData.append('variants', JSON.stringify(variants));
+      
+      // Thêm ảnh variant (nếu có)
+      variants.forEach((variant, index) => {
+        if (variant.imageFile) {
+          console.log(`✅ Adding variant image for color ${variant.color}:`, variant.imageFile);
+          // Ảnh mới của variant
+          formData.append(`variant_image_${variant.color}`, variant.imageFile);
         }
       });
-      
-      // Gửi thông tin ảnh cũ được cập nhật (chỉ trong edit mode)
-      if (isEditMode && existingImages.length > 0) {
-        formData.append('existing_images', JSON.stringify(existingImages));
+
+      // Thêm vouchers
+      if (vouchers && vouchers.length > 0) {
+        console.log('=== VOUCHERS DEBUG ===');
+        console.log('Vouchers to send:', vouchers);
+        formData.append('vouchers', JSON.stringify(vouchers));
       }
-      
-      // Gửi danh sách ảnh bị xóa (chỉ trong edit mode)
-      if (isEditMode && deletedImageIds.length > 0) {
-        formData.append('deleted_image_ids', JSON.stringify(deletedImageIds));
-      }
-      
-      // Thêm variants
-      formData.append('variants', JSON.stringify(variants));
       
       if (isEditMode) {
         // Update product
@@ -434,76 +404,25 @@ const AddProduct = () => {
               </Row>
             </Card>
 
-            {/* Upload ảnh */}
-            <Card title="Hình ảnh sản phẩm" style={{ marginBottom: 24 }}>
-              <ProductImageUpload 
-                images={images}
-                onChange={(newImages) => {
-                  // Track deleted existing images
-                  if (isEditMode) {
-                    const currentExistingIds = images
-                      .filter(img => img.existingImageId)
-                      .map(img => img.existingImageId);
-                    const newExistingIds = newImages
-                      .filter(img => img.existingImageId)
-                      .map(img => img.existingImageId);
-                    
-                    const newlyDeleted = currentExistingIds.filter(
-                      id => !newExistingIds.includes(id)
-                    );
-                    
-                    if (newlyDeleted.length > 0) {
-                      setDeletedImageIds(prev => [...prev, ...newlyDeleted]);
-                    }
-                  }
-                  
-                  setImages(newImages);
-                }}
-              />
-            </Card>
-
-            {/* Variants */}
-            <Card title="Biến thể sản phẩm" style={{ marginBottom: 24 }}>
+            {/* Variants - bao gồm cả upload ảnh cho mỗi màu */}
+            <Card title="Biến thể sản phẩm (Màu sắc & Kích cỡ)" style={{ marginBottom: 24 }}>
               <ProductVariantsForm
                 variants={variants}
                 onChange={setVariants}
               />
             </Card>
+
+            {/* Vouchers */}
+            <Card title="Voucher giảm giá" style={{ marginBottom: 24 }}>
+              <ProductVouchersForm
+                vouchers={vouchers}
+                onChange={setVouchers}
+              />
+            </Card>
           </Col>
 
-          {/* Cột phải - Giá và trạng thái */}
+          {/* Cột phải - Trạng thái */}
           <Col xs={24} lg={8}>
-            <Card title="Giá cả" style={{ marginBottom: 24 }}>
-              <Form.Item
-                label="Giá bán"
-                name="price"
-                rules={[{ required: true, message: 'Vui lòng nhập giá bán' }]}
-              >
-                <InputNumber
-                  style={{ width: '100%' }}
-                  min={0}
-                  formatter={value => `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
-                  parser={value => value.replace(/\$\s?|(,*)/g, '')}
-                  placeholder="0"
-                  addonAfter="VND"
-                />
-              </Form.Item>
-
-              <Form.Item
-                label="Giá khuyến mãi"
-                name="discount_price"
-              >
-                <InputNumber
-                  style={{ width: '100%' }}
-                  min={0}
-                  formatter={value => `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
-                  parser={value => value.replace(/\$\s?|(,*)/g, '')}
-                  placeholder="0"
-                  addonAfter="VND"
-                />
-              </Form.Item>
-            </Card>
-
             <Card title="Trạng thái" style={{ marginBottom: 24 }}>
               <Space direction="vertical" style={{ width: '100%' }}>
                 <Form.Item

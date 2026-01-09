@@ -3,7 +3,7 @@
 from rest_framework import generics, permissions
 from rest_framework.views import APIView
 from rest_framework.response import Response
-from .models import Product, ProductVariant, User, Order, OrderItem, Category, Brand, ProductImage, Review, Wishlist
+from .models import Product, ProductVariant, ProductVoucher, User, Order, OrderItem, Category, Brand, Review, Wishlist
 from .pagination import ProductPagination, OrderPagination, AdminPagination, StandardResultsSetPagination
 from .serializers import (
     RegisterSerializer, ProductSerializer, OrderSerializer, 
@@ -104,7 +104,7 @@ class RegisterView(generics.CreateAPIView):
 
 # Danh sÃ¡ch sáº£n pháº©m
 class ProductListView(generics.ListAPIView):
-    queryset = Product.objects.filter(is_active=True).select_related('category', 'brand').prefetch_related('images', 'variants')
+    queryset = Product.objects.filter(is_active=True).select_related('category', 'brand').prefetch_related('variants')
     serializer_class = ProductSerializer
     permission_classes = (permissions.AllowAny,)
     pagination_class = ProductPagination
@@ -629,7 +629,7 @@ class OrderStatusUpdateView(APIView):
 
 # ===== ADMIN API VIEWS =====
 
-from .serializers import CategorySerializer, BrandSerializer, AdminProductSerializer, ProductImageSerializer
+from .serializers import CategorySerializer, BrandSerializer, AdminProductSerializer
 
 # Admin: Categories CRUD
 class AdminCategoryListView(generics.ListCreateAPIView):
@@ -683,7 +683,7 @@ class AdminProductListView(generics.ListCreateAPIView):
     def get_queryset(self):
         if not (self.request.user.is_admin or self.request.user.is_superuser):
             return Product.objects.none()
-        return Product.objects.all().select_related('category', 'brand').prefetch_related('variants', 'images').order_by('-created_at')
+        return Product.objects.all().select_related('category', 'brand').prefetch_related('variants').order_by('-created_at')
     
     def create(self, request, *args, **kwargs):
         # Debug logging
@@ -729,18 +729,6 @@ class AdminProductListView(generics.ListCreateAPIView):
             
         product = serializer.save()
         
-        # Handle image uploads
-        images_data = self.request.FILES.getlist('images')
-        for i, image_file in enumerate(images_data):
-            is_main = i == 0  # First image is main
-            ProductImage.objects.create(
-                product=product,
-                image=image_file,
-                is_main=is_main,
-                order=i,
-                alt_text=f"{product.name} - Image {i+1}"
-            )
-        
         # Handle variants from JSON
         variants_json = self.request.data.get('variants')
         if variants_json:
@@ -748,11 +736,42 @@ class AdminProductListView(generics.ListCreateAPIView):
             try:
                 variants_data = json.loads(variants_json)
                 for variant_data in variants_data:
+                    # Get image file for this variant color (if any)
+                    color = variant_data.get('color', '')
+                    image_key = f'variant_image_{color}'
+                    image_file = self.request.FILES.get(image_key)
+                    
                     ProductVariant.objects.create(
                         product=product,
                         size=variant_data.get('size', ''),
-                        color=variant_data.get('color', ''),
+                        color=color,
+                        price=variant_data.get('price', 0),
+                        discount_price=variant_data.get('discount_price'),
+                        image=image_file,
                         stock_quantity=variant_data.get('stock_quantity', 0)
+                    )
+            except json.JSONDecodeError:
+                pass
+        
+        # Handle vouchers from JSON
+        vouchers_json = self.request.data.get('vouchers')
+        if vouchers_json:
+            try:
+                vouchers_data = json.loads(vouchers_json)
+                for voucher_data in vouchers_data:
+                    ProductVoucher.objects.create(
+                        product=product,
+                        code=voucher_data.get('code', ''),
+                        name=voucher_data.get('name', ''),
+                        description=voucher_data.get('description', ''),
+                        discount_type=voucher_data.get('discount_type', 'percentage'),
+                        discount_value=voucher_data.get('discount_value', 0),
+                        max_discount_amount=voucher_data.get('max_discount_amount'),
+                        max_uses=voucher_data.get('max_uses'),
+                        current_uses=voucher_data.get('current_uses', 0),
+                        valid_from=voucher_data.get('valid_from'),
+                        valid_to=voucher_data.get('valid_to'),
+                        is_active=voucher_data.get('is_active', True),
                     )
             except json.JSONDecodeError:
                 pass
@@ -765,7 +784,7 @@ class AdminProductDetailView(generics.RetrieveUpdateDestroyAPIView):
     def get_queryset(self):
         if not (self.request.user.is_admin or self.request.user.is_superuser):
             return Product.objects.none()
-        return Product.objects.all().select_related('category', 'brand').prefetch_related('variants', 'images')
+        return Product.objects.all().select_related('category', 'brand').prefetch_related('variants', 'vouchers')
     
     def update(self, request, *args, **kwargs):
         # Debug logging
@@ -795,74 +814,99 @@ class AdminProductDetailView(generics.RetrieveUpdateDestroyAPIView):
             print("Serializer is valid. Validated data:", serializer.validated_data)
             product = serializer.save()
             
-            # Handle deleted images
-            deleted_image_ids_json = request.data.get('deleted_image_ids')
-            if deleted_image_ids_json:
-                import json
-                try:
-                    deleted_ids = json.loads(deleted_image_ids_json)
-                    # Delete the images
-                    ProductImage.objects.filter(
-                        id__in=deleted_ids, 
-                        product=product
-                    ).delete()
-                except json.JSONDecodeError:
-                    pass
-            
-            # Handle existing images updates
-            existing_images_json = request.data.get('existing_images')
-            if existing_images_json:
-                import json
-                try:
-                    existing_images_data = json.loads(existing_images_json)
-                    for img_data in existing_images_data:
-                        try:
-                            img_obj = ProductImage.objects.get(
-                                id=img_data['id'], 
-                                product=product
-                            )
-                            # Reset all images to not main if this one is being set as main
-                            if img_data.get('is_main'):
-                                ProductImage.objects.filter(product=product).update(is_main=False)
-                            
-                            img_obj.is_main = img_data.get('is_main', False)
-                            img_obj.alt_text = img_data.get('alt_text', '')
-                            img_obj.order = img_data.get('order', 0)
-                            img_obj.save()
-                        except ProductImage.DoesNotExist:
-                            continue
-                except json.JSONDecodeError:
-                    pass
-            
-            # Handle new image uploads
-            new_images = request.FILES.getlist('images')
-            for i, image_file in enumerate(new_images):
-                # Get existing images count to set proper order
-                existing_count = product.images.count()
-                ProductImage.objects.create(
-                    product=product,
-                    image=image_file,
-                    is_main=False,  # Don't auto-set main for updates
-                    order=existing_count + i,
-                    alt_text=f"{product.name} - Image {existing_count + i + 1}"
-                )
-            
             # Handle variants update (replace all)
             variants_json = request.data.get('variants')
             if variants_json:
                 import json
                 try:
                     variants_data = json.loads(variants_json)
+                    
+                    # Lưu lại ảnh cũ theo màu trước khi xóa
+                    old_variants_images = {}
+                    for old_variant in product.variants.all():
+                        if old_variant.image and old_variant.color:
+                            # Lưu ảnh đầu tiên của mỗi màu
+                            if old_variant.color not in old_variants_images:
+                                old_variants_images[old_variant.color] = old_variant.image
+                    
                     # Delete existing variants
                     product.variants.all().delete()
+                    
                     # Create new variants
                     for variant_data in variants_data:
+                        # Get image file for this variant color (if any)
+                        color = variant_data.get('color', '')
+                        image_key = f'variant_image_{color}'
+                        image_file = request.FILES.get(image_key)
+                        
+                        # Quyết định ảnh nào sẽ được dùng:
+                        # 1. Nếu có ảnh mới upload → dùng ảnh mới
+                        # 2. Nếu không có ảnh mới nhưng có ảnh cũ → giữ ảnh cũ
+                        # 3. Nếu không có gì → None
+                        final_image = None
+                        if image_file:
+                            final_image = image_file
+                        elif color in old_variants_images:
+                            final_image = old_variants_images[color]
+                        
                         ProductVariant.objects.create(
                             product=product,
                             size=variant_data.get('size', ''),
-                            color=variant_data.get('color', ''),
+                            color=color,
+                            price=variant_data.get('price', 0),
+                            discount_price=variant_data.get('discount_price'),
+                            image=final_image,
                             stock_quantity=variant_data.get('stock_quantity', 0)
                         )
+                except json.JSONDecodeError:
+                    pass
+            
+            # Handle vouchers update (replace all)
+            vouchers_json = request.data.get('vouchers')
+            if vouchers_json:
+                try:
+                    vouchers_data = json.loads(vouchers_json)
+                    
+                    # Delete existing vouchers (except ones being kept)
+                    existing_voucher_ids = [v.get('id') for v in vouchers_data if v.get('id')]
+                    product.vouchers.exclude(id__in=existing_voucher_ids).delete()
+                    
+                    # Create or update vouchers
+                    for voucher_data in vouchers_data:
+                        voucher_id = voucher_data.get('id')
+                        if voucher_id:
+                            # Update existing voucher
+                            try:
+                                voucher = ProductVoucher.objects.get(id=voucher_id, product=product)
+                                voucher.code = voucher_data.get('code', voucher.code)
+                                voucher.name = voucher_data.get('name', voucher.name)
+                                voucher.description = voucher_data.get('description', '')
+                                voucher.discount_type = voucher_data.get('discount_type', voucher.discount_type)
+                                voucher.discount_value = voucher_data.get('discount_value', voucher.discount_value)
+                                voucher.max_discount_amount = voucher_data.get('max_discount_amount')
+                                voucher.max_uses = voucher_data.get('max_uses')
+                                voucher.valid_from = voucher_data.get('valid_from', voucher.valid_from)
+                                voucher.valid_to = voucher_data.get('valid_to', voucher.valid_to)
+                                voucher.is_active = voucher_data.get('is_active', voucher.is_active)
+                                voucher.save()
+                            except ProductVoucher.DoesNotExist:
+                                pass
+                        else:
+                            # Create new voucher
+                            ProductVoucher.objects.create(
+                                product=product,
+                                code=voucher_data.get('code', ''),
+                                name=voucher_data.get('name', ''),
+                                description=voucher_data.get('description', ''),
+                                discount_type=voucher_data.get('discount_type', 'percentage'),
+                                discount_value=voucher_data.get('discount_value', 0),
+                                max_discount_amount=voucher_data.get('max_discount_amount'),
+                                max_uses=voucher_data.get('max_uses'),
+                                current_uses=voucher_data.get('current_uses', 0),
+                                valid_from=voucher_data.get('valid_from'),
+                                valid_to=voucher_data.get('valid_to'),
+                                is_active=voucher_data.get('is_active', True),
+                            )
                 except json.JSONDecodeError:
                     pass
             
