@@ -3,7 +3,11 @@
 from rest_framework import generics, permissions
 from rest_framework.views import APIView
 from rest_framework.response import Response
-from .models import Product, ProductVariant, ProductVoucher, User, Order, OrderItem, Category, Brand, Review, Wishlist
+from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
+from .models import (
+    Product, ProductVariant, ProductVariantImage, ProductSKU, ProductVoucher, 
+    User, Order, OrderItem, Category, Brand, Review, Wishlist
+)
 from .pagination import ProductPagination, OrderPagination, AdminPagination, StandardResultsSetPagination
 from .serializers import (
     RegisterSerializer, ProductSerializer, OrderSerializer, 
@@ -20,7 +24,11 @@ from django.db import transaction
 # Custom permission for admin only
 class IsAdminUser(permissions.BasePermission):
     def has_permission(self, request, view):
-        return bool(request.user and request.user.is_authenticated and request.user.is_admin)
+        return bool(
+            request.user and 
+            request.user.is_authenticated and 
+            (request.user.is_admin or request.user.is_staff or request.user.is_superuser)
+        )
 
 # Current User Info
 class CurrentUserView(APIView):
@@ -102,6 +110,42 @@ class RegisterView(generics.CreateAPIView):
             print("Serializer errors:", serializer.errors)
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
+# User Profile View - Xem và cập nhật thông tin cá nhân
+class UserProfileView(APIView):
+    permission_classes = [IsAuthenticated]
+    parser_classes = [MultiPartParser, FormParser, JSONParser]
+    
+    def get(self, request):
+        """Lấy thông tin profile của user hiện tại"""
+        serializer = UserSerializer(request.user, context={'request': request})
+        return Response(serializer.data)
+    
+    def put(self, request):
+        """Cập nhật thông tin profile"""
+        serializer = UserSerializer(
+            request.user, 
+            data=request.data, 
+            partial=True,
+            context={'request': request}
+        )
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    
+    def patch(self, request):
+        """Cập nhật một phần thông tin profile"""
+        serializer = UserSerializer(
+            request.user, 
+            data=request.data, 
+            partial=True,
+            context={'request': request}
+        )
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
 # Danh sÃ¡ch sáº£n pháº©m
 class ProductListView(generics.ListAPIView):
     queryset = Product.objects.filter(is_active=True).select_related('category', 'brand').prefetch_related('variants')
@@ -135,7 +179,7 @@ class CartView(APIView):
 
     def get(self, request):
         cart, created = Cart.objects.get_or_create(user=request.user)
-        serializer = CartSerializer(cart)
+        serializer = CartSerializer(cart, context={'request': request})
         return Response(serializer.data)
 
     def post(self, request):
@@ -143,9 +187,9 @@ class CartView(APIView):
         
         print("=== CART POST DEBUG ===")
         print("Request data:", request.data)
-        print("Current cart items:", [{"id": item.id, "variant": item.product_variant.id, "qty": item.quantity} for item in cart.items.all()])
+        print("Current cart items:", [{"id": item.id, "sku": item.product_sku.id, "qty": item.quantity} for item in cart.items.all()])
         
-        # Sá»­ dá»¥ng serializer Ä‘á»ƒ update cart vá»›i items má»›i
+        # Sử dụng serializer để update cart với items mới
         serializer = CartSerializer(cart, data=request.data, context={'request': request})
         if serializer.is_valid():
             serializer.save()
@@ -159,19 +203,19 @@ class CartView(APIView):
         """Add single item to cart"""
         cart, _ = Cart.objects.get_or_create(user=request.user)
         
-        product_variant_id = request.data.get('product_variant_id')
+        product_sku_id = request.data.get('product_sku_id')
         quantity = int(request.data.get('quantity', 1))
         
         print("=== CART PUT DEBUG (ADD ITEM) ===")
-        print(f"Adding variant {product_variant_id} with quantity {quantity}")
+        print(f"Adding SKU {product_sku_id} with quantity {quantity}")
         
         try:
-            product_variant = ProductVariant.objects.get(id=product_variant_id)
+            product_sku = ProductSKU.objects.get(id=product_sku_id)
             
             # Check if item already exists
             cart_item, created = cart.items.get_or_create(
-                product_variant=product_variant,
-                defaults={'quantity': 0}  # Set default 0 Ä‘á»ƒ validate sau
+                product_sku=product_sku,
+                defaults={'quantity': 0}
             )
             
             # Calculate new quantity
@@ -180,21 +224,21 @@ class CartView(APIView):
             print(f"Current quantity: {cart_item.quantity}")
             print(f"Adding quantity: {quantity}")
             print(f"New quantity: {new_quantity}")
-            print(f"Stock available: {product_variant.stock_quantity}")
+            print(f"Stock available: {product_sku.available_quantity}")
             
-            # Validate stock quantity (chá»‰ khi tÄƒng quantity)
-            if quantity > 0 and new_quantity > product_variant.stock_quantity:
-                available = product_variant.stock_quantity - cart_item.quantity
+            # Validate stock quantity (chỉ khi tăng quantity)
+            if quantity > 0 and new_quantity > product_sku.available_quantity:
+                available = product_sku.available_quantity - cart_item.quantity
                 if created:
-                    cart_item.delete()  # XÃ³a item vá»«a táº¡o náº¿u validation fail
+                    cart_item.delete()
                 return Response({
-                    "error": f"KhÃ´ng Ä‘á»§ hÃ ng trong kho. Chá»‰ cÃ²n {available} sáº£n pháº©m cÃ³ thá»ƒ thÃªm.",
+                    "error": f"Không đủ hàng trong kho. Chỉ còn {available} sản phẩm có thể thêm.",
                     "available_quantity": available,
                     "requested_quantity": quantity
                 }, status=status.HTTP_400_BAD_REQUEST)
             
             if created:
-                # Item má»›i, set quantity sau khi validate
+                # Item mới, set quantity sau khi validate
                 cart_item.quantity = quantity
                 if cart_item.quantity <= 0:
                     cart_item.delete()
@@ -206,7 +250,7 @@ class CartView(APIView):
                 # Update existing item
                 cart_item.quantity = new_quantity
                 
-                # Náº¿u quantity <= 0, xÃ³a item
+                # Nếu quantity <= 0, xóa item
                 if cart_item.quantity <= 0:
                     print(f"Removing item with quantity {cart_item.quantity}")
                     cart_item.delete()
@@ -215,12 +259,12 @@ class CartView(APIView):
                     print(f"Updated existing item to quantity {cart_item.quantity}")
             
             # Return updated cart
-            serializer = CartSerializer(cart)
+            serializer = CartSerializer(cart, context={'request': request})
             return Response(serializer.data, status=status.HTTP_200_OK)
             
-        except ProductVariant.DoesNotExist:
+        except ProductSKU.DoesNotExist:
             return Response(
-                {"error": "Product variant not found"}, 
+                {"error": "Product SKU not found"}, 
                 status=status.HTTP_404_NOT_FOUND
             )
         except Exception as e:
@@ -234,18 +278,18 @@ class CartView(APIView):
         """Remove specific item from cart"""
         cart, _ = Cart.objects.get_or_create(user=request.user)
         
-        product_variant_id = request.data.get('product_variant_id')
+        product_sku_id = request.data.get('product_sku_id')
         
         print(f"=== CART DELETE DEBUG (REMOVE ITEM) ===")
-        print(f"Removing variant {product_variant_id}")
+        print(f"Removing SKU {product_sku_id}")
         
         try:
-            cart_item = cart.items.get(product_variant=product_variant_id)
+            cart_item = cart.items.get(product_sku=product_sku_id)
             cart_item.delete()
             print(f"Successfully deleted item")
             
             # Return updated cart
-            serializer = CartSerializer(cart)
+            serializer = CartSerializer(cart, context={'request': request})
             return Response(serializer.data, status=status.HTTP_200_OK)
             
         except CartItem.DoesNotExist:
@@ -259,7 +303,6 @@ class CartView(APIView):
                 {"error": str(e)}, 
                 status=status.HTTP_400_BAD_REQUEST
             )
-
 
 #-----------------------------Order Management-----------------------------------------------
 
@@ -292,7 +335,9 @@ class OrderListView(generics.ListAPIView):
     pagination_class = OrderPagination
     
     def get_queryset(self):
-        return Order.objects.filter(user=self.request.user).select_related('user').prefetch_related('items__product_variant__product').order_by('-created_at')
+        return Order.objects.filter(user=self.request.user).select_related('user').prefetch_related(
+            'items__product_sku__variant__product'
+        ).order_by('-created_at')
 
 # Get order details
 class OrderDetailView(generics.RetrieveAPIView):
@@ -310,7 +355,30 @@ class AdminOrderListView(generics.ListAPIView):
     pagination_class = AdminPagination
     
     def get_queryset(self):
-        return Order.objects.all().select_related('user').prefetch_related('items__product_variant__product').order_by('-created_at')
+        queryset = Order.objects.all().select_related('user').prefetch_related(
+            'items__product_sku__variant__product'
+        ).order_by('-created_at')
+        
+        # Search filter (by order ID or username)
+        search = self.request.query_params.get('search', None)
+        if search:
+            from django.db.models import Q
+            queryset = queryset.filter(
+                Q(id__icontains=search) |
+                Q(user__username__icontains=search) |
+                Q(user__email__icontains=search)
+            )
+        
+        # Status filters
+        status = self.request.query_params.get('status', None)
+        if status:
+            queryset = queryset.filter(status=status)
+        
+        payment_status = self.request.query_params.get('payment_status', None)
+        if payment_status:
+            queryset = queryset.filter(payment_status=payment_status)
+        
+        return queryset
 
 # Admin: Update order status
 class AdminOrderStatusUpdateView(generics.UpdateAPIView):
@@ -355,7 +423,7 @@ class OrderCancelView(APIView):
                 for item in order.items.all():
                     try:
                         StockService.return_stock(
-                            product_variant=item.product_variant,
+                            product_sku=item.product_sku,  # Dùng product_sku thay vì product_variant
                             quantity=item.quantity,
                             order=order,
                             user=request.user,
@@ -397,9 +465,9 @@ class CreateOrderFromCartView(APIView):
                     status=status.HTTP_400_BAD_REQUEST
                 )
             
-            # Calculate total price
+            # Calculate total price using ProductSKU
             total_price = sum(
-                item.quantity * item.product_variant.product.price 
+                item.quantity * item.product_sku.get_final_price()
                 for item in cart.items.all()
             )
             
@@ -433,18 +501,18 @@ class CreateOrderFromCartView(APIView):
             # Create order items from cart items and export stock
             with transaction.atomic():
                 for cart_item in cart.items.all():
-                    # Create order item
+                    # Create order item using ProductSKU
                     OrderItem.objects.create(
                         order=order,
-                        product_variant=cart_item.product_variant,
+                        product_sku=cart_item.product_sku,
                         quantity=cart_item.quantity,
-                        price_per_item=cart_item.product_variant.product.price
+                        price_per_item=cart_item.product_sku.get_final_price()
                     )
                     
-                    # Export stock using StockService (proper way)
+                    # Export stock using StockService with ProductSKU
                     try:
                         StockService.export_stock(
-                            product_variant=cart_item.product_variant,
+                            product_sku=cart_item.product_sku,
                             quantity=cart_item.quantity,
                             order=order,
                             user=request.user,
@@ -484,7 +552,7 @@ class UserOrderListView(generics.ListAPIView):
     pagination_class = OrderPagination
     
     def get_queryset(self):
-        return Order.objects.filter(user=self.request.user).select_related('user').prefetch_related('items__product_variant__product').order_by('-created_at')
+        return Order.objects.filter(user=self.request.user).select_related('user').prefetch_related('items__product_sku__variant__product').order_by('-created_at')
 
 
 # Order detail for user
@@ -729,28 +797,54 @@ class AdminProductListView(generics.ListCreateAPIView):
             
         product = serializer.save()
         
-        # Handle variants from JSON
+        # Handle variants from JSON (NEW STRUCTURE)
+        # Structure: [{color, price, discount_price, images: [files], sizes: [{name, stock}]}]
         variants_json = self.request.data.get('variants')
         if variants_json:
             import json
             try:
                 variants_data = json.loads(variants_json)
                 for variant_data in variants_data:
-                    # Get image file for this variant color (if any)
-                    color = variant_data.get('color', '')
-                    image_key = f'variant_image_{color}'
-                    image_file = self.request.FILES.get(image_key)
-                    
-                    ProductVariant.objects.create(
+                    # Create ProductVariant (color + price level)
+                    variant = ProductVariant.objects.create(
                         product=product,
-                        size=variant_data.get('size', ''),
-                        color=color,
+                        color=variant_data.get('color', ''),
                         price=variant_data.get('price', 0),
                         discount_price=variant_data.get('discount_price'),
-                        image=image_file,
-                        stock_quantity=variant_data.get('stock_quantity', 0)
+                        is_active=variant_data.get('is_active', True)
                     )
-            except json.JSONDecodeError:
+                    
+                    # Create ProductVariantImages
+                    color = variant_data.get('color', '')
+                    # Support multiple images per variant
+                    image_index = 0
+                    while True:
+                        image_key = f'variant_image_{color}_{image_index}' if image_index > 0 else f'variant_image_{color}'
+                        image_file = self.request.FILES.get(image_key)
+                        if not image_file:
+                            break
+                        
+                        ProductVariantImage.objects.create(
+                            variant=variant,
+                            image=image_file,
+                            is_primary=(image_index == 0),
+                            order=image_index
+                        )
+                        image_index += 1
+                    
+                    # Create ProductSKUs (size + stock level)
+                    sizes_data = variant_data.get('sizes', [])
+                    for size_data in sizes_data:
+                        ProductSKU.objects.create(
+                            variant=variant,
+                            size=size_data.get('name', ''),
+                            stock_quantity=size_data.get('stock_quantity', 0),
+                            minimum_stock=size_data.get('minimum_stock', 5),
+                            reorder_point=size_data.get('reorder_point', 10),
+                            cost_price=size_data.get('cost_price', 0)
+                        )
+            except json.JSONDecodeError as e:
+                print(f"JSON decode error: {e}")
                 pass
         
         # Handle vouchers from JSON
@@ -814,51 +908,58 @@ class AdminProductDetailView(generics.RetrieveUpdateDestroyAPIView):
             print("Serializer is valid. Validated data:", serializer.validated_data)
             product = serializer.save()
             
-            # Handle variants update (replace all)
+            # Handle variants update (replace all - NEW STRUCTURE)
             variants_json = request.data.get('variants')
             if variants_json:
                 import json
                 try:
                     variants_data = json.loads(variants_json)
                     
-                    # Lưu lại ảnh cũ theo màu trước khi xóa
-                    old_variants_images = {}
-                    for old_variant in product.variants.all():
-                        if old_variant.image and old_variant.color:
-                            # Lưu ảnh đầu tiên của mỗi màu
-                            if old_variant.color not in old_variants_images:
-                                old_variants_images[old_variant.color] = old_variant.image
-                    
-                    # Delete existing variants
+                    # Delete existing variants (cascade will delete images and SKUs)
                     product.variants.all().delete()
                     
                     # Create new variants
                     for variant_data in variants_data:
-                        # Get image file for this variant color (if any)
-                        color = variant_data.get('color', '')
-                        image_key = f'variant_image_{color}'
-                        image_file = request.FILES.get(image_key)
-                        
-                        # Quyết định ảnh nào sẽ được dùng:
-                        # 1. Nếu có ảnh mới upload → dùng ảnh mới
-                        # 2. Nếu không có ảnh mới nhưng có ảnh cũ → giữ ảnh cũ
-                        # 3. Nếu không có gì → None
-                        final_image = None
-                        if image_file:
-                            final_image = image_file
-                        elif color in old_variants_images:
-                            final_image = old_variants_images[color]
-                        
-                        ProductVariant.objects.create(
+                        # Create ProductVariant (color + price level)
+                        variant = ProductVariant.objects.create(
                             product=product,
-                            size=variant_data.get('size', ''),
-                            color=color,
+                            color=variant_data.get('color', ''),
                             price=variant_data.get('price', 0),
                             discount_price=variant_data.get('discount_price'),
-                            image=final_image,
-                            stock_quantity=variant_data.get('stock_quantity', 0)
+                            is_active=variant_data.get('is_active', True)
                         )
-                except json.JSONDecodeError:
+                        
+                        # Create ProductVariantImages
+                        color = variant_data.get('color', '')
+                        # Support multiple images per variant
+                        image_index = 0
+                        while True:
+                            image_key = f'variant_image_{color}_{image_index}' if image_index > 0 else f'variant_image_{color}'
+                            image_file = request.FILES.get(image_key)
+                            if not image_file:
+                                break
+                            
+                            ProductVariantImage.objects.create(
+                                variant=variant,
+                                image=image_file,
+                                is_primary=(image_index == 0),
+                                order=image_index
+                            )
+                            image_index += 1
+                        
+                        # Create ProductSKUs (size + stock level)
+                        sizes_data = variant_data.get('sizes', [])
+                        for size_data in sizes_data:
+                            ProductSKU.objects.create(
+                                variant=variant,
+                                size=size_data.get('name', ''),
+                                stock_quantity=size_data.get('stock_quantity', 0),
+                                minimum_stock=size_data.get('minimum_stock', 5),
+                                reorder_point=size_data.get('reorder_point', 10),
+                                cost_price=size_data.get('cost_price', 0)
+                            )
+                except json.JSONDecodeError as e:
+                    print(f"JSON decode error: {e}")
                     pass
             
             # Handle vouchers update (replace all)
@@ -944,7 +1045,7 @@ class AdminDashboardStatsView(APIView):
         start_of_today = now.replace(hour=0, minute=0, second=0, microsecond=0)
         
         stats = {
-            'total_products': ProductVariant.objects.filter(product__is_active=True).count(),  # Tá»•ng sáº£n pháº©m (variants)
+            'total_products': ProductSKU.objects.filter(variant__product__is_active=True).count(),  # Tá»•ng sáº£n pháº©m (variants)
             'total_product_types': Product.objects.filter(is_active=True).count(),  # Tá»•ng loáº¡i sáº£n pháº©m
             'total_orders': Order.objects.count(),
             'total_users': User.objects.count(),
@@ -1047,7 +1148,29 @@ class AdminUserListView(generics.ListAPIView):
     pagination_class = AdminPagination
     
     def get_queryset(self):
-        return User.objects.order_by('-date_joined')
+        queryset = User.objects.order_by('-date_joined')
+        
+        # Search filter
+        search = self.request.query_params.get('search', None)
+        if search:
+            from django.db.models import Q
+            queryset = queryset.filter(
+                Q(username__icontains=search) |
+                Q(email__icontains=search) |
+                Q(first_name__icontains=search) |
+                Q(last_name__icontains=search)
+            )
+        
+        # Status filters
+        is_active = self.request.query_params.get('is_active', None)
+        if is_active is not None and is_active != '':
+            queryset = queryset.filter(is_active=is_active.lower() == 'true')
+        
+        is_staff = self.request.query_params.get('is_staff', None)
+        if is_staff is not None and is_staff != '':
+            queryset = queryset.filter(is_staff=is_staff.lower() == 'true')
+        
+        return queryset
     
     def get_serializer_context(self):
         context = super().get_serializer_context()
@@ -1241,7 +1364,7 @@ class ProductStatsView(APIView):
 from .services.stock_service import StockService
 from .serializers import (
     StockHistorySerializer, StockAlertSerializer, 
-    ProductVariantStockSerializer, StockTransactionSerializer,
+    ProductSKUStockSerializer, StockTransactionSerializer,
     StockAdjustmentSerializer
 )
 from .models import StockHistory, StockAlert
@@ -1272,12 +1395,12 @@ class AdminStockImportView(APIView):
             reference_number = serializer.validated_data.get('reference_number', '')
             notes = serializer.validated_data.get('notes', '')
             
-            # Get variant
-            variant = ProductVariant.objects.select_related('product').get(id=variant_id)
+            # Get SKU
+            sku = ProductSKU.objects.select_related('variant__product').get(id=variant_id)
             
             # Import stock
-            updated_variant = StockService.import_stock(
-                product_variant=variant,
+            updated_sku = StockService.import_stock(
+                product_sku=sku,
                 quantity=quantity,
                 cost_per_item=cost_per_item,
                 reference_number=reference_number,
@@ -1288,16 +1411,16 @@ class AdminStockImportView(APIView):
             # Return updated variant info
             return Response({
                 'message': f'Nháº­p kho thÃ nh cÃ´ng: {quantity} sáº£n pháº©m',
-                'variant': {
-                    'id': updated_variant.id,
-                    'sku': updated_variant.sku,
-                    'product_name': updated_variant.product.name,
-                    'size': updated_variant.size,
-                    'color': updated_variant.color,
-                    'stock_quantity': updated_variant.stock_quantity,
-                    'reserved_quantity': updated_variant.reserved_quantity,
-                    'available_quantity': updated_variant.available_quantity,
-                    'cost_price': float(updated_variant.cost_price),
+                'sku': {
+                    'id': updated_sku.id,
+                    'sku': updated_sku.sku,
+                    'product_name': updated_sku.variant.product.name,
+                    'size': updated_sku.size,
+                    'color': updated_sku.variant.color,
+                    'stock_quantity': updated_sku.stock_quantity,
+                    'reserved_quantity': updated_sku.reserved_quantity,
+                    'available_quantity': updated_sku.available_quantity,
+                    'cost_price': float(updated_sku.cost_price),
                 }
             }, status=status.HTTP_201_CREATED)
             
@@ -1340,13 +1463,13 @@ class AdminStockAdjustView(APIView):
             new_quantity = serializer.validated_data['new_quantity']
             reason = serializer.validated_data.get('reason', '')
             
-            # Get variant
-            variant = ProductVariant.objects.get(id=variant_id)
-            old_quantity = variant.stock_quantity
+            # Get SKU
+            sku = ProductSKU.objects.get(id=variant_id)
+            old_quantity = sku.stock_quantity
             
             # Adjust stock
-            updated_variant = StockService.adjust_stock(
-                product_variant=variant,
+            updated_sku = StockService.adjust_stock(
+                product_sku=sku,
                 new_quantity=new_quantity,
                 reason=reason,
                 user=request.user
@@ -1357,16 +1480,16 @@ class AdminStockAdjustView(APIView):
             
             return Response({
                 'message': f'Äiá»u chá»‰nh tá»“n kho thÃ nh cÃ´ng: {action} {abs(difference)} sáº£n pháº©m',
-                'variant': {
-                    'id': updated_variant.id,
-                    'sku': updated_variant.sku,
-                    'product_name': updated_variant.product.name,
-                    'size': updated_variant.size,
-                    'color': updated_variant.color,
+                'sku': {
+                    'id': updated_sku.id,
+                    'sku': updated_sku.sku,
+                    'product_name': updated_sku.variant.product.name,
+                    'size': updated_sku.size,
+                    'color': updated_sku.variant.color,
                     'old_quantity': old_quantity,
-                    'new_quantity': updated_variant.stock_quantity,
+                    'new_quantity': updated_sku.stock_quantity,
                     'difference': difference,
-                    'available_quantity': updated_variant.available_quantity,
+                    'available_quantity': updated_sku.available_quantity,
                 }
             }, status=status.HTTP_200_OK)
             
@@ -1410,12 +1533,12 @@ class AdminStockDamagedView(APIView):
                     status=status.HTTP_400_BAD_REQUEST
                 )
             
-            # Get variant
-            variant = ProductVariant.objects.select_related('product').get(id=variant_id)
+            # Get SKU
+            sku = ProductSKU.objects.select_related('variant__product').get(id=variant_id)
             
             # Mark as damaged
-            updated_variant = StockService.mark_damaged(
-                product_variant=variant,
+            updated_sku = StockService.mark_damaged(
+                product_sku=sku,
                 quantity=quantity,
                 reason=reason,
                 user=request.user
@@ -1423,12 +1546,12 @@ class AdminStockDamagedView(APIView):
             
             return Response({
                 'message': f'ÄÃ£ Ä‘Ã¡nh dáº¥u {quantity} sáº£n pháº©m há»ng',
-                'variant': {
-                    'id': updated_variant.id,
-                    'sku': updated_variant.sku,
-                    'product_name': updated_variant.product.name,
-                    'stock_quantity': updated_variant.stock_quantity,
-                    'available_quantity': updated_variant.available_quantity,
+                'sku': {
+                    'id': updated_sku.id,
+                    'sku': updated_sku.sku,
+                    'product_name': updated_sku.variant.product.name,
+                    'stock_quantity': updated_sku.stock_quantity,
+                    'available_quantity': updated_sku.available_quantity,
                 }
             }, status=status.HTTP_200_OK)
             
@@ -1466,15 +1589,15 @@ class AdminStockHistoryView(generics.ListAPIView):
     
     def get_queryset(self):
         queryset = StockHistory.objects.all().select_related(
-            'product_variant__product',
+            'product_sku__variant__product',
             'created_by',
             'order'
         ).order_by('-created_at')
         
-        # Filter by variant
-        variant_id = self.request.query_params.get('variant_id')
-        if variant_id:
-            queryset = queryset.filter(product_variant_id=variant_id)
+        # Filter by SKU
+        sku_id = self.request.query_params.get('sku_id')
+        if sku_id:
+            queryset = queryset.filter(product_sku_id=sku_id)
         
         # Filter by transaction type
         transaction_type = self.request.query_params.get('transaction_type')
@@ -1511,7 +1634,7 @@ class AdminStockAlertsView(generics.ListAPIView):
     
     def get_queryset(self):
         queryset = StockAlert.objects.all().select_related(
-            'product_variant__product',
+            'product_sku__variant__product',
             'resolved_by'
         ).order_by('is_resolved', '-created_at')
         
@@ -1558,7 +1681,7 @@ class AdminStockAlertResolveView(APIView):
                 'message': 'Alert Ä‘Ã£ Ä‘Æ°á»£c giáº£i quyáº¿t',
                 'alert': {
                     'id': alert.id,
-                    'product_variant': alert.product_variant.sku,
+                    'product_sku': alert.product_sku.sku,
                     'alert_type': alert.get_alert_type_display(),
                     'resolved_at': alert.resolved_at,
                     'resolved_by': alert.resolved_by.username,
@@ -1660,9 +1783,9 @@ class AdminVariantStockDetailView(APIView):
     
     def get(self, request, pk):
         try:
-            variant = ProductVariant.objects.select_related(
-                'product__category',
-                'product__brand'
+            variant = ProductSKU.objects.select_related(
+                'variant__product__category',
+                'variant__product__brand'
             ).get(pk=pk)
             
             # Get recent stock history
@@ -1671,13 +1794,13 @@ class AdminVariantStockDetailView(APIView):
             
             # Get active alerts
             active_alerts = StockAlert.objects.filter(
-                product_variant=variant,
+                product_sku=variant,
                 is_resolved=False
             )
             alerts_data = StockAlertSerializer(active_alerts, many=True).data
             
             return Response({
-                'variant': {
+                'sku': {
                     'id': variant.id,
                     'sku': variant.sku,
                     'product': {
@@ -1730,7 +1853,7 @@ class AdminStockReturnView(APIView):
                     status=status.HTTP_400_BAD_REQUEST
                 )
             
-            variant = ProductVariant.objects.select_related('product').get(id=variant_id)
+            variant = ProductSKU.objects.select_related('variant__product').get(id=variant_id)
             
             order = None
             if order_id:
@@ -1739,8 +1862,8 @@ class AdminStockReturnView(APIView):
                 except Order.DoesNotExist:
                     pass
             
-            updated_variant = StockService.return_stock(
-                product_variant=variant,
+            updated_sku = StockService.return_stock(
+                product_sku=variant,
                 quantity=quantity,
                 order=order,
                 notes=notes,
@@ -1749,19 +1872,19 @@ class AdminStockReturnView(APIView):
             
             return Response({
                 'message': f'Return successful: {quantity} items',
-                'variant': {
-                    'id': updated_variant.id,
-                    'sku': updated_variant.sku,
-                    'product_name': updated_variant.product.name,
-                    'size': updated_variant.size,
-                    'color': updated_variant.color,
-                    'stock_quantity': updated_variant.stock_quantity,
-                    'reserved_quantity': updated_variant.reserved_quantity,
-                    'available_quantity': updated_variant.available_quantity,
+                'sku': {
+                    'id': updated_sku.id,
+                    'sku': updated_sku.sku,
+                    'product_name': updated_sku.variant.product.name,
+                    'size': updated_sku.size,
+                    'color': updated_sku.variant.color,
+                    'stock_quantity': updated_sku.stock_quantity,
+                    'reserved_quantity': updated_sku.reserved_quantity,
+                    'available_quantity': updated_sku.available_quantity,
                 }
             }, status=status.HTTP_200_OK)
             
-        except ProductVariant.DoesNotExist:
+        except ProductSKU.DoesNotExist:
             return Response(
                 {'error': 'Product variant not found'}, 
                 status=status.HTTP_404_NOT_FOUND
@@ -1791,9 +1914,9 @@ class AdminVariantStockHistoryView(generics.ListAPIView):
     def get_queryset(self):
         variant_id = self.kwargs['variant_id']
         return StockHistory.objects.filter(
-            product_variant_id=variant_id
+            product_sku_id=variant_id
         ).select_related(
-            'product_variant__product',
+            'product_sku__variant__product',
             'created_by',
             'order'
         ).order_by('-created_at')
@@ -1806,32 +1929,32 @@ class AdminVariantListView(generics.ListAPIView):
     GET /api/shop/admin/products/variants/
     """
     permission_classes = [IsAdminUser]
-    serializer_class = ProductVariantSerializer
+    serializer_class = ProductSKUStockSerializer
     pagination_class = AdminPagination
     
     def get_queryset(self):
         from django.db.models import Q, F
-        queryset = ProductVariant.objects.select_related(
-            'product__category',
-            'product__brand'
+        queryset = ProductSKU.objects.select_related(
+            'variant__product__category',
+            'variant__product__brand'
         ).all()
         
         search = self.request.query_params.get('search')
         if search:
             queryset = queryset.filter(
                 Q(sku__icontains=search) |
-                Q(product__name__icontains=search) |
+                Q(variant__product__name__icontains=search) |
                 Q(size__icontains=search) |
-                Q(color__icontains=search)
+                Q(variant__color__icontains=search)
             )
         
         category = self.request.query_params.get('category')
         if category:
-            queryset = queryset.filter(product__category_id=category)
+            queryset = queryset.filter(variant__product__category_id=category)
         
         brand = self.request.query_params.get('brand')
         if brand:
-            queryset = queryset.filter(product__brand_id=brand)
+            queryset = queryset.filter(variant__product__brand_id=brand)
         
         if self.request.query_params.get('low_stock') == 'true':
             queryset = queryset.filter(stock_quantity__lte=F('minimum_stock'))
@@ -2267,10 +2390,10 @@ class BestSellingProductsView(APIView):
         ).exclude(
             order__status='cancelled'
         ).values(
-            'product_variant__product__id',
-            'product_variant__product__name',
-            'product_variant__product__category__name',
-            'product_variant__product__brand__name'
+            'product_sku__variant__product__id',
+            'product_sku__variant__product__name',
+            'product_sku__variant__product__category__name',
+            'product_sku__variant__product__brand__name'
         ).annotate(
             total_quantity=Sum('quantity'),
             total_revenue=Sum(F('quantity') * F('price_per_item')),
@@ -2280,10 +2403,10 @@ class BestSellingProductsView(APIView):
         products_data = []
         for item in best_sellers:
             products_data.append({
-                'product_id': item['product_variant__product__id'],
-                'product_name': item['product_variant__product__name'],
-                'category': item['product_variant__product__category__name'],
-                'brand': item['product_variant__product__brand__name'],
+                'product_id': item['product_sku__variant__product__id'],
+                'product_name': item['product_sku__variant__product__name'],
+                'category': item['product_sku__variant__product__category__name'],
+                'brand': item['product_sku__variant__product__brand__name'],
                 'total_sold': item['total_quantity'],
                 'total_revenue': float(item['total_revenue'] or 0),
                 'order_count': item['order_count']
@@ -2311,8 +2434,8 @@ class CategoryRevenueView(APIView):
         ).exclude(
             order__status='cancelled'
         ).values(
-            'product_variant__product__category__id',
-            'product_variant__product__category__name'
+            'product_sku__variant__product__category__id',
+            'product_sku__variant__product__category__name'
         ).annotate(
             revenue=Sum(F('quantity') * F('price_per_item')),
             quantity_sold=Sum('quantity'),
@@ -2323,13 +2446,13 @@ class CategoryRevenueView(APIView):
         total_revenue = 0
         
         for item in category_revenue:
-            if item['product_variant__product__category__name']:
+            if item['product_sku__variant__product__category__name']:
                 revenue = float(item['revenue'] or 0)
                 total_revenue += revenue
                 
                 categories_data.append({
-                    'category_id': item['product_variant__product__category__id'],
-                    'category_name': item['product_variant__product__category__name'],
+                    'category_id': item['product_sku__variant__product__category__id'],
+                    'category_name': item['product_sku__variant__product__category__name'],
                     'revenue': revenue,
                     'quantity_sold': item['quantity_sold'],
                     'order_count': item['order_count']

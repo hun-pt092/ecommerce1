@@ -145,23 +145,30 @@ const PaymentForm = ({ cartData, shippingAddress, onSubmit, onPrevious, loading 
       // Try multiple paths to get price with better fallback logic
       let price = 0;
       
-      // Priority 1: Discount price from various sources
-      if (item.product_variant?.product?.discount_price) {
-        price = parseFloat(item.product_variant.product.discount_price);
-        console.log('✓ Using product_variant.product.discount_price:', price);
-      } else if (item.product?.discount_price) {
+      // Priority 1: final_price from product_sku (calculated by backend)
+      if (item.product_sku?.final_price) {
+        price = parseFloat(item.product_sku.final_price);
+        console.log('✓ Using product_sku.final_price:', price);
+      }
+      // Priority 2: Discount price from variant product
+      else if (item.product_sku?.variant?.product?.discount_price) {
+        price = parseFloat(item.product_sku.variant.product.discount_price);
+        console.log('✓ Using product_sku.variant.product.discount_price:', price);
+      }
+      // Priority 3: Regular price from variant product
+      else if (item.product_sku?.variant?.product?.price) {
+        price = parseFloat(item.product_sku.variant.product.price);
+        console.log('✓ Using product_sku.variant.product.price:', price);
+      }
+      // Priority 4: Fallback to product direct (old structure)
+      else if (item.product?.discount_price) {
         price = parseFloat(item.product.discount_price);
         console.log('✓ Using product.discount_price:', price);
-      }
-      // Priority 2: Regular price from various sources
-      else if (item.product_variant?.product?.price) {
-        price = parseFloat(item.product_variant.product.price);
-        console.log('✓ Using product_variant.product.price:', price);
       } else if (item.product?.price) {
         price = parseFloat(item.product.price);
         console.log('✓ Using product.price:', price);
       }
-      // Priority 3: Direct item price properties
+      // Priority 5: Direct item price properties
       else if (item.discount_price) {
         price = parseFloat(item.discount_price);
         console.log('✓ Using item.discount_price:', price);

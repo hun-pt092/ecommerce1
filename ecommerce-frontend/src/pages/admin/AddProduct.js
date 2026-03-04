@@ -225,18 +225,36 @@ const AddProduct = () => {
         console.log(`FormData contains: ${key} = ${value}`);
       }
       
-      // Thêm variants (bao gồm cả ảnh - mỗi màu có ảnh riêng)
+      // Thêm variants (NEW STRUCTURE: color, price, sizes[], images[])
       console.log('=== VARIANTS DEBUG ===');
       console.log('Variants to send:', variants);
       
-      formData.append('variants', JSON.stringify(variants));
+      // Prepare variants data for JSON (without image files)
+      const variantsForJSON = variants.map(variant => ({
+        color: variant.color,
+        price: variant.price,
+        discount_price: variant.discount_price,
+        is_active: variant.is_active !== false,
+        sizes: variant.sizes || [],
+      }));
       
-      // Thêm ảnh variant (nếu có)
-      variants.forEach((variant, index) => {
-        if (variant.imageFile) {
-          console.log(`✅ Adding variant image for color ${variant.color}:`, variant.imageFile);
-          // Ảnh mới của variant
-          formData.append(`variant_image_${variant.color}`, variant.imageFile);
+      formData.append('variants', JSON.stringify(variantsForJSON));
+      
+      // Thêm ảnh variant (mỗi variant có thể có nhiều ảnh)
+      variants.forEach((variant, variantIndex) => {
+        if (variant.images && variant.images.length > 0) {
+          variant.images.forEach((imageFile, imageIndex) => {
+            if (imageFile instanceof File) {
+              // Format: variant_image_{color}_{index}
+              // Index 0 will be primary image
+              const imageKey = imageIndex === 0 
+                ? `variant_image_${variant.color}` 
+                : `variant_image_${variant.color}_${imageIndex}`;
+              
+              console.log(`✅ Adding variant image: ${imageKey}`, imageFile.name);
+              formData.append(imageKey, imageFile);
+            }
+          });
         }
       });
 

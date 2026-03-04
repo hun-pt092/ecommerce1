@@ -28,19 +28,27 @@ const WishlistPage = () => {
             return getImageUrl(item.product_main_image);
         }
         
-        // Priority 2: product.images array (get first is_main=true)
-        if (item.product?.images && item.product.images.length > 0) {
-            const mainImage = item.product.images.find(img => img.is_main);
-            if (mainImage?.image) {
-                return getImageUrl(mainImage.image);
+        // Priority 2: product.display_image
+        if (item.product?.display_image) {
+            return getImageUrl(item.product.display_image);
+        }
+        
+        // Priority 3: First variant's primary_image
+        if (item.product?.variants && item.product.variants.length > 0) {
+            const firstVariant = item.product.variants[0];
+            if (firstVariant.primary_image) {
+                return getImageUrl(firstVariant.primary_image);
             }
-            // Fallback to first image
-            if (item.product.images[0]?.image) {
-                return getImageUrl(item.product.images[0].image);
+            // Priority 4: First image in first variant's images array
+            if (firstVariant.images && firstVariant.images.length > 0) {
+                const imageUrl = firstVariant.images[0].image_url || firstVariant.images[0].image;
+                if (imageUrl) {
+                    return getImageUrl(imageUrl);
+                }
             }
         }
         
-        // Priority 3: product.main_image
+        // Priority 5: product.main_image (legacy)
         if (item.product?.main_image) {
             return getImageUrl(item.product.main_image);
         }
@@ -118,9 +126,9 @@ const WishlistPage = () => {
                 return;
             }
 
-            // Lấy variant đầu tiên của sản phẩm
-            const firstVariant = product.variants && product.variants.length > 0 ? product.variants[0] : null;
-            if (!firstVariant) {
+            // Lấy SKU đầu tiên của sản phẩm
+            const firstSKU = product.skus && product.skus.length > 0 ? product.skus[0] : null;
+            if (!firstSKU) {
                 alert('Sản phẩm này hiện tại không có sẵn');
                 return;
             }
@@ -132,7 +140,7 @@ const WishlistPage = () => {
                     'Content-Type': 'application/json',
                 },
                 body: JSON.stringify({
-                    product_variant_id: firstVariant.id,
+                    product_sku_id: firstSKU.id,
                     quantity: 1
                 })
             });

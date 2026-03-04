@@ -1,6 +1,7 @@
 from rest_framework import serializers
 from .models import (
-    User, Product, ProductVariant, Order, OrderItem, Category, Brand, 
+    User, Product, ProductVariant, ProductVariantImage, ProductSKU,
+    Order, OrderItem, Category, Brand, 
     Review, Wishlist, StockHistory, StockAlert, Cart, CartItem,
     Coupon, UserCoupon, ProductVoucher
 )
@@ -51,17 +52,76 @@ class BrandSerializer(serializers.ModelSerializer):
         fields = '__all__'
 
 # Product serializers
-class ProductVariantSerializer(serializers.ModelSerializer):
-    product_name = serializers.CharField(source='product.name', read_only=True)
-    available_quantity = serializers.IntegerField(read_only=True)
+
+# ProductVariantImage Serializer
+class ProductVariantImageSerializer(serializers.ModelSerializer):
+    image_url = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = ProductVariantImage
+        fields = ['id', 'image', 'image_url', 'is_primary', 'order']
+        read_only_fields = ['id']
+    
+    def get_image_url(self, obj):
+        if obj.image:
+            request = self.context.get('request')
+            if request:
+                return request.build_absolute_uri(obj.image.url)
+            return obj.image.url
+        return None
+
+# ProductSKU Serializer
+class ProductSKUSerializer(serializers.ModelSerializer):
     final_price = serializers.SerializerMethodField()
     
     class Meta:
-        model = ProductVariant
-        fields = '__all__'
+        model = ProductSKU
+        fields = [
+            'id', 'size', 'sku', 'stock_quantity', 'reserved_quantity',
+            'available_quantity', 'minimum_stock', 'reorder_point',
+            'cost_price', 'is_active', 'final_price', 'is_low_stock', 'need_reorder'
+        ]
+        read_only_fields = ['id', 'sku', 'available_quantity', 'is_low_stock', 'need_reorder']
     
     def get_final_price(self, obj):
         return obj.get_final_price()
+
+# ProductVariant Serializer với nested images và SKUs
+class ProductVariantSerializer(serializers.ModelSerializer):
+    product_name = serializers.CharField(source='product.name', read_only=True)
+    images = ProductVariantImageSerializer(many=True, read_only=True)
+    skus = ProductSKUSerializer(many=True, read_only=True)
+    final_price = serializers.SerializerMethodField()
+    primary_image = serializers.SerializerMethodField()
+    total_stock = serializers.SerializerMethodField()
+    total_available = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = ProductVariant
+        fields = [
+            'id', 'product', 'product_name', 'color', 'price', 'discount_price',
+            'is_active', 'images', 'skus', 'final_price', 'primary_image',
+            'total_stock', 'total_available', 'created_at', 'updated_at'
+        ]
+        read_only_fields = ['id', 'created_at', 'updated_at']
+    
+    def get_final_price(self, obj):
+        return obj.get_final_price()
+    
+    def get_primary_image(self, obj):
+        primary = obj.get_primary_image()
+        if primary:
+            request = self.context.get('request')
+            if request:
+                return request.build_absolute_uri(primary)
+            return primary
+        return None
+    
+    def get_total_stock(self, obj):
+        return obj.get_total_stock()
+    
+    def get_total_available(self, obj):
+        return obj.get_total_available()
 
 class ProductVoucherSerializer(serializers.ModelSerializer):
     is_valid_now = serializers.SerializerMethodField()
@@ -101,9 +161,34 @@ class ProductSerializer(serializers.ModelSerializer):
     def get_price_range(self, obj):
         return obj.get_price_range()
 
+# Admin nested serializers for create/update
+class AdminProductSKUSerializer(serializers.ModelSerializer):
+    """Serializer cho việc tạo/cập nhật SKU trong Admin"""
+    class Meta:
+        model = ProductSKU
+        fields = ['id', 'size', 'stock_quantity', 'minimum_stock', 'reorder_point', 'cost_price', 'is_active']
+        read_only_fields = ['id']
+
+class AdminProductVariantImageSerializer(serializers.ModelSerializer):
+    """Serializer cho việc upload ảnh variant trong Admin"""
+    class Meta:
+        model = ProductVariantImage
+        fields = ['id', 'image', 'is_primary', 'order']
+        read_only_fields = ['id']
+
+class AdminProductVariantSerializer(serializers.ModelSerializer):
+    """Serializer cho việc tạo/cập nhật variant với images và SKUs"""
+    images = AdminProductVariantImageSerializer(many=True, required=False)
+    skus = AdminProductSKUSerializer(many=True, required=False)
+    
+    class Meta:
+        model = ProductVariant
+        fields = ['id', 'color', 'price', 'discount_price', 'is_active', 'images', 'skus']
+        read_only_fields = ['id']
+
 # Admin product serializer with create/update functionality
 class AdminProductSerializer(serializers.ModelSerializer):
-    variants = ProductVariantSerializer(many=True, required=False)
+    variants = AdminProductVariantSerializer(many=True, required=False)
     vouchers = ProductVoucherSerializer(many=True, read_only=True)
     
     # For reading - return nested objects
@@ -138,51 +223,82 @@ class AdminProductSerializer(serializers.ModelSerializer):
         variants_data = validated_data.pop('variants', [])
         product = Product.objects.create(**validated_data)
         
-        # Tạo variants
+        # Tạo variants với images và SKUs
         for variant_data in variants_data:
-            ProductVariant.objects.create(product=product, **variant_data)
+            images_data = variant_data.pop('images', [])
+            skus_data = variant_data.pop('skus', [])
+            
+            variant = ProductVariant.objects.create(product=product, **variant_data)
+            
+            # Tạo images
+            for image_data in images_data:
+                ProductVariantImage.objects.create(variant=variant, **image_data)
+            
+            # Tạo SKUs
+            for sku_data in skus_data:
+                ProductSKU.objects.create(variant=variant, **sku_data)
         
         return product
     
     def update(self, instance, validated_data):
-        variants_data = validated_data.pop('variants', [])
+        variants_data = validated_data.pop('variants', None)
         
         # Update product
         for attr, value in validated_data.items():
             setattr(instance, attr, value)
         instance.save()
         
-        # Update variants (xóa cũ, tạo mới)
-        if variants_data:
+        # Update variants nếu có data
+        if variants_data is not None:
+            # Xóa tất cả variants cũ (cascade sẽ xóa images và SKUs)
             instance.variants.all().delete()
+            
+            # Tạo variants mới
             for variant_data in variants_data:
-                ProductVariant.objects.create(product=instance, **variant_data)
+                images_data = variant_data.pop('images', [])
+                skus_data = variant_data.pop('skus', [])
+                
+                variant = ProductVariant.objects.create(product=instance, **variant_data)
+                
+                # Tạo images
+                for image_data in images_data:
+                    ProductVariantImage.objects.create(variant=variant, **image_data)
+                
+                # Tạo SKUs
+                for sku_data in skus_data:
+                    ProductSKU.objects.create(variant=variant, **sku_data)
         
         return instance
 
 
 
 #-----------------------------gio hang-----------------------------------------------
-# Để hiển thị thông tin đầy đủ của variant và product trong giỏ
-class ProductVariantCartSerializer(serializers.ModelSerializer):
-    product = ProductSerializer(read_only=True)
+# ProductSKU serializer cho Cart - hiển thị đầy đủ thông tin variant, product và stock
+class ProductSKUCartSerializer(serializers.ModelSerializer):
+    variant = ProductVariantSerializer(read_only=True)
+    final_price = serializers.SerializerMethodField()
     
     class Meta:
-        model = ProductVariant
-        fields = ['id', 'size', 'color', 'stock_quantity', 'product']
+        model = ProductSKU
+        fields = ['id', 'size', 'sku', 'variant', 'stock_quantity', 'available_quantity', 'final_price']
+        read_only_fields = ['id', 'sku', 'available_quantity']
+    
+    def get_final_price(self, obj):
+        return obj.get_final_price()
 
-# Cart item
+# Cart item - dùng ProductSKU thay vì ProductVariant
 class CartItemSerializer(serializers.ModelSerializer):
-    product_variant = ProductVariantCartSerializer(read_only=True)
-    product_variant_id = serializers.PrimaryKeyRelatedField(
-        queryset=ProductVariant.objects.all(),
-        source='product_variant',
+    product_sku = ProductSKUCartSerializer(read_only=True)
+    product_sku_id = serializers.PrimaryKeyRelatedField(
+        queryset=ProductSKU.objects.all(),
+        source='product_sku',
         write_only=True
     )
 
     class Meta:
         model = CartItem
-        fields = ['id', 'product_variant', 'product_variant_id', 'quantity']
+        fields = ['id', 'product_sku', 'product_sku_id', 'quantity', 'is_reserved', 'reserved_at']
+        read_only_fields = ['is_reserved', 'reserved_at']
 
 # Cart chính
 class CartSerializer(serializers.ModelSerializer):
@@ -210,31 +326,34 @@ class CartSerializer(serializers.ModelSerializer):
 
 #-----------------------------Order Management-----------------------------------------------
 
-# Serializer để hiển thị thông tin sản phẩm trong order item
-class OrderItemProductSerializer(serializers.ModelSerializer):
-    product_name = serializers.CharField(source='product.name', read_only=True)
-    image = serializers.SerializerMethodField()
+# ProductSKU serializer cho Order - hiển thị thông tin sản phẩm trong order
+class ProductSKUOrderSerializer(serializers.ModelSerializer):
+    product_name = serializers.CharField(source='variant.product.name', read_only=True)
+    color = serializers.CharField(source='variant.color', read_only=True)
+    primary_image = serializers.SerializerMethodField()
     
     class Meta:
-        model = ProductVariant
-        fields = ['id', 'size', 'color', 'product_name', 'image']
+        model = ProductSKU
+        fields = ['id', 'size', 'sku', 'color', 'product_name', 'primary_image']
+        read_only_fields = ['id', 'sku']
     
-    def get_image(self, obj):
-        # Lấy ảnh từ variant (vì giờ ảnh lưu ở ProductVariant)
-        if obj.image:
+    def get_primary_image(self, obj):
+        primary = obj.variant.get_primary_image()
+        if primary:
             request = self.context.get('request')
             if request:
-                return request.build_absolute_uri(obj.image.url)
+                return request.build_absolute_uri(primary)
+            return primary
         return None
 
-# Order Item serializer
+# Order Item serializer - dùng ProductSKU
 class OrderItemSerializer(serializers.ModelSerializer):
-    product_variant = OrderItemProductSerializer(read_only=True)
+    product_sku = ProductSKUOrderSerializer(read_only=True)
     total_price = serializers.SerializerMethodField()
     
     class Meta:
         model = OrderItem
-        fields = ['id', 'product_variant', 'quantity', 'price_per_item', 'total_price']
+        fields = ['id', 'product_sku', 'quantity', 'price_per_item', 'total_price']
     
     def get_total_price(self, obj):
         return obj.get_total_price()
@@ -315,12 +434,11 @@ class OrderCreateSerializer(serializers.ModelSerializer):
         coupon_code = validated_data.pop('coupon_code', None)
         payment_method = validated_data.pop('payment_method', None)
         
-        # Calculate total price
+        # Calculate total price - dùng ProductSKU
         total_price = 0
         for cart_item in cart.items.all():
-            # Use current price or discount price
-            product = cart_item.product_variant.product
-            item_price = product.discount_price if product.discount_price else product.price
+            # Lấy giá từ variant (vì ProductSKU không có price riêng)
+            item_price = cart_item.product_sku.get_final_price()
             total_price += item_price * cart_item.quantity
         
         # Add shipping fee if order is less than 500,000
@@ -383,10 +501,9 @@ class OrderCreateSerializer(serializers.ModelSerializer):
             used_coupon.order = order
             used_coupon.save()
         
-        # Create order items from cart
+        # Create order items from cart - dùng ProductSKU
         for cart_item in cart.items.all():
-            product = cart_item.product_variant.product
-            item_price = product.discount_price if product.discount_price else product.price
+            item_price = cart_item.product_sku.get_final_price()
             
             # Release reservation before creating OrderItem
             # This will restore reserved_quantity back to available
@@ -395,7 +512,7 @@ class OrderCreateSerializer(serializers.ModelSerializer):
             
             OrderItem.objects.create(
                 order=order,
-                product_variant=cart_item.product_variant,
+                product_sku=cart_item.product_sku,  # Dùng product_sku thay vì product_variant
                 quantity=cart_item.quantity,
                 price_per_item=item_price
             )
@@ -428,12 +545,22 @@ class OrderStatusUpdateSerializer(serializers.ModelSerializer):
 
 # User serializer for admin management
 class UserSerializer(serializers.ModelSerializer):
+    avatar_url = serializers.SerializerMethodField()
+    
     class Meta:
         model = User
         fields = ('id', 'username', 'email', 'first_name', 'last_name', 
                  'is_active', 'is_admin', 'is_staff', 'date_joined', 'last_login',
-                 'date_of_birth', 'phone_number')
-        read_only_fields = ('id', 'date_joined', 'last_login')
+                 'date_of_birth', 'phone_number', 'avatar', 'avatar_url')
+        read_only_fields = ('id', 'date_joined', 'last_login', 'avatar_url')
+    
+    def get_avatar_url(self, obj):
+        if obj.avatar:
+            request = self.context.get('request')
+            if request:
+                return request.build_absolute_uri(obj.avatar.url)
+            return obj.avatar.url
+        return None
 
 #-----------------------------Review Management-----------------------------------------------
 
@@ -466,7 +593,7 @@ class ReviewSerializer(serializers.ModelSerializer):
         # Kiểm tra xem user đã có đơn hàng chứa sản phẩm này và đã delivered chưa
         has_purchased = OrderItem.objects.filter(
             order__user=user,
-            product_variant__product=product,
+            product_sku__variant__product=product,
             order__status='delivered'
         ).exists()
         
@@ -537,9 +664,9 @@ class WishlistItemSerializer(serializers.ModelSerializer):
 
 #-----------------------------Stock Management Serializers-----------------------------------------------
 
-# Stock History Serializer
+# Stock History Serializer - dùng ProductSKU
 class StockHistorySerializer(serializers.ModelSerializer):
-    product_variant_detail = serializers.SerializerMethodField()
+    product_sku_detail = serializers.SerializerMethodField()
     created_by_name = serializers.CharField(source='created_by.username', read_only=True)
     transaction_type_display = serializers.CharField(source='get_transaction_type_display', read_only=True)
     order_id = serializers.IntegerField(source='order.id', read_only=True)
@@ -547,64 +674,66 @@ class StockHistorySerializer(serializers.ModelSerializer):
     class Meta:
         model = StockHistory
         fields = [
-            'id', 'product_variant', 'product_variant_detail', 'transaction_type', 
+            'id', 'product_sku', 'product_sku_detail', 'transaction_type', 
             'transaction_type_display', 'quantity', 'quantity_before', 'quantity_after',
             'order', 'order_id', 'reference_number', 'cost_per_item', 'notes',
             'created_by', 'created_by_name', 'created_at'
         ]
         read_only_fields = ['created_at']
     
-    def get_product_variant_detail(self, obj):
+    def get_product_sku_detail(self, obj):
         return {
-            'id': obj.product_variant.id,
-            'sku': obj.product_variant.sku,
-            'product_name': obj.product_variant.product.name,
-            'size': obj.product_variant.size,
-            'color': obj.product_variant.color,
+            'id': obj.product_sku.id,
+            'sku': obj.product_sku.sku,
+            'product_name': obj.product_sku.variant.product.name,
+            'size': obj.product_sku.size,
+            'color': obj.product_sku.variant.color,
         }
 
 
-# Stock Alert Serializer
+# Stock Alert Serializer - dùng ProductSKU
 class StockAlertSerializer(serializers.ModelSerializer):
-    product_variant_detail = serializers.SerializerMethodField()
+    product_sku_detail = serializers.SerializerMethodField()
     alert_type_display = serializers.CharField(source='get_alert_type_display', read_only=True)
     resolved_by_name = serializers.CharField(source='resolved_by.username', read_only=True)
     
     class Meta:
         model = StockAlert
         fields = [
-            'id', 'product_variant', 'product_variant_detail', 'alert_type', 
+            'id', 'product_sku', 'product_sku_detail', 'alert_type', 
             'alert_type_display', 'current_quantity', 'threshold', 
             'is_resolved', 'resolved_at', 'resolved_by', 'resolved_by_name', 'created_at'
         ]
         read_only_fields = ['created_at']
     
-    def get_product_variant_detail(self, obj):
+    def get_product_sku_detail(self, obj):
         return {
-            'id': obj.product_variant.id,
-            'sku': obj.product_variant.sku,
-            'product_name': obj.product_variant.product.name,
-            'size': obj.product_variant.size,
-            'color': obj.product_variant.color,
-            'stock_quantity': obj.product_variant.stock_quantity,
-            'available_quantity': obj.product_variant.available_quantity,
+            'id': obj.product_sku.id,
+            'sku': obj.product_sku.sku,
+            'product_name': obj.product_sku.variant.product.name,
+            'size': obj.product_sku.size,
+            'color': obj.product_sku.variant.color,
+            'stock_quantity': obj.product_sku.stock_quantity,
+            'available_quantity': obj.product_sku.available_quantity,
         }
 
 
-# Product Variant với Stock Info đầy đủ
-class ProductVariantStockSerializer(serializers.ModelSerializer):
-    product_name = serializers.CharField(source='product.name', read_only=True)
+# ProductSKU với Stock Info đầy đủ
+class ProductSKUStockSerializer(serializers.ModelSerializer):
+    product_name = serializers.CharField(source='variant.product.name', read_only=True)
+    color = serializers.CharField(source='variant.color', read_only=True)
+    variant_price = serializers.DecimalField(source='variant.price', max_digits=10, decimal_places=2, read_only=True)
     available_quantity = serializers.IntegerField(read_only=True)
     is_low_stock = serializers.BooleanField(read_only=True)
     need_reorder = serializers.BooleanField(read_only=True)
     total_value = serializers.SerializerMethodField()
     
     class Meta:
-        model = ProductVariant
+        model = ProductSKU
         fields = [
-            'id', 'product', 'product_name', 'sku', 'size', 'color',
+            'id', 'variant', 'product_name', 'color', 'sku', 'size',
             'stock_quantity', 'reserved_quantity', 'available_quantity',
-            'minimum_stock', 'reorder_point', 'cost_price', 'total_value',
+            'minimum_stock', 'reorder_point', 'cost_price', 'variant_price', 'total_value',
             'is_active', 'is_low_stock', 'need_reorder',
             'created_at', 'updated_at'
         ]
@@ -614,7 +743,7 @@ class ProductVariantStockSerializer(serializers.ModelSerializer):
 
 
 # Stock Import/Export Request Serializer
-# NOTE: variant_id now comes from URL parameter, not request body
+# NOTE: sku_id now comes from URL parameter, not request body
 class StockTransactionSerializer(serializers.Serializer):
     quantity = serializers.IntegerField(required=True, min_value=1)
     cost_per_item = serializers.DecimalField(max_digits=10, decimal_places=2, required=False, allow_null=True)
@@ -628,7 +757,7 @@ class StockTransactionSerializer(serializers.Serializer):
 
 
 # Stock Adjustment Request Serializer
-# NOTE: variant_id now comes from URL parameter, not request body
+# NOTE: sku_id now comes from URL parameter, not request body
 class StockAdjustmentSerializer(serializers.Serializer):
     new_quantity = serializers.IntegerField(required=True, min_value=0)
     reason = serializers.CharField(required=False, allow_blank=True)

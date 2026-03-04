@@ -89,7 +89,7 @@ const CartPage = () => {
       if (quantityDiff !== 0) {
         // Sử dụng PUT method để cập nhật số lượng
         await authAxios.put('cart/', {
-          product_variant_id: currentItem.product_variant.id,
+          product_sku_id: currentItem.product_sku.id,
           quantity: quantityDiff
         });
         
@@ -127,7 +127,7 @@ const CartPage = () => {
       // Sử dụng DELETE method để xóa item hoàn toàn
       await authAxios.delete('cart/', {
         data: {
-          product_variant_id: itemToRemove.product_variant.id
+          product_sku_id: itemToRemove.product_sku.id
         }
       });
       
@@ -149,10 +149,8 @@ const CartPage = () => {
   };
 
   const calculateItemTotal = (item) => {
-    const product = item.product_variant?.product;
-    if (!product) return 0;
-    
-    const price = product.discount_price || product.price || 0;
+    // Lấy giá từ product_sku hoặc variant
+    const price = item.product_sku?.final_price || item.product_sku?.variant?.final_price || 0;
     return price * item.quantity;
   };
 
@@ -285,12 +283,12 @@ const CartPage = () => {
                   <Row gutter={[16, 16]} align="middle">
                     {/* Product Image */}
                     <Col xs={24} sm={6} md={4}>
-                      {item.product_variant?.product?.images && item.product_variant.product.images.length > 0 ? (
+                      {item.product_sku?.variant?.images && item.product_sku.variant.images.length > 0 ? (
                         <Image
                           width={80}
                           height={80}
-                          src={getImageUrl(item.product_variant.product.images[0].image)}
-                          alt={item.product_variant.product.name || 'Product image'}
+                          src={getImageUrl(item.product_sku.variant.images[0].image_url || item.product_sku.variant.images[0].image)}
+                          alt={item.product_sku?.variant?.product?.name || 'Product image'}
                           style={{ 
                             objectFit: 'cover',
                             borderRadius: '8px'
@@ -333,16 +331,18 @@ const CartPage = () => {
                     <Col xs={24} sm={18} md={10}>
                       <div>
                         <Title level={5} style={{ margin: 0, marginBottom: '4px', color: theme.textColor }}>
-                          {item.product_variant?.product?.name || `Sản phẩm #${item.product_variant.id}`}
+                          {item.product_sku?.variant?.product_name || 
+                           item.product_sku?.variant?.product?.name || 
+                           `Sản phẩm #${item.product_sku.id}`}
                         </Title>
                         <Text type="secondary" style={{ display: 'block', marginBottom: '4px', color: theme.secondaryText }}>
-                          Kích cỡ: {item.product_variant.size} | Màu: {item.product_variant.color}
+                          Kích cỡ: {item.product_sku.size} | Màu: {item.product_sku.variant.color}
                         </Text>
                         <div>
                           {(() => {
-                            const product = item.product_variant?.product;
+                            const variant = item.product_sku?.variant;
                             
-                            if (!product) {
+                            if (!variant) {
                               return (
                                 <Text type="secondary" style={{ fontSize: '14px', color: theme.secondaryText }}>
                                   Đang tải giá...
@@ -350,21 +350,24 @@ const CartPage = () => {
                               );
                             }
                             
-                            if (product.discount_price) {
+                            const finalPrice = item.product_sku.final_price || variant.final_price;
+                            const hasDiscount = variant.discount_price && variant.discount_price < variant.price;
+                            
+                            if (hasDiscount) {
                               return (
                                 <Space>
                                   <Text strong style={{ color: '#f5222d', fontSize: '16px' }}>
-                                    {Number(product.discount_price).toLocaleString()}₫
+                                    {Number(finalPrice).toLocaleString()}₫
                                   </Text>
                                   <Text delete type="secondary" style={{ fontSize: '14px', color: theme.secondaryText }}>
-                                    {Number(product.price).toLocaleString()}₫
+                                    {Number(variant.price).toLocaleString()}₫
                                   </Text>
                                 </Space>
                               );
                             } else {
                               return (
                                 <Text strong style={{ color: '#1890ff', fontSize: '16px' }}>
-                                  {Number(product.price).toLocaleString()}₫
+                                  {Number(finalPrice).toLocaleString()}₫
                                 </Text>
                               );
                             }
@@ -372,7 +375,7 @@ const CartPage = () => {
                         </div>
                         <div style={{ marginTop: '4px' }}>
                           <Text type="secondary" style={{ fontSize: '12px', color: theme.secondaryText }}>
-                            Tồn kho: {item.product_variant?.stock_quantity || 0}
+                            Tồn kho: {item.product_sku?.available_quantity || item.product_sku?.stock_quantity || 0}
                           </Text>
                         </div>
                       </div>
@@ -381,10 +384,10 @@ const CartPage = () => {
                     {/* Quantity Controls */}
                     <Col xs={12} sm={12} md={6}>
                       {/* Stock warning */}
-                      {item.product_variant && item.product_variant.stock_quantity <= 5 && (
+                      {item.product_sku && (item.product_sku.available_quantity || item.product_sku.stock_quantity) <= 5 && (
                         <div style={{ marginBottom: '8px' }}>
                           <Text type="warning" style={{ fontSize: '12px', color: '#faad14' }}>
-                            ⚠️ Chỉ còn {item.product_variant.stock_quantity} sản phẩm
+                            ⚠️ Chỉ còn {item.product_sku.available_quantity || item.product_sku.stock_quantity} sản phẩm
                           </Text>
                         </div>
                       )}
@@ -399,7 +402,7 @@ const CartPage = () => {
                         <InputNumber
                           value={item.quantity}
                           min={1}
-                          max={item.product_variant?.stock_quantity || 99}
+                          max={item.product_sku?.available_quantity || item.product_sku?.stock_quantity || 99}
                           onChange={(value) => {
                             // Nếu value null hoặc <= 0, xóa item
                             if (!value || value <= 0) {
@@ -415,16 +418,16 @@ const CartPage = () => {
                         <Button
                           icon={<PlusOutlined />}
                           onClick={() => updateCartItem(index, item.quantity + 1)}
-                          disabled={updating || item.quantity >= (item.product_variant?.stock_quantity || 99)}
+                          disabled={updating || item.quantity >= (item.product_sku?.available_quantity || item.product_sku?.stock_quantity || 99)}
                           size="small"
                         />
                       </Space.Compact>
                       
                       {/* Stock info */}
-                      {item.product_variant && (
+                      {item.product_sku && (
                         <div style={{ marginTop: '4px' }}>
                           <Text type="secondary" style={{ fontSize: '11px', color: theme.secondaryText }}>
-                            Tồn kho: {item.product_variant.stock_quantity}
+                            Tồn kho: {item.product_sku.available_quantity || item.product_sku.stock_quantity}
                           </Text>
                         </div>
                       )}
@@ -514,7 +517,7 @@ const CartPage = () => {
               {/* Savings info */}
               {(() => {
                 const totalSavings = cart.items.reduce((total, item) => {
-                  const product = item.product_variant?.product;
+                  const product = item.product_sku?.variant?.product;
                   if (product?.discount_price) {
                     return total + (product.price - product.discount_price) * item.quantity;
                   }

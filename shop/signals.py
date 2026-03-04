@@ -71,17 +71,17 @@ def order_status_changed(sender, instance, **kwargs):
             with transaction.atomic():
                 for item in instance.items.all():
                     try:
-                        logger.info(f"Returning {item.quantity} x {item.product_variant} (current stock: {item.product_variant.stock_quantity})")
+                        logger.info(f"Returning {item.quantity} x {item.product_sku} (current stock: {item.product_sku.stock_quantity})")
                         StockService.return_stock(
-                            product_variant=item.product_variant,
+                            product_sku=item.product_sku,  # Dùng product_sku thay vì product_variant
                             quantity=item.quantity,
                             order=instance,
                             user=instance.user,
                             notes=f"Order #{instance.id} {new_status} by admin"
                         )
                         # Refresh để lấy stock mới nhất
-                        item.product_variant.refresh_from_db()
-                        logger.info(f"✓ Returned {item.quantity} items of {item.product_variant} (new stock: {item.product_variant.stock_quantity})")
+                        item.product_sku.refresh_from_db()
+                        logger.info(f"✓ Returned {item.quantity} items of {item.product_sku} (new stock: {item.product_sku.stock_quantity})")
                     except Exception as e:
                         logger.error(f"Failed to return stock for order #{instance.id}: {str(e)}")
         else:
@@ -106,15 +106,15 @@ def orderitem_created_or_updated(sender, instance, created, **kwargs):
             logger.info(f"New OrderItem created for Order #{order.id}")
             
             try:
-                # Export stock
+                # Export stock - dùng ProductSKU
                 StockService.export_stock(
-                    product_variant=instance.product_variant,
+                    product_sku=instance.product_sku,  # Dùng product_sku
                     quantity=instance.quantity,
                     order=order,
                     user=order.user,  # Dùng order owner
                     notes=f"Order #{order.id} - Customer checkout via Admin"
                 )
-                logger.info(f"Exported {instance.quantity} items of {instance.product_variant}")
+                logger.info(f"Exported {instance.quantity} items of {instance.product_sku}")
             except ValueError as e:
                 logger.error(f"Failed to export stock for OrderItem: {str(e)}")
                 # Không raise để admin vẫn tạo được OrderItem
@@ -139,14 +139,14 @@ def orderitem_deleted(sender, instance, **kwargs):
         logger.info(f"OrderItem deleted from Order #{order.id}")
         
         try:
-            # Return stock
+            # Return stock - dùng ProductSKU
             StockService.return_stock(
-                product_variant=instance.product_variant,
+                product_sku=instance.product_sku,  # Dùng product_sku
                 quantity=instance.quantity,
                 order=order,
                 user=order.user,  # Dùng order owner
                 notes=f"Order #{order.id} - OrderItem removed via Admin"
             )
-            logger.info(f"Returned {instance.quantity} items of {instance.product_variant}")
+            logger.info(f"Returned {instance.quantity} items of {instance.product_sku}")
         except Exception as e:
             logger.error(f"Failed to return stock: {str(e)}")

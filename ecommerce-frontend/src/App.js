@@ -4,6 +4,7 @@ import { ThemeProvider } from './contexts/ThemeContext';
 import Layout from './components/Layout';
 import AdminLayout from './components/AdminLayout';
 import AdminProtectedRoute from './components/admin/AdminProtectedRoute';
+import ChatBot from './components/ChatBot';
 import HomePage from './pages/HomePage';
 import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
@@ -14,6 +15,7 @@ import CheckoutPage from './pages/checkout/CheckoutPage';
 import WishlistPage from './pages/WishlistPage';
 import MyReviewsPage from './pages/MyReviewsPage';
 import CouponsPage from './pages/CouponsPage';
+import ProfilePage from './pages/ProfilePage';
 //import DebugPage from './pages/DebugPage';
 //import TestConnectionPage from './pages/TestConnectionPage';
 
@@ -35,6 +37,7 @@ import StockManagement from './pages/admin/StockManagement';
 import InventoryReport from './pages/admin/InventoryReport';
 import StockHistory from './pages/admin/StockHistory';
 import StockAlerts from './pages/admin/StockAlerts';
+import CategoryManagement from './pages/admin/CategoryManagement';
 import AnalyticsDashboardPage from './pages/AnalyticsDashboardPage';
 
 function App() {
@@ -56,6 +59,7 @@ function App() {
                 <Route path="/products/list" element={<ProductList />} />
                 <Route path="/products/add" element={<AddProduct />} />
                 <Route path="/products/edit/:id" element={<AddProduct />} />
+                <Route path="/categories" element={<CategoryManagement />} />
                 <Route path="/orders" element={<OrderManagement />} />
                 <Route path="/users" element={<UserManagement />} />
                 <Route path="/stock" element={<StockManagement />} />
@@ -79,6 +83,7 @@ function App() {
               <Route path="/wishlist" element={<WishlistPage />} />
               <Route path="/my-reviews" element={<MyReviewsPage />} />
               <Route path="/coupons" element={<CouponsPage />} />
+              <Route path="/profile" element={<ProfilePage />} />
               
               {/* Information pages */}
               <Route path="/about" element={<AboutPage />} />
@@ -92,6 +97,9 @@ function App() {
           </Layout>
         } />
       </Routes>
+      
+      {/* ChatBot - hiển thị trên mọi trang ngoài login/register */}
+      <ChatBot />
     </Router>
     </ThemeProvider>
   );

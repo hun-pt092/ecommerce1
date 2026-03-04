@@ -14,6 +14,7 @@ class User(AbstractUser):
     is_admin = models.BooleanField(default=False)
     date_of_birth = models.DateField(null=True, blank=True, verbose_name='Ngày sinh')
     phone_number = models.CharField(max_length=20, blank=True, verbose_name='Số điện thoại')
+    avatar = models.ImageField(upload_to='avatars/', blank=True, null=True, verbose_name='Ảnh đại diện')
     # email, username, password đã có sẵn từ AbstractUser
 
 class Category(models.Model):
@@ -70,16 +71,29 @@ class Product(models.Model):
     def get_display_image(self):
         """Lấy ảnh từ variant đầu tiên"""
         first_variant = self.variants.first()
-        if first_variant and first_variant.image:
-            return first_variant.image.url
+        if first_variant:
+            first_image = first_variant.images.first()
+            if first_image:
+                return first_image.image.url
         return None
     
     def get_price_range(self):
-        """Lấy khoảng giá của tất cả variants dạng string"""
-        prices = self.variants.values_list('price', flat=True)
-        if prices:
-            min_price = min(prices)
-            max_price = max(prices)
+        """Lấy khoảng giá của tất cả variants (ưu tiên discount_price nếu có)"""
+        variants = self.variants.all()
+        if not variants:
+            return "0₫"
+        
+        # Lấy giá cuối cùng (discount_price nếu có, không thì price)
+        final_prices = []
+        for variant in variants:
+            if variant.discount_price:
+                final_prices.append(variant.discount_price)
+            else:
+                final_prices.append(variant.price)
+        
+        if final_prices:
+            min_price = min(final_prices)
+            max_price = max(final_prices)
             if min_price == max_price:
                 return f"{int(min_price):,}₫"
             return f"{int(min_price):,}₫ - {int(max_price):,}₫"
@@ -94,30 +108,17 @@ def variant_image_path(instance, filename):
     """Tạo đường dẫn upload ảnh variant (theo màu)"""
     ext = filename.split('.')[-1]
     filename = f'{uuid.uuid4().hex}.{ext}'
-    return os.path.join('products', str(instance.product.id), 'variants', filename)
+    return os.path.join('products', str(instance.variant.product.id), 'variants', filename)
 
 
 class ProductVariant(models.Model):
+    """Variant theo màu sắc - mỗi màu có giá riêng và nhiều ảnh"""
     product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name='variants')
-    sku = models.CharField(max_length=50, blank=True, null=True, db_index=True)  # SKU riêng cho variant
+    color = models.CharField(max_length=30, verbose_name='Màu sắc')
     
-    # Thuộc tính cơ bản
-    size = models.CharField(max_length=10)
-    color = models.CharField(max_length=30)
-    
-    # Ảnh và giá cho từng variant
-    image = models.ImageField(upload_to=variant_image_path, blank=True, null=True, verbose_name='Ảnh variant')
+    # Giá cho từng màu
     price = models.DecimalField(max_digits=10, decimal_places=2, verbose_name='Giá bán')
     discount_price = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True, verbose_name='Giá khuyến mãi')
-    
-    # --- STOCK MANAGEMENT ---
-    stock_quantity = models.PositiveIntegerField(default=0)  # Tồn kho thực tế
-    reserved_quantity = models.PositiveIntegerField(default=0)  # Số lượng đang giữ (trong giỏ hàng/checkout)
-    minimum_stock = models.PositiveIntegerField(default=5)  # Ngưỡng cảnh báo tồn kho
-    reorder_point = models.PositiveIntegerField(default=10)  # Điểm đặt hàng lại
-    
-    # Cost tracking
-    cost_price = models.DecimalField(max_digits=10, decimal_places=2, default=0)  # Giá vốn
     
     # Status
     is_active = models.BooleanField(default=True)
@@ -126,13 +127,79 @@ class ProductVariant(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     def __str__(self):
-        return f"{self.product.name} - Size: {self.size} - Color: {self.color}"
+        return f"{self.product.name} - {self.color}"
+    
+    def get_final_price(self):
+        """Lấy giá cuối cùng (ưu tiên discount_price)"""
+        return self.discount_price if self.discount_price else self.price
+    
+    def get_primary_image(self):
+        """Lấy ảnh chính của variant"""
+        primary = self.images.filter(is_primary=True).first()
+        if primary:
+            return primary.image.url if primary.image else None
+        # Nếu không có ảnh primary, lấy ảnh đầu tiên
+        first_image = self.images.first()
+        return first_image.image.url if first_image and first_image.image else None
+    
+    def get_total_stock(self):
+        """Tổng tồn kho của tất cả SKUs"""
+        return sum(sku.stock_quantity for sku in self.skus.all())
+    
+    def get_total_available(self):
+        """Tổng số lượng có thể bán"""
+        return sum(sku.available_quantity for sku in self.skus.all())
+    
+    class Meta:
+        unique_together = ['product', 'color']
+        ordering = ['color']
+
+
+class ProductVariantImage(models.Model):
+    """Nhiều ảnh cho mỗi variant (màu)"""
+    variant = models.ForeignKey(ProductVariant, on_delete=models.CASCADE, related_name='images')
+    image = models.ImageField(upload_to=variant_image_path, verbose_name='Ảnh')
+    is_primary = models.BooleanField(default=False, verbose_name='Ảnh chính')
+    order = models.PositiveIntegerField(default=0, verbose_name='Thứ tự hiển thị')
+    
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    def __str__(self):
+        return f"{self.variant} - Image {self.order}"
+    
+    class Meta:
+        ordering = ['order', 'id']
+
+
+class ProductSKU(models.Model):
+    """SKU theo kích cỡ trong mỗi variant (màu)"""
+    variant = models.ForeignKey(ProductVariant, on_delete=models.CASCADE, related_name='skus')
+    size = models.CharField(max_length=10, verbose_name='Kích cỡ')
+    sku = models.CharField(max_length=50, unique=True, blank=True, db_index=True, verbose_name='Mã SKU')
+    
+    # --- STOCK MANAGEMENT ---
+    stock_quantity = models.PositiveIntegerField(default=0, verbose_name='Tồn kho')  # Tồn kho thực tế
+    reserved_quantity = models.PositiveIntegerField(default=0, verbose_name='Đang giữ')  # Số lượng đang giữ (trong giỏ hàng/checkout)
+    minimum_stock = models.PositiveIntegerField(default=5, verbose_name='Ngưỡng tối thiểu')  # Ngưỡng cảnh báo tồn kho
+    reorder_point = models.PositiveIntegerField(default=10, verbose_name='Điểm đặt lại')  # Điểm đặt hàng lại
+    
+    # Cost tracking
+    cost_price = models.DecimalField(max_digits=10, decimal_places=2, default=0, verbose_name='Giá vốn')  # Giá vốn
+    
+    # Status
+    is_active = models.BooleanField(default=True)
+    
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"{self.variant} - Size {self.size}"
     
     def save(self, *args, **kwargs):
         # Auto-generate SKU nếu chưa có
         if not self.sku:
-            product_sku = self.product.sku if self.product.sku else f"PRD-{self.product.id}"
-            self.sku = f"{product_sku}-{self.size}-{self.color}".upper().replace(' ', '-')
+            product_sku = self.variant.product.sku if self.variant.product.sku else f"PRD-{self.variant.product.id}"
+            self.sku = f"{product_sku}-{self.variant.color}-{self.size}".upper().replace(' ', '-')
         super().save(*args, **kwargs)
     
     @property
@@ -151,11 +218,14 @@ class ProductVariant(models.Model):
         return self.available_quantity <= self.reorder_point
     
     def get_final_price(self):
-        """Lấy giá cuối cùng (ưu tiên discount_price)"""
-        return self.discount_price if self.discount_price else self.price
+        """Lấy giá từ variant"""
+        return self.variant.get_final_price()
     
     class Meta:
-        unique_together = ['product', 'size', 'color']
+        unique_together = ['variant', 'size']
+        verbose_name = 'Product SKU'
+        verbose_name_plural = 'Product SKUs'
+        ordering = ['size']
 
 class Order(models.Model):
     STATUS_CHOICES = [
@@ -208,12 +278,12 @@ class Order(models.Model):
 
 class OrderItem(models.Model):
     order = models.ForeignKey(Order, on_delete=models.CASCADE, related_name='items')
-    product_variant = models.ForeignKey(ProductVariant, on_delete=models.SET_NULL, null=True)
+    product_sku = models.ForeignKey('ProductSKU', on_delete=models.SET_NULL, null=True)
     quantity = models.PositiveIntegerField()
     price_per_item = models.DecimalField(max_digits=10, decimal_places=2)
     
     def __str__(self):
-        return f"Order #{self.order.id} - {self.product_variant} (x{self.quantity})"
+        return f"Order #{self.order.id} - {self.product_sku} (x{self.quantity})"
     
     def get_total_price(self):
         return self.price_per_item * self.quantity
@@ -256,7 +326,7 @@ class Cart(models.Model):
 
 class CartItem(models.Model):
     cart = models.ForeignKey(Cart, related_name='items', on_delete=models.CASCADE)
-    product_variant = models.ForeignKey(ProductVariant, on_delete=models.CASCADE)
+    product_sku = models.ForeignKey('ProductSKU', on_delete=models.CASCADE)
     quantity = models.PositiveIntegerField(default=1)
     
     # Reserved stock tracking
@@ -268,7 +338,7 @@ class CartItem(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     def __str__(self):
-        return f"{self.product_variant} (x{self.quantity})"
+        return f"{self.product_sku} (x{self.quantity})"
     
     def reserve_stock(self):
         """Giữ hàng khi bắt đầu checkout"""
@@ -277,9 +347,9 @@ class CartItem(models.Model):
         
         if not self.is_reserved:
             # Check availability
-            if self.product_variant.available_quantity >= self.quantity:
-                self.product_variant.reserved_quantity += self.quantity
-                self.product_variant.save()
+            if self.product_sku.available_quantity >= self.quantity:
+                self.product_sku.reserved_quantity += self.quantity
+                self.product_sku.save()
                 
                 self.is_reserved = True
                 self.reserved_at = timezone.now()
@@ -291,8 +361,8 @@ class CartItem(models.Model):
     def release_reservation(self):
         """Hủy giữ hàng"""
         if self.is_reserved:
-            self.product_variant.reserved_quantity = max(0, self.product_variant.reserved_quantity - self.quantity)
-            self.product_variant.save()
+            self.product_sku.reserved_quantity = max(0, self.product_sku.reserved_quantity - self.quantity)
+            self.product_sku.save()
             
             self.is_reserved = False
             self.reserved_at = None
@@ -312,7 +382,7 @@ class StockHistory(models.Model):
         ('unreserved', 'Hủy giữ hàng'),
     ]
     
-    product_variant = models.ForeignKey(ProductVariant, on_delete=models.CASCADE, related_name='stock_history')
+    product_sku = models.ForeignKey('ProductSKU', on_delete=models.CASCADE, related_name='stock_history')
     transaction_type = models.CharField(max_length=20, choices=TRANSACTION_TYPES)
     quantity = models.IntegerField()  # Có thể âm (xuất) hoặc dương (nhập)
     
@@ -334,7 +404,7 @@ class StockHistory(models.Model):
     
     def __str__(self):
         sign = "+" if self.quantity > 0 else ""
-        return f"{self.product_variant} - {self.get_transaction_type_display()}: {sign}{self.quantity}"
+        return f"{self.product_sku} - {self.get_transaction_type_display()}: {sign}{self.quantity}"
     
     class Meta:
         ordering = ['-created_at']
@@ -349,7 +419,7 @@ class StockAlert(models.Model):
         ('reorder_needed', 'Cần đặt hàng'),
     ]
     
-    product_variant = models.ForeignKey(ProductVariant, on_delete=models.CASCADE, related_name='stock_alerts')
+    product_sku = models.ForeignKey('ProductSKU', on_delete=models.CASCADE, related_name='stock_alerts')
     alert_type = models.CharField(max_length=20, choices=ALERT_TYPES)
     current_quantity = models.PositiveIntegerField()
     threshold = models.PositiveIntegerField()
@@ -362,7 +432,7 @@ class StockAlert(models.Model):
     
     def __str__(self):
         status = "✓ Resolved" if self.is_resolved else "⚠ Active"
-        return f"{status} - {self.product_variant} - {self.get_alert_type_display()}"
+        return f"{status} - {self.product_sku} - {self.get_alert_type_display()}"
     
     class Meta:
         ordering = ['is_resolved', '-created_at']

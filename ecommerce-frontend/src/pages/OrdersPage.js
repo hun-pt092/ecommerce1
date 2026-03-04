@@ -449,8 +449,8 @@ const OrdersPage = () => {
                     <List.Item.Meta
                       avatar={
                         <img 
-                          src={item.product_variant?.image || '/placeholder-image.png'} 
-                          alt={item.product_variant?.product_name || 'Sản phẩm'}
+                          src={item.product_sku?.primary_image || '/placeholder-image.png'} 
+                          alt={item.product_sku?.product_name || 'Sản phẩm'}
                           style={{ 
                             width: '80px', 
                             height: '80px', 
@@ -462,10 +462,10 @@ const OrdersPage = () => {
                       }
                       title={
                         <div>
-                          <Text strong>{item.product_variant?.product_name || 'Sản phẩm'}</Text>
+                          <Text strong>{item.product_sku?.product_name || 'Sản phẩm'}</Text>
                           <br />
                           <Text type="secondary" style={{ fontSize: '13px' }}>
-                            Màu: {item.product_variant?.color} | Size: {item.product_variant?.size}
+                            Màu: {item.product_sku?.color} | Size: {item.product_sku?.size}
                           </Text>
                         </div>
                       }

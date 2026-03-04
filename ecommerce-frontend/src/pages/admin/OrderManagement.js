@@ -558,17 +558,17 @@ const OrderManagement = () => {
                   render: (_, record) => (
                     <div>
                       <div style={{ fontWeight: 600, color: '#1890ff', fontSize: '14px' }}>
-                        {record.product_variant?.product_name || 'Sản phẩm không xác định'}
+                        {record.product_sku?.product_name || 'Sản phẩm không xác định'}
                       </div>
                       <div style={{ fontSize: '12px', color: '#666', marginTop: '4px' }}>
-                        {record.product_variant?.size && (
+                        {record.product_sku?.size && (
                           <Tag color="blue" size="small" style={{ marginRight: '4px' }}>
-                            Size: {record.product_variant.size}
+                            Size: {record.product_sku.size}
                           </Tag>
                         )}
-                        {record.product_variant?.color && (
+                        {record.product_sku?.color && (
                           <Tag color="green" size="small">
-                            Màu: {record.product_variant.color}
+                            Màu: {record.product_sku.color}
                           </Tag>
                         )}
                       </div>

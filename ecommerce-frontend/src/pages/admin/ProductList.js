@@ -54,12 +54,23 @@ const ProductList = () => {
       title: 'Tên sản phẩm',
       dataIndex: 'name',
       key: 'name',
-      render: (name, record) => (
-        <div>
-          <div style={{ fontWeight: 500 }}>{name}</div>
-          <div style={{ fontSize: 12, color: '#666' }}>SKU: {record.sku}</div>
-        </div>
-      ),
+      render: (name, record) => {
+        const variantCount = record.variants?.length || 0;
+        const skuCount = record.variants?.reduce((total, variant) => 
+          total + (variant.skus?.length || 0), 0) || 0;
+        
+        return (
+          <div>
+            <div style={{ fontWeight: 500 }}>{name}</div>
+            <div style={{ fontSize: 12, color: '#666' }}>
+              SKU: {record.sku}
+            </div>
+            <div style={{ fontSize: 11, color: '#999', marginTop: 2 }}>
+              {variantCount} variant{variantCount !== 1 ? 's' : ''} • {skuCount} SKU{skuCount !== 1 ? 's' : ''}
+            </div>
+          </div>
+        );
+      },
     },
     {
       title: 'Danh mục',
@@ -76,19 +87,70 @@ const ProductList = () => {
     {
       title: 'Giá',
       key: 'price',
-      render: (_, record) => (
-        <div>
-          {record.price_range ? (
-            <div style={{ fontWeight: 500 }}>
-              {record.price_range}
+      render: (_, record) => {
+        // Tính giá hiển thị từ variants
+        if (record.variants && record.variants.length > 0) {
+          const prices = record.variants.map(v => v.price).filter(p => p);
+          const discountPrices = record.variants
+            .filter(v => v.discount_price)
+            .map(v => v.discount_price);
+          
+          if (prices.length === 0) {
+            return <div style={{ color: '#999' }}>Chưa có giá</div>;
+          }
+          
+          const minPrice = Math.min(...prices);
+          const maxPrice = Math.max(...prices);
+          const hasDiscount = discountPrices.length > 0;
+          
+          // Tính giá cuối cùng (có discount thì lấy discount, không thì lấy price)
+          let displayPrice;
+          if (hasDiscount) {
+            const minDiscount = Math.min(...discountPrices);
+            const maxDiscount = Math.max(...discountPrices);
+            displayPrice = minDiscount === maxDiscount 
+              ? `${minDiscount.toLocaleString()}₫`
+              : `${minDiscount.toLocaleString()}₫ - ${maxDiscount.toLocaleString()}₫`;
+          } else {
+            displayPrice = minPrice === maxPrice 
+              ? `${minPrice.toLocaleString()}₫`
+              : `${minPrice.toLocaleString()}₫ - ${maxPrice.toLocaleString()}₫`;
+          }
+          
+          return (
+            <div>
+              {hasDiscount && (
+                <div style={{ 
+                  fontSize: '11px', 
+                  color: '#999', 
+                  textDecoration: 'line-through',
+                  marginBottom: '2px'
+                }}>
+                  {minPrice === maxPrice 
+                    ? `${minPrice.toLocaleString()}₫`
+                    : `${minPrice.toLocaleString()}₫ - ${maxPrice.toLocaleString()}₫`
+                  }
+                </div>
+              )}
+              <div style={{ fontWeight: 500, color: hasDiscount ? '#ff4d4f' : '#000' }}>
+                {displayPrice}
+              </div>
+              {record.variants.length > 1 && (
+                <div style={{ fontSize: '11px', color: '#999', marginTop: '2px' }}>
+                  {record.variants.length} variants
+                </div>
+              )}
             </div>
-          ) : (
-            <div style={{ fontWeight: 500 }}>
-              {record.price ? parseInt(record.price).toLocaleString('vi-VN') + 'đ' : 'Chưa có giá'}
-            </div>
-          )}
-        </div>
-      ),
+          );
+        }
+        
+        // Fallback cho product không có variants
+        return (
+          <div style={{ fontWeight: 500 }}>
+            {record.price_range || (record.price ? `${parseInt(record.price).toLocaleString()}₫` : 'Chưa có giá')}
+          </div>
+        );
+      },
     },
     {
       title: 'Trạng thái',
@@ -146,12 +208,31 @@ const ProductList = () => {
       // Handle pagination format
       const productsData = response.data.results || response.data || [];
       
-      // Process data để thêm main_image
-      const processedData = Array.isArray(productsData) ? productsData.map(product => ({
-        ...product,
-        main_image: product.display_image || 
-                   (product.variants && product.variants.length > 0 ? product.variants[0].image : null)
-      })) : [];
+      // Process data để thêm main_image từ structure mới
+      const processedData = Array.isArray(productsData) ? productsData.map(product => {
+        let mainImage = null;
+        
+        // Priority 1: display_image từ Product
+        if (product.display_image) {
+          mainImage = product.display_image;
+        }
+        // Priority 2: primary_image từ variant đầu tiên
+        else if (product.variants && product.variants.length > 0) {
+          const firstVariant = product.variants[0];
+          if (firstVariant.primary_image) {
+            mainImage = firstVariant.primary_image;
+          }
+          // Priority 3: ảnh đầu tiên trong images array
+          else if (firstVariant.images && firstVariant.images.length > 0) {
+            mainImage = firstVariant.images[0].image_url || firstVariant.images[0].image;
+          }
+        }
+        
+        return {
+          ...product,
+          main_image: mainImage
+        };
+      }) : [];
       
       setProducts(processedData);
     } catch (error) {
@@ -180,8 +261,8 @@ const ProductList = () => {
 
   // Filter products
   const filteredProducts = products.filter(product => {
-    const matchesSearch = product.name.toLowerCase().includes(searchText.toLowerCase()) ||
-                         product.sku.toLowerCase().includes(searchText.toLowerCase());
+    const matchesSearch = product.name?.toLowerCase().includes(searchText.toLowerCase()) ||
+                         product.sku?.toLowerCase().includes(searchText.toLowerCase());
     
     const matchesStatus = statusFilter === 'all' || 
                          (statusFilter === 'active' && product.is_active) ||

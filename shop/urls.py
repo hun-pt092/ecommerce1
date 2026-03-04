@@ -1,6 +1,6 @@
 from django.urls import path
 from .views import (
-    CartView, RegisterView, ProductListView, ProductDetailView,
+    CartView, RegisterView, UserProfileView, ProductListView, ProductDetailView,
     CategoryListView, BrandListView,  # Public views
     OrderCreateView, OrderListView, OrderDetailView, 
     AdminOrderListView, AdminOrderStatusUpdateView, CancelOrderView,
@@ -38,6 +38,7 @@ urlpatterns = [
     path('token/', TokenObtainPairView.as_view(), name='token_obtain_pair_alt'),
     path('token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
     path('user/', CurrentUserView.as_view(), name='current_user'),
+    path('user/profile/', UserProfileView.as_view(), name='user_profile'),
     path('user/change-password/', ChangePasswordView.as_view(), name='change_password'),
     
     # Products

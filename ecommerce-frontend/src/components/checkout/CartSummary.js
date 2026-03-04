@@ -42,19 +42,22 @@ const CartSummary = ({ cartData, onNext, onEdit, isBuyNow }) => {
     // Debug item structure
     console.log('calculateItemTotal - full item:', JSON.stringify(item, null, 2));
     
-    // Try multiple paths to get price (API cart vs temp cart)
+    // Try multiple paths to get price (API cart vs buyNow temp cart)
     let price = 0;
     
-    if (item.product_variant?.product?.discount_price) {
-      price = item.product_variant.product.discount_price;
-    } else if (item.product_variant?.product?.price) {
-      price = item.product_variant.product.price;
-    } else if (item.product?.discount_price) {
-      // Alternative path for temp cart
-      price = item.product.discount_price;
-    } else if (item.product?.price) {
-      // Alternative path for temp cart
-      price = item.product.price;
+    // BuyNow temp cart: item.product_sku.variant (có discount_price hoặc price)
+    if (item.product_sku?.variant?.discount_price) {
+      price = item.product_sku.variant.discount_price;
+    } else if (item.product_sku?.variant?.price) {
+      price = item.product_sku.variant.price;
+    } 
+    // Regular cart from API: item.product_sku.final_price
+    else if (item.product_sku?.final_price) {
+      price = item.product_sku.final_price;
+    }
+    // Fallback to item.price
+    else if (item.price) {
+      price = item.price;
     }
     
     console.log('calculateItemTotal - extracted price:', price, 'quantity:', item.quantity, 'total:', price * item.quantity);
@@ -133,47 +136,60 @@ const CartSummary = ({ cartData, onNext, onEdit, isBuyNow }) => {
                       borderRadius: '8px',
                       border: '1px solid #f0f0f0'
                     }}>
-                      {item.product_variant?.product?.images?.[0] ? (
-                        <Image
-                          src={getImageUrl(item.product_variant.product.images[0].image)}
-                          alt={item.product_variant.product.name}
-                          style={{ 
-                            width: '100%', 
-                            height: '100%', 
-                            objectFit: 'cover' 
-                          }}
-                          preview={false}
-                        />
-                      ) : (
-                        <div style={{
-                          width: '100%',
-                          height: '100%',
-                          background: '#f5f5f5',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          fontSize: '24px'
-                        }}>
-                          👕
-                        </div>
-                      )}
+                      {(() => {
+                        // BuyNow: product_sku.variant.images
+                        const images = item.product_sku?.variant?.images;
+                        const product = item.product_sku?.variant?.product;
+                        
+                        let imageUrl = null;
+                        if (images && images.length > 0) {
+                          imageUrl = getImageUrl(images[0].image || images[0]);
+                        }
+                        
+                        return imageUrl ? (
+                          <Image
+                            src={imageUrl}
+                            alt={product?.name || 'Product'}
+                            style={{ 
+                              width: '100%', 
+                              height: '100%', 
+                              objectFit: 'cover' 
+                            }}
+                            preview={false}
+                          />
+                        ) : (
+                          <div style={{
+                            width: '100%',
+                            height: '100%',
+                            background: '#f5f5f5',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            fontSize: '24px'
+                          }}>
+                            👕
+                          </div>
+                        );
+                      })()}
                     </div>
                   </Col>
                   
                   <Col xs={18} sm={12}>
                     <div>
                       <Title level={5} style={{ margin: 0, marginBottom: '4px' }}>
-                        {item.product_variant?.product?.name || 'Sản phẩm không xác định'}
+                        {item.product_sku?.variant?.product_name || 
+                         item.product_sku?.variant?.product?.name || 
+                         'Sản phẩm không xác định'}
                       </Title>
-                      {item.product_variant && (
+                      {item.product_sku && (
                         <Text type="secondary" style={{ fontSize: '12px' }}>
-                          Phân loại: {item.product_variant.size} - {item.product_variant.color}
+                          Phân loại: {item.product_sku.size} - {item.product_sku.variant?.color}
                         </Text>
                       )}
-                      {item.product_variant?.product?.category && (
+                      {item.product_sku?.variant?.product?.category && (
                         <div style={{ marginTop: '4px' }}>
                           <Tag size="small" color="blue">
-                            {item.product_variant.product.category.name}
+                            {item.product_sku.variant.product.category.name}
                           </Tag>
                         </div>
                       )}
@@ -183,12 +199,16 @@ const CartSummary = ({ cartData, onNext, onEdit, isBuyNow }) => {
                   <Col xs={24} sm={8} style={{ textAlign: 'right' }}>
                     <div>
                       <Text strong style={{ fontSize: '16px', color: '#f5222d' }}>
-                        {calculateItemTotal(item).toLocaleString()}₫
+                        {formatPrice(calculateItemTotal(item))}
                       </Text>
                       <br />
                       <Text type="secondary" style={{ fontSize: '12px' }}>
-                        {(item.product_variant?.product?.discount_price || 
-                          item.product_variant?.product?.price || 0).toLocaleString()}₫ x {item.quantity}
+                        {formatPrice(
+                          item.product_sku?.variant?.discount_price || 
+                          item.product_sku?.variant?.price ||
+                          item.product_sku?.final_price ||
+                          item.price || 0
+                        )} x {item.quantity}
                       </Text>
                     </div>
                   </Col>

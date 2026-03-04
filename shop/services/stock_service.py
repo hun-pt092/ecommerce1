@@ -1,25 +1,25 @@
 """
 Stock Management Service
-Xử lý các tác vụ liên quan đến kho hàng
+Xử lý các tác vụ liên quan đến kho hàng - ProductSKU based
 """
 
 from django.db import transaction
 from django.utils import timezone
 from django.db.models import Sum, Count, F, Q
-from ..models import ProductVariant, StockHistory, StockAlert
+from ..models import ProductSKU, StockHistory, StockAlert
 
 
 class StockService:
-    """Service xử lý các tác vụ liên quan đến kho hàng"""
+    """Service xử lý các tác vụ liên quan đến kho hàng - ProductSKU based"""
     
     @staticmethod
     @transaction.atomic
-    def import_stock(product_variant, quantity, cost_per_item=None, reference_number='', notes='', user=None):
+    def import_stock(product_sku, quantity, cost_per_item=None, reference_number='', notes='', user=None):
         """
         Nhập kho
         
         Args:
-            product_variant: ProductVariant object
+            product_sku: ProductSKU object
             quantity: Số lượng nhập (phải > 0)
             cost_per_item: Giá vốn mỗi sản phẩm
             reference_number: Mã phiếu nhập
@@ -27,28 +27,28 @@ class StockService:
             user: User thực hiện
             
         Returns:
-            ProductVariant object đã được cập nhật
+            ProductSKU object đã được cập nhật
         """
         if quantity <= 0:
             raise ValueError("Số lượng nhập phải lớn hơn 0")
         
         # Update stock
-        old_quantity = product_variant.stock_quantity
-        product_variant.stock_quantity += quantity
+        old_quantity = product_sku.stock_quantity
+        product_sku.stock_quantity += quantity
         
         # Update cost price if provided
         if cost_per_item is not None and cost_per_item > 0:
-            product_variant.cost_price = cost_per_item
+            product_sku.cost_price = cost_per_item
         
-        product_variant.save()
+        product_sku.save()
         
         # Create history record
         StockHistory.objects.create(
-            product_variant=product_variant,
+            product_sku=product_sku,
             transaction_type='import',
             quantity=quantity,
             quantity_before=old_quantity,
-            quantity_after=product_variant.stock_quantity,
+            quantity_after=product_sku.stock_quantity,
             reference_number=reference_number,
             cost_per_item=cost_per_item,
             notes=notes,
@@ -56,203 +56,203 @@ class StockService:
         )
         
         # Resolve alerts based on available quantity
-        available = product_variant.available_quantity
+        available = product_sku.available_quantity
         
         # Resolve out_of_stock alert nếu có hàng trở lại
         if available > 0:
             StockAlert.objects.filter(
-                product_variant=product_variant,
+                product_sku=product_sku,
                 alert_type='out_of_stock',
                 is_resolved=False
             ).update(
                 is_resolved=True,
                 resolved_at=timezone.now(),
                 resolved_by=user,
-                current_quantity=available  # Cập nhật số lượng lúc resolve
+                current_quantity=available
             )
         
         # Resolve low_stock alert nếu vượt minimum_stock
-        if available > product_variant.minimum_stock:
+        if available > product_sku.minimum_stock:
             StockAlert.objects.filter(
-                product_variant=product_variant,
+                product_sku=product_sku,
                 alert_type='low_stock',
                 is_resolved=False
             ).update(
                 is_resolved=True,
                 resolved_at=timezone.now(),
                 resolved_by=user,
-                current_quantity=available  # Cập nhật số lượng lúc resolve
+                current_quantity=available
             )
         
         # Resolve reorder_needed alert nếu vượt reorder_point
-        if available > product_variant.reorder_point:
+        if available > product_sku.reorder_point:
             StockAlert.objects.filter(
-                product_variant=product_variant,
+                product_sku=product_sku,
                 alert_type='reorder_needed',
                 is_resolved=False
             ).update(
                 is_resolved=True,
                 resolved_at=timezone.now(),
                 resolved_by=user,
-                current_quantity=available  # Cập nhật số lượng lúc resolve
+                current_quantity=available
             )
         
-        return product_variant
+        return product_sku
     
     @staticmethod
     @transaction.atomic
-    def export_stock(product_variant, quantity, order=None, notes='', user=None):
+    def export_stock(product_sku, quantity, order=None, notes='', user=None):
         """
         Xuất kho (khi bán hàng)
         
         Args:
-            product_variant: ProductVariant object
+            product_sku: ProductSKU object
             quantity: Số lượng xuất (phải > 0)
             order: Order liên quan (nếu có)
             notes: Ghi chú
             user: User thực hiện
             
         Returns:
-            ProductVariant object đã được cập nhật
+            ProductSKU object đã được cập nhật
         """
         if quantity <= 0:
             raise ValueError("Số lượng xuất phải lớn hơn 0")
         
-        if product_variant.available_quantity < quantity:
+        if product_sku.available_quantity < quantity:
             raise ValueError(
-                f"Không đủ hàng trong kho. Có thể bán: {product_variant.available_quantity}, "
+                f"Không đủ hàng trong kho. Có thể bán: {product_sku.available_quantity}, "
                 f"Yêu cầu: {quantity}"
             )
         
         # Update stock
-        old_quantity = product_variant.stock_quantity
-        product_variant.stock_quantity -= quantity
-        product_variant.save()
+        old_quantity = product_sku.stock_quantity
+        product_sku.stock_quantity -= quantity
+        product_sku.save()
         
         # Create history record
         StockHistory.objects.create(
-            product_variant=product_variant,
+            product_sku=product_sku,
             transaction_type='export',
             quantity=-quantity,  # Negative for export
             quantity_before=old_quantity,
-            quantity_after=product_variant.stock_quantity,
+            quantity_after=product_sku.stock_quantity,
             order=order,
             notes=notes,
             created_by=user
         )
         
         # Check and create alerts
-        StockService.check_and_create_alerts(product_variant)
+        StockService.check_and_create_alerts(product_sku)
         
-        return product_variant
+        return product_sku
     
     @staticmethod
     @transaction.atomic
-    def return_stock(product_variant, quantity, order=None, notes='', user=None):
+    def return_stock(product_sku, quantity, order=None, notes='', user=None):
         """
         Hoàn trả hàng
         
         Args:
-            product_variant: ProductVariant object
+            product_sku: ProductSKU object
             quantity: Số lượng hoàn trả (phải > 0)
             order: Order liên quan
             notes: Ghi chú
             user: User thực hiện
             
         Returns:
-            ProductVariant object đã được cập nhật
+            ProductSKU object đã được cập nhật
         """
         if quantity <= 0:
             raise ValueError("Số lượng hoàn trả phải lớn hơn 0")
         
         # Update stock
-        old_quantity = product_variant.stock_quantity
-        product_variant.stock_quantity += quantity
-        product_variant.save()
+        old_quantity = product_sku.stock_quantity
+        product_sku.stock_quantity += quantity
+        product_sku.save()
         
         # Create history record
         StockHistory.objects.create(
-            product_variant=product_variant,
+            product_sku=product_sku,
             transaction_type='return',
             quantity=quantity,
             quantity_before=old_quantity,
-            quantity_after=product_variant.stock_quantity,
+            quantity_after=product_sku.stock_quantity,
             order=order,
             notes=notes,
             created_by=user
         )
         
         # Resolve alerts based on available quantity (same logic as import_stock)
-        available = product_variant.available_quantity
+        available = product_sku.available_quantity
         
         # Resolve out_of_stock alert nếu có hàng trở lại
         if available > 0:
             StockAlert.objects.filter(
-                product_variant=product_variant,
+                product_sku=product_sku,
                 alert_type='out_of_stock',
                 is_resolved=False
             ).update(
                 is_resolved=True,
                 resolved_at=timezone.now(),
                 resolved_by=user,
-                current_quantity=available  # Cập nhật số lượng lúc resolve
+                current_quantity=available
             )
         
         # Resolve low_stock alert nếu vượt minimum_stock
-        if available > product_variant.minimum_stock:
+        if available > product_sku.minimum_stock:
             StockAlert.objects.filter(
-                product_variant=product_variant,
+                product_sku=product_sku,
                 alert_type='low_stock',
                 is_resolved=False
             ).update(
                 is_resolved=True,
                 resolved_at=timezone.now(),
                 resolved_by=user,
-                current_quantity=available  # Cập nhật số lượng lúc resolve
+                current_quantity=available
             )
         
         # Resolve reorder_needed alert nếu vượt reorder_point
-        if available > product_variant.reorder_point:
+        if available > product_sku.reorder_point:
             StockAlert.objects.filter(
-                product_variant=product_variant,
+                product_sku=product_sku,
                 alert_type='reorder_needed',
                 is_resolved=False
             ).update(
                 is_resolved=True,
                 resolved_at=timezone.now(),
                 resolved_by=user,
-                current_quantity=available  # Cập nhật số lượng lúc resolve
+                current_quantity=available
             )
         
-        return product_variant
+        return product_sku
     
     @staticmethod
     @transaction.atomic
-    def adjust_stock(product_variant, new_quantity, reason='', user=None):
+    def adjust_stock(product_sku, new_quantity, reason='', user=None):
         """
         Điều chỉnh tồn kho (kiểm kê, hàng hỏng...)
         
         Args:
-            product_variant: ProductVariant object
+            product_sku: ProductSKU object
             new_quantity: Số lượng mới (phải >= 0)
             reason: Lý do điều chỉnh
             user: User thực hiện
             
         Returns:
-            ProductVariant object đã được cập nhật
+            ProductSKU object đã được cập nhật
         """
         if new_quantity < 0:
             raise ValueError("Số lượng mới không thể âm")
         
-        old_quantity = product_variant.stock_quantity
+        old_quantity = product_sku.stock_quantity
         difference = new_quantity - old_quantity
         
-        product_variant.stock_quantity = new_quantity
-        product_variant.save()
+        product_sku.stock_quantity = new_quantity
+        product_sku.save()
         
         # Create history record
         StockHistory.objects.create(
-            product_variant=product_variant,
+            product_sku=product_sku,
             transaction_type='adjustment',
             quantity=difference,
             quantity_before=old_quantity,
@@ -262,68 +262,68 @@ class StockService:
         )
         
         # Check and create alerts
-        StockService.check_and_create_alerts(product_variant)
+        StockService.check_and_create_alerts(product_sku)
         
-        return product_variant
+        return product_sku
     
     @staticmethod
     @transaction.atomic
-    def mark_damaged(product_variant, quantity, reason='', user=None):
+    def mark_damaged(product_sku, quantity, reason='', user=None):
         """
         Đánh dấu hàng hỏng
         
         Args:
-            product_variant: ProductVariant object
+            product_sku: ProductSKU object
             quantity: Số lượng hàng hỏng (phải > 0)
             reason: Lý do
             user: User thực hiện
             
         Returns:
-            ProductVariant object đã được cập nhật
+            ProductSKU object đã được cập nhật
         """
         if quantity <= 0:
             raise ValueError("Số lượng hàng hỏng phải lớn hơn 0")
         
-        if product_variant.stock_quantity < quantity:
+        if product_sku.stock_quantity < quantity:
             raise ValueError(
-                f"Số lượng hàng hỏng vượt quá tồn kho. Tồn kho hiện tại: {product_variant.stock_quantity}"
+                f"Số lượng hàng hỏng vượt quá tồn kho. Tồn kho hiện tại: {product_sku.stock_quantity}"
             )
         
         # Update stock
-        old_quantity = product_variant.stock_quantity
-        product_variant.stock_quantity -= quantity
-        product_variant.save()
+        old_quantity = product_sku.stock_quantity
+        product_sku.stock_quantity -= quantity
+        product_sku.save()
         
         # Create history record
         StockHistory.objects.create(
-            product_variant=product_variant,
+            product_sku=product_sku,
             transaction_type='damaged',
             quantity=-quantity,
             quantity_before=old_quantity,
-            quantity_after=product_variant.stock_quantity,
+            quantity_after=product_sku.stock_quantity,
             notes=reason,
             created_by=user
         )
         
         # Check and create alerts
-        StockService.check_and_create_alerts(product_variant)
+        StockService.check_and_create_alerts(product_sku)
         
-        return product_variant
+        return product_sku
     
     @staticmethod
-    def check_and_create_alerts(product_variant):
+    def check_and_create_alerts(product_sku):
         """
         Kiểm tra và tạo cảnh báo tồn kho
         
         Args:
-            product_variant: ProductVariant object
+            product_sku: ProductSKU object
         """
-        available = product_variant.available_quantity
+        available = product_sku.available_quantity
         
         # Out of stock alert
         if available == 0:
             StockAlert.objects.get_or_create(
-                product_variant=product_variant,
+                product_sku=product_sku,
                 alert_type='out_of_stock',
                 is_resolved=False,
                 defaults={
@@ -332,39 +332,39 @@ class StockService:
                 }
             )
         # Low stock alert
-        elif available <= product_variant.minimum_stock:
+        elif available <= product_sku.minimum_stock:
             StockAlert.objects.get_or_create(
-                product_variant=product_variant,
+                product_sku=product_sku,
                 alert_type='low_stock',
                 is_resolved=False,
                 defaults={
                     'current_quantity': available,
-                    'threshold': product_variant.minimum_stock
+                    'threshold': product_sku.minimum_stock
                 }
             )
         # Reorder needed alert
-        elif available <= product_variant.reorder_point:
+        elif available <= product_sku.reorder_point:
             StockAlert.objects.get_or_create(
-                product_variant=product_variant,
+                product_sku=product_sku,
                 alert_type='reorder_needed',
                 is_resolved=False,
                 defaults={
                     'current_quantity': available,
-                    'threshold': product_variant.reorder_point
+                    'threshold': product_sku.reorder_point
                 }
             )
     
     @staticmethod
-    def resolve_alerts(product_variant, user=None):
+    def resolve_alerts(product_sku, user=None):
         """
-        Giải quyết tất cả alerts của một variant
+        Giải quyết tất cả alerts của một SKU
         
         Args:
-            product_variant: ProductVariant object
+            product_sku: ProductSKU object
             user: User thực hiện
         """
         StockAlert.objects.filter(
-            product_variant=product_variant,
+            product_sku=product_sku,
             is_resolved=False
         ).update(
             is_resolved=True,

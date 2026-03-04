@@ -16,6 +16,7 @@ import {
   Upload,
   Image,
   Collapse,
+  Form,
 } from 'antd';
 import {
   PlusOutlined,
@@ -24,500 +25,552 @@ import {
   PictureOutlined,
 } from '@ant-design/icons';
 
-const { Text } = Typography;
+const { Text, Title } = Typography;
 const { Panel } = Collapse;
 
 /**
- * ProductVariantsForm - Form quản lý biến thể sản phẩm theo cấu trúc:
- * Màu sắc (color) → Ảnh + Giá → Các sizes
+ * ProductVariantsForm - NEW STRUCTURE
+ * Product → ProductVariant (color, price) → ProductVariantImage[] + ProductSKU[] (size, stock)
  */
 const ProductVariantsForm = ({ variants = [], onChange }) => {
-  // State để quản lý các màu sắc (mỗi màu có ảnh và giá riêng)
-  const [colors, setColors] = useState([]);
+  // State để quản lý các variants (mỗi variant có color, price, images[], sizes[])
+  const [variantsList, setVariantsList] = useState([]);
   
-  // Form thêm màu mới
-  const [newColor, setNewColor] = useState({
-    name: '',
+  // Form thêm variant mới
+  const [newVariant, setNewVariant] = useState({
+    color: '',
     price: '',
     discount_price: '',
-    image: null,
-    imagePreview: null,
+    images: [], // Array of image files
+    imagePreviews: [], // Array of preview URLs
   });
 
-  // Form thêm size cho màu đã chọn
-  const [selectedColorForSize, setSelectedColorForSize] = useState(null);
-  const [newSize, setNewSize] = useState('');
+  // Form thêm size cho variant đã chọn
+  const [selectedVariantIndex, setSelectedVariantIndex] = useState(null);
+  const [newSize, setNewSize] = useState({
+    name: '',
+    stock_quantity: 0,
+  });
 
-  // Parse variants thành cấu trúc colors khi component mount hoặc variants thay đổi
+  // Parse variants từ backend khi component mount
   useEffect(() => {
     if (variants && variants.length > 0) {
-      const colorMap = {};
+      // Backend trả về ProductVariant with skus[] and images[]
+      const parsedVariants = variants.map(variant => ({
+        color: variant.color || '',
+        price: variant.price || 0,
+        discount_price: variant.discount_price || null,
+        is_active: variant.is_active !== false,
+        images: variant.images || [],
+        imagePreviews: variant.images?.map(img => img.image_url || img.image) || [],
+        sizes: variant.skus?.map(sku => ({
+          name: sku.size || '',
+          stock_quantity: sku.stock_quantity || 0,
+          minimum_stock: sku.minimum_stock || 5,
+          reorder_point: sku.reorder_point || 10,
+          cost_price: sku.cost_price || 0,
+        })) || [],
+      }));
       
-      variants.forEach(variant => {
-        const colorName = variant.color;
-        if (!colorMap[colorName]) {
-          colorMap[colorName] = {
-            name: colorName,
-            price: variant.price || 0,
-            discount_price: variant.discount_price || null,
-            image: variant.image,
-            imagePreview: variant.image,
-            sizes: [],
-          };
-        }
-        colorMap[colorName].sizes.push({
-          name: variant.size,
-          stock_quantity: variant.stock_quantity || 0,
-        });
-      });
-      
-      setColors(Object.values(colorMap));
+      setVariantsList(parsedVariants);
     }
   }, []);
 
-  // Khi colors thay đổi, cập nhật variants
+  // Khi variantsList thay đổi, cập nhật parent component
   useEffect(() => {
-    const newVariants = [];
-    colors.forEach(color => {
-      color.sizes.forEach(size => {
-        newVariants.push({
-          color: color.name,
-          size: size.name,
-          price: color.price,
-          discount_price: color.discount_price,
-          image: color.image,
-          imageFile: color.imageFile || (color.image instanceof File ? color.image : null), // Lưu file riêng để upload
-          imagePreview: color.imagePreview,
-          stock_quantity: size.stock_quantity,
-        });
+    // Convert to format expected by backend
+    const formatted = variantsList.map(variant => ({
+      color: variant.color,
+      price: variant.price,
+      discount_price: variant.discount_price,
+      is_active: variant.is_active,
+      images: variant.images, // File objects
+      imagePreviews: variant.imagePreviews, // For display only
+      sizes: variant.sizes,
+    }));
+    
+    onChange(formatted);
+  }, [variantsList, onChange]);
+
+  // Xử lý upload nhiều ảnh cho variant mới
+  const handleNewVariantImagesChange = ({ fileList }) => {
+    const files = fileList.map(f => f.originFileObj || f).filter(f => f instanceof File);
+    
+    if (files.length === 0) {
+      setNewVariant({
+        ...newVariant,
+        images: [],
+        imagePreviews: [],
       });
-    });
-    onChange(newVariants);
-  }, [colors, onChange]);
-
-  // Xử lý upload ảnh cho màu mới
-  const handleNewColorImageChange = (info) => {
-    const file = info.file.originFileObj || info.file;
-    if (file) {
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        setNewColor({
-          ...newColor,
-          image: file,
-          imagePreview: e.target.result,
-        });
-      };
-      reader.readAsDataURL(file);
-    }
-  };
-
-  // Thêm màu mới
-  const handleAddColor = () => {
-    if (!newColor.name.trim()) {
-      message.error('Vui lòng nhập tên màu sắc');
       return;
     }
-    if (!newColor.price || newColor.price <= 0) {
+    
+    const previews = [];
+    let loadedCount = 0;
+    
+    files.forEach((file, index) => {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        previews[index] = e.target.result;
+        loadedCount++;
+        
+        // Chỉ update state khi đã load xong tất cả ảnh
+        if (loadedCount === files.length) {
+          setNewVariant({
+            ...newVariant,
+            images: files,
+            imagePreviews: previews,
+          });
+        }
+      };
+      reader.readAsDataURL(file);
+    });
+  };
+
+  // Thêm variant mới
+  const handleAddVariant = () => {
+    if (!newVariant.color.trim()) {
+      message.error('Vui lòng nhập màu sắc');
+      return;
+    }
+    if (!newVariant.price || newVariant.price <= 0) {
       message.error('Vui lòng nhập giá hợp lệ');
       return;
     }
 
     // Kiểm tra trùng màu
-    if (colors.some(c => c.name.toLowerCase() === newColor.name.toLowerCase())) {
+    if (variantsList.some(v => v.color && v.color.toLowerCase() === newVariant.color.toLowerCase())) {
       message.error('Màu sắc này đã tồn tại');
       return;
     }
 
-    setColors([
-      ...colors,
+    setVariantsList([
+      ...variantsList,
       {
-        name: newColor.name,
-        price: parseFloat(newColor.price),
-        discount_price: newColor.discount_price ? parseFloat(newColor.discount_price) : null,
-        image: newColor.image,
-        imagePreview: newColor.imagePreview,
+        color: newVariant.color,
+        price: parseFloat(newVariant.price),
+        discount_price: newVariant.discount_price ? parseFloat(newVariant.discount_price) : null,
+        is_active: true,
+        images: newVariant.images,
+        imagePreviews: newVariant.imagePreviews,
         sizes: [],
       },
     ]);
 
     // Reset form
-    setNewColor({
-      name: '',
+    setNewVariant({
+      color: '',
       price: '',
       discount_price: '',
-      image: null,
-      imagePreview: null,
+      images: [],
+      imagePreviews: [],
     });
-    message.success('Thêm màu sắc thành công');
+    
+    message.success('Thêm variant thành công');
   };
 
-  // Xóa màu
-  const handleDeleteColor = (colorName) => {
-    setColors(colors.filter(c => c.name !== colorName));
-    message.success('Xóa màu sắc thành công');
+  // Xóa variant
+  const handleDeleteVariant = (index) => {
+    setVariantsList(variantsList.filter((_, i) => i !== index));
+    message.success('Xóa variant thành công');
   };
 
-  // Thêm size cho màu
-  const handleAddSize = (colorName) => {
-    if (!newSize.trim()) {
+  // Cập nhật giá của variant
+  const handleUpdateVariantPrice = (index, field, value) => {
+    const updated = [...variantsList];
+    updated[index] = {
+      ...updated[index],
+      [field]: value ? parseFloat(value) : null,
+    };
+    setVariantsList(updated);
+  };
+
+  // Thêm size cho variant
+  const handleAddSize = (variantIndex) => {
+    if (!newSize.name.trim()) {
       message.error('Vui lòng nhập tên size');
       return;
     }
 
-    setColors(colors.map(color => {
-      if (color.name === colorName) {
-        // Kiểm tra trùng size
-        if (color.sizes.some(s => s.name.toLowerCase() === newSize.toLowerCase())) {
-          message.error('Size này đã tồn tại cho màu này');
-          return color;
-        }
-        
-        return {
-          ...color,
-          sizes: [...color.sizes, { name: newSize, stock_quantity: 0 }],
-        };
-      }
-      return color;
-    }));
-
-    setNewSize('');
-    setSelectedColorForSize(null);
+    const updated = [...variantsList];
+    const variant = updated[variantIndex];
+    
+    // Kiểm tra trùng size
+    if (variant.sizes.some(s => s.name && s.name.toLowerCase() === newSize.name.toLowerCase())) {
+      message.error('Size này đã tồn tại cho variant này');
+      return;
+    }
+    
+    variant.sizes.push({
+      name: newSize.name,
+      stock_quantity: newSize.stock_quantity || 0,
+      minimum_stock: 5,
+      reorder_point: 10,
+      cost_price: 0,
+    });
+    
+    setVariantsList(updated);
+    setNewSize({ name: '', stock_quantity: 0 });
+    setSelectedVariantIndex(null);
     message.success('Thêm size thành công');
   };
 
   // Xóa size
-  const handleDeleteSize = (colorName, sizeName) => {
-    setColors(colors.map(color => {
-      if (color.name === colorName) {
-        return {
-          ...color,
-          sizes: color.sizes.filter(s => s.name !== sizeName),
-        };
-      }
-      return color;
-    }));
+  const handleDeleteSize = (variantIndex, sizeIndex) => {
+    const updated = [...variantsList];
+    updated[variantIndex].sizes = updated[variantIndex].sizes.filter((_, i) => i !== sizeIndex);
+    setVariantsList(updated);
     message.success('Xóa size thành công');
   };
 
-  // Cập nhật giá của màu
-  const handleUpdateColorPrice = (colorName, field, value) => {
-    setColors(colors.map(color => {
-      if (color.name === colorName) {
-        return { ...color, [field]: value };
-      }
-      return color;
-    }));
+  // Cập nhật stock của size
+  const handleUpdateSizeStock = (variantIndex, sizeIndex, stock) => {
+    const updated = [...variantsList];
+    updated[variantIndex].sizes[sizeIndex].stock_quantity = stock || 0;
+    setVariantsList(updated);
   };
 
-  // Xử lý thay đổi ảnh cho màu đã tồn tại
-  const handleColorImageChange = (colorName, info) => {
-    const file = info.file.originFileObj || info.file;
-    if (file) {
+  // Thêm/cập nhật ảnh cho variant đã tồn tại
+  const handleUpdateVariantImages = (variantIndex, { fileList }) => {
+    const files = fileList.map(f => f.originFileObj || f).filter(f => f instanceof File);
+    
+    if (files.length === 0) {
+      return;
+    }
+    
+    const previews = [];
+    let loadedCount = 0;
+    
+    files.forEach((file, index) => {
       const reader = new FileReader();
       reader.onload = (e) => {
-        setColors(colors.map(color => {
-          if (color.name === colorName) {
-            return {
-              ...color,
-              image: file,
-              imageFile: file,
-              imagePreview: e.target.result,
-            };
-          }
-          return color;
-        }));
+        previews[index] = e.target.result;
+        loadedCount++;
+        
+        if (loadedCount === files.length) {
+          const updated = [...variantsList];
+          updated[variantIndex] = {
+            ...updated[variantIndex],
+            images: [...(updated[variantIndex].images || []), ...files],
+            imagePreviews: [...(updated[variantIndex].imagePreviews || []), ...previews],
+          };
+          setVariantsList(updated);
+          message.success('Thêm ảnh thành công');
+        }
       };
       reader.readAsDataURL(file);
-    }
+    });
+  };
+
+  // Xóa ảnh khỏi variant
+  const handleDeleteVariantImage = (variantIndex, imageIndex) => {
+    const updated = [...variantsList];
+    const variant = updated[variantIndex];
+    
+    variant.images = variant.images.filter((_, i) => i !== imageIndex);
+    variant.imagePreviews = variant.imagePreviews.filter((_, i) => i !== imageIndex);
+    
+    setVariantsList(updated);
+    message.success('Xóa ảnh thành công');
   };
 
   return (
-    <div>
-      {/* Form thêm màu mới */}
-      <Card size="small" style={{ marginBottom: 16, background: '#f0f5ff' }}>
-        <Text strong>Thêm màu sắc mới</Text>
-        <Row gutter={16} style={{ marginTop: 12 }}>
-          <Col xs={24} sm={6}>
+    <div style={{ marginTop: '24px' }}>
+      <Title level={4}>Quản lý Variants (Màu sắc & Sizes)</Title>
+      
+      {/* Form thêm variant mới */}
+      <Card 
+        title="Thêm Variant Mới (Màu sắc + Giá)" 
+        size="small" 
+        style={{ marginBottom: '16px', background: '#fafafa' }}
+      >
+        <Row gutter={16}>
+          <Col span={6}>
+            <Text strong>Màu sắc *</Text>
             <Input
-              placeholder="Tên màu (Đỏ, Xanh...)"
-              value={newColor.name}
-              onChange={(e) => setNewColor({ ...newColor, name: e.target.value })}
-              onPressEnter={handleAddColor}
+              placeholder="VD: Đen, Trắng, Xanh"
+              value={newVariant.color}
+              onChange={(e) => setNewVariant({ ...newVariant, color: e.target.value })}
+              onPressEnter={handleAddVariant}
             />
           </Col>
-          <Col xs={24} sm={5}>
+          <Col span={5}>
+            <Text strong>Giá (₫) *</Text>
             <InputNumber
               style={{ width: '100%' }}
-              placeholder="Giá bán"
+              placeholder="VD: 500000"
               min={0}
+              value={newVariant.price}
+              onChange={(val) => setNewVariant({ ...newVariant, price: val })}
               formatter={value => `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
               parser={value => value.replace(/\$\s?|(,*)/g, '')}
-              value={newColor.price}
-              onChange={(value) => setNewColor({ ...newColor, price: value })}
-              addonAfter="VND"
             />
           </Col>
-          <Col xs={24} sm={5}>
+          <Col span={5}>
+            <Text strong>Giá giảm (₫)</Text>
             <InputNumber
               style={{ width: '100%' }}
-              placeholder="Giá KM (tùy chọn)"
+              placeholder="Tùy chọn"
               min={0}
+              value={newVariant.discount_price}
+              onChange={(val) => setNewVariant({ ...newVariant, discount_price: val })}
               formatter={value => `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
               parser={value => value.replace(/\$\s?|(,*)/g, '')}
-              value={newColor.discount_price}
-              onChange={(value) => setNewColor({ ...newColor, discount_price: value })}
-              addonAfter="VND"
             />
           </Col>
-          <Col xs={24} sm={4}>
+          <Col span={6}>
+            <Text strong>Ảnh</Text>
             <Upload
-              accept="image/*"
-              showUploadList={false}
+              listType="picture-card"
+              fileList={newVariant.imagePreviews.map((url, i) => ({
+                uid: i,
+                name: `image-${i}`,
+                status: 'done',
+                url: url,
+              }))}
+              onChange={handleNewVariantImagesChange}
               beforeUpload={() => false}
-              onChange={handleNewColorImageChange}
+              multiple
             >
-              <Button icon={<UploadOutlined />} block>
-                {newColor.imagePreview ? 'Đổi ảnh' : 'Chọn ảnh'}
-              </Button>
+              <div>
+                <PlusOutlined />
+                <div style={{ marginTop: 8 }}>Upload</div>
+              </div>
             </Upload>
-            {newColor.imagePreview && (
-              <Image
-                src={newColor.imagePreview}
-                alt="Preview"
-                style={{ marginTop: 8, width: '100%', maxHeight: 60, objectFit: 'cover' }}
-              />
-            )}
           </Col>
-          <Col xs={24} sm={4}>
-            <Button
-              type="primary"
-              icon={<PlusOutlined />}
-              onClick={handleAddColor}
-              block
-            >
-              Thêm màu
-            </Button>
+          <Col span={2}>
+            <div style={{ marginTop: '22px' }}>
+              <Button 
+                type="primary" 
+                icon={<PlusOutlined />} 
+                onClick={handleAddVariant}
+                block
+              >
+                Thêm
+              </Button>
+            </div>
           </Col>
         </Row>
       </Card>
 
-      {/* Danh sách màu sắc */}
-      {colors.length > 0 ? (
-        <Collapse accordion>
-          {colors.map((color, index) => (
-            <Panel
-              header={
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                  <Space>
-                    <PictureOutlined />
-                    <Text strong>{color.name}</Text>
-                    <Tag color="green">{color.price?.toLocaleString()} VND</Tag>
-                    {color.discount_price && (
-                      <Tag color="red">KM: {color.discount_price?.toLocaleString()} VND</Tag>
-                    )}
-                    <Tag color="blue">{color.sizes.length} sizes</Tag>
-                  </Space>
-                  <Popconfirm
-                    title="Xóa màu này và tất cả sizes?"
-                    onConfirm={(e) => {
-                      e.stopPropagation();
-                      handleDeleteColor(color.name);
-                    }}
-                    onClick={(e) => e.stopPropagation()}
-                    okText="Xóa"
-                    cancelText="Hủy"
-                  >
-                    <Button
-                      size="small"
-                      danger
-                      icon={<DeleteOutlined />}
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      Xóa màu
-                    </Button>
-                  </Popconfirm>
-                </div>
-              }
-              key={index}
-            >
-              {/* Ảnh màu và giá */}
-              <Row gutter={16} style={{ marginBottom: 16 }}>
-                <Col xs={24} sm={6}>
-                  {color.imagePreview ? (
-                    <div>
-                      <Image
-                        src={typeof color.imagePreview === 'string' ? color.imagePreview : color.imagePreview}
-                        alt={color.name}
-                        style={{ width: '100%', maxHeight: 150, objectFit: 'cover', marginBottom: 8 }}
-                      />
-                      <Upload
-                        accept="image/*"
-                        showUploadList={false}
-                        beforeUpload={() => false}
-                        onChange={(info) => handleColorImageChange(color.name, info)}
-                      >
-                        <Button icon={<UploadOutlined />} size="small" block>
-                          Đổi ảnh
-                        </Button>
-                      </Upload>
-                    </div>
-                  ) : (
-                    <div>
-                      <div style={{
-                        width: '100%',
-                        height: 150,
-                        background: '#f0f0f0',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        marginBottom: 8,
-                      }}>
-                        <Text type="secondary">Chưa có ảnh</Text>
-                      </div>
-                      <Upload
-                        accept="image/*"
-                        showUploadList={false}
-                        beforeUpload={() => false}
-                        onChange={(info) => handleColorImageChange(color.name, info)}
-                      >
-                        <Button icon={<UploadOutlined />} size="small" block>
-                          Chọn ảnh
-                        </Button>
-                      </Upload>
-                    </div>
+      {/* Danh sách variants */}
+      <Collapse accordion>
+        {variantsList.map((variant, variantIndex) => (
+          <Panel
+            key={variantIndex}
+            header={
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <Space>
+                  <Tag color="blue">{variant.color}</Tag>
+                  <Text strong>{variant.price?.toLocaleString()}₫</Text>
+                  {variant.discount_price && (
+                    <Text type="danger">→ {variant.discount_price?.toLocaleString()}₫</Text>
                   )}
-                </Col>
-                <Col xs={24} sm={18}>
-                  <Row gutter={16}>
-                    <Col span={12}>
-                      <Text>Giá bán:</Text>
-                      <InputNumber
-                        style={{ width: '100%', marginTop: 8 }}
-                        min={0}
-                        value={color.price}
-                        onChange={(value) => handleUpdateColorPrice(color.name, 'price', value)}
-                        formatter={value => `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
-                        parser={value => value.replace(/\$\s?|(,*)/g, '')}
-                        addonAfter="VND"
-                      />
-                    </Col>
-                    <Col span={12}>
-                      <Text>Giá khuyến mãi:</Text>
-                      <InputNumber
-                        style={{ width: '100%', marginTop: 8 }}
-                        min={0}
-                        value={color.discount_price}
-                        onChange={(value) => handleUpdateColorPrice(color.name, 'discount_price', value)}
-                        formatter={value => `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
-                        parser={value => value.replace(/\$\s?|(,*)/g, '')}
-                        addonAfter="VND"
-                      />
-                    </Col>
-                  </Row>
-                </Col>
-              </Row>
+                  <Text type="secondary">
+                    ({variant.sizes.length} sizes, {variant.imagePreviews?.length || 0} ảnh)
+                  </Text>
+                </Space>
+                <Popconfirm
+                  title="Xóa variant này?"
+                  onConfirm={(e) => {
+                    e.stopPropagation();
+                    handleDeleteVariant(variantIndex);
+                  }}
+                  okText="Xóa"
+                  cancelText="Hủy"
+                >
+                  <Button 
+                    danger 
+                    size="small" 
+                    icon={<DeleteOutlined />}
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    Xóa Variant
+                  </Button>
+                </Popconfirm>
+              </div>
+            }
+          >
+            {/* Cập nhật giá và ảnh */}
+            <Row gutter={16} style={{ marginBottom: '16px' }}>
+              <Col span={6}>
+                <Text strong>Giá (₫)</Text>
+                <InputNumber
+                  style={{ width: '100%' }}
+                  value={variant.price}
+                  onChange={(val) => handleUpdateVariantPrice(variantIndex, 'price', val)}
+                  formatter={value => `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
+                  parser={value => value.replace(/\$\s?|(,*)/g, '')}
+                />
+              </Col>
+              <Col span={6}>
+                <Text strong>Giá giảm (₫)</Text>
+                <InputNumber
+                  style={{ width: '100%' }}
+                  value={variant.discount_price}
+                  onChange={(val) => handleUpdateVariantPrice(variantIndex, 'discount_price', val)}
+                  formatter={value => `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
+                  parser={value => value.replace(/\$\s?|(,*)/g, '')}
+                />
+              </Col>
+              <Col span={12}>
+                <Text strong>Quản lý ảnh ({variant.imagePreviews?.length || 0} ảnh)</Text>
+                <div style={{ marginTop: '8px' }}>
+                  {/* Hiển thị ảnh hiện tại với nút xóa */}
+                  <Space wrap>
+                    {variant.imagePreviews?.map((url, imageIndex) => (
+                      <div key={imageIndex} style={{ position: 'relative', display: 'inline-block' }}>
+                        <Image 
+                          width={60} 
+                          height={60} 
+                          src={url} 
+                          style={{ borderRadius: '4px', border: '1px solid #d9d9d9' }}
+                        />
+                        <Button
+                          danger
+                          size="small"
+                          shape="circle"
+                          icon={<DeleteOutlined />}
+                          style={{
+                            position: 'absolute',
+                            top: -8,
+                            right: -8,
+                            zIndex: 1,
+                          }}
+                          onClick={() => handleDeleteVariantImage(variantIndex, imageIndex)}
+                        />
+                        {imageIndex === 0 && (
+                          <Tag 
+                            color="green" 
+                            style={{ position: 'absolute', bottom: 0, left: 0, margin: 2, fontSize: '10px' }}
+                          >
+                            Chính
+                          </Tag>
+                        )}
+                      </div>
+                    ))}
+                    
+                    {/* Upload thêm ảnh */}
+                    <Upload
+                      listType="picture-card"
+                      showUploadList={false}
+                      beforeUpload={() => false}
+                      multiple
+                      onChange={(info) => handleUpdateVariantImages(variantIndex, info)}
+                    >
+                      <div>
+                        <PlusOutlined />
+                        <div style={{ marginTop: 4, fontSize: '12px' }}>Thêm</div>
+                      </div>
+                    </Upload>
+                  </Space>
+                </div>
+              </Col>
+            </Row>
 
-              <Divider />
+            <Divider />
 
-              {/* Form thêm size */}
-              <Row gutter={16} style={{ marginBottom: 16 }}>
-                <Col xs={18}>
+            {/* Form thêm size */}
+            <Card size="small" title="Thêm Size" style={{ marginBottom: '16px', background: '#f0f0f0' }}>
+              <Row gutter={16}>
+                <Col span={8}>
                   <Input
-                    placeholder="Nhập size (S, M, L, XL...)"
-                    value={selectedColorForSize === color.name ? newSize : ''}
+                    placeholder="VD: S, M, L, XL, 29, 30"
+                    value={selectedVariantIndex === variantIndex ? newSize.name : ''}
                     onChange={(e) => {
-                      setSelectedColorForSize(color.name);
-                      setNewSize(e.target.value);
+                      setSelectedVariantIndex(variantIndex);
+                      setNewSize({ ...newSize, name: e.target.value });
                     }}
-                    onPressEnter={() => handleAddSize(color.name)}
+                    onPressEnter={() => handleAddSize(variantIndex)}
                   />
                 </Col>
-                <Col xs={6}>
-                  <Button
-                    type="dashed"
+                <Col span={8}>
+                  <InputNumber
+                    style={{ width: '100%' }}
+                    placeholder="Số lượng tồn kho"
+                    min={0}
+                    value={selectedVariantIndex === variantIndex ? newSize.stock_quantity : 0}
+                    onChange={(val) => {
+                      setSelectedVariantIndex(variantIndex);
+                      setNewSize({ ...newSize, stock_quantity: val || 0 });
+                    }}
+                  />
+                </Col>
+                <Col span={8}>
+                  <Button 
+                    type="primary" 
                     icon={<PlusOutlined />}
-                    onClick={() => handleAddSize(color.name)}
+                    onClick={() => handleAddSize(variantIndex)}
                     block
                   >
-                    Thêm size
+                    Thêm Size
                   </Button>
                 </Col>
               </Row>
+            </Card>
 
-              {/* Danh sách sizes */}
-              {color.sizes.length > 0 ? (
-                <Table
-                  dataSource={color.sizes}
-                  rowKey="name"
-                  size="small"
-                  pagination={false}
-                  columns={[
-                    {
-                      title: 'Size',
-                      dataIndex: 'name',
-                      render: (text) => <Tag color="blue">{text}</Tag>,
-                    },
-                    {
-                      title: 'Tồn kho',
-                      dataIndex: 'stock_quantity',
-                      render: (text, record) => (
-                        <Text type="secondary">{text || 0} (Quản lý ở Kho hàng)</Text>
-                      ),
-                    },
-                    {
-                      title: 'Hành động',
-                      render: (_, record) => (
-                        <Popconfirm
-                          title="Xóa size này?"
-                          onConfirm={() => handleDeleteSize(color.name, record.name)}
-                          okText="Xóa"
-                          cancelText="Hủy"
-                        >
-                          <Button size="small" danger icon={<DeleteOutlined />} />
-                        </Popconfirm>
-                      ),
-                    },
-                  ]}
-                />
-              ) : (
-                <div style={{ textAlign: 'center', padding: 20, background: '#fafafa' }}>
-                  <Text type="secondary">Chưa có size nào cho màu này</Text>
-                </div>
-              )}
-            </Panel>
-          ))}
-        </Collapse>
-      ) : (
-        <div style={{
-          textAlign: 'center',
-          padding: 40,
-          background: '#f5f5f5',
-          borderRadius: 8,
-          border: '1px dashed #d9d9d9'
+            {/* Bảng sizes */}
+            <Table
+              size="small"
+              dataSource={variant.sizes}
+              pagination={false}
+              rowKey={(_, index) => index}
+              columns={[
+                {
+                  title: 'Size',
+                  dataIndex: 'name',
+                  key: 'name',
+                  render: (text) => <Tag color="green">{text}</Tag>,
+                },
+                {
+                  title: 'Tồn kho',
+                  dataIndex: 'stock_quantity',
+                  key: 'stock',
+                  render: (stock, record, sizeIndex) => (
+                    <InputNumber
+                      min={0}
+                      value={stock}
+                      onChange={(val) => handleUpdateSizeStock(variantIndex, sizeIndex, val)}
+                      style={{ width: '100px' }}
+                    />
+                  ),
+                },
+                {
+                  title: 'Hành động',
+                  key: 'action',
+                  render: (_, record, sizeIndex) => (
+                    <Popconfirm
+                      title="Xóa size này?"
+                      onConfirm={() => handleDeleteSize(variantIndex, sizeIndex)}
+                      okText="Xóa"
+                      cancelText="Hủy"
+                    >
+                      <Button danger size="small" icon={<DeleteOutlined />}>
+                        Xóa
+                      </Button>
+                    </Popconfirm>
+                  ),
+                },
+              ]}
+            />
+          </Panel>
+        ))}
+      </Collapse>
+
+      {variantsList.length === 0 && (
+        <div style={{ 
+          textAlign: 'center', 
+          padding: '40px', 
+          background: '#fafafa', 
+          borderRadius: '8px',
+          marginTop: '16px'
         }}>
-          <Text type="secondary">
-            Chưa có màu sắc nào. Thêm màu sắc để bắt đầu.
-          </Text>
+          <PictureOutlined style={{ fontSize: '48px', color: '#d9d9d9' }} />
+          <p style={{ color: '#999', marginTop: '16px' }}>
+            Chưa có variant nào. Thêm màu sắc và giá ở form bên trên.
+          </p>
         </div>
       )}
-
-      {/* Hướng dẫn */}
-      <div style={{
-        marginTop: 16,
-        padding: 12,
-        background: '#fffbe6',
-        borderRadius: 8,
-        border: '1px solid #ffe58f'
-      }}>
-        <Text style={{ fontSize: 12 }}>
-          <strong>📝 Hướng dẫn:</strong>
-        </Text>
-        <ul style={{ marginTop: 8, marginBottom: 0, fontSize: 12 }}>
-          <li>Mỗi màu sắc sẽ có ảnh riêng, giá riêng (và giá khuyến mãi nếu có)</li>
-          <li>Mỗi màu có thể có nhiều sizes khác nhau (S, M, L, XL...)</li>
-          <li>Tồn kho sẽ được quản lý riêng cho từng kết hợp màu-size ở phần "Quản lý Kho hàng"</li>
-        </ul>
-      </div>
     </div>
   );
 };

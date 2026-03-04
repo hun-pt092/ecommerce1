@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Layout,
   Menu,
@@ -9,6 +9,7 @@ import {
   Space,
   Typography,
 } from 'antd';
+import authAxios from '../api/AuthAxios';
 import {
   UserOutlined,
   ShoppingOutlined,
@@ -24,6 +25,7 @@ import {
   BarChartOutlined,
   HistoryOutlined,
   WarningOutlined,
+  FolderOutlined,
 } from '@ant-design/icons';
 import { useNavigate, useLocation } from 'react-router-dom';
 
@@ -32,12 +34,43 @@ const { Text } = Typography;
 
 const AdminLayout = ({ children }) => {
   const [collapsed, setCollapsed] = useState(false);
+  const [userInfo, setUserInfo] = useState(null);
+  const [avatarTimestamp, setAvatarTimestamp] = useState(Date.now());
   const navigate = useNavigate();
   const location = useLocation();
   
   const {
     token: { colorBgContainer, borderRadiusLG },
   } = theme.useToken();
+
+  // Fetch user info
+  const fetchUserInfo = async () => {
+    try {
+      const response = await authAxios.get('user/');
+      setUserInfo(response.data);
+      setAvatarTimestamp(Date.now());
+    } catch (error) {
+      console.error('Error fetching user info:', error);
+    }
+  };
+
+  // Fetch user info on mount
+  useEffect(() => {
+    fetchUserInfo();
+  }, []);
+
+  // Listen for avatar update event
+  useEffect(() => {
+    const handleUserUpdate = () => {
+      fetchUserInfo();
+    };
+    
+    window.addEventListener('user-updated', handleUserUpdate);
+    
+    return () => {
+      window.removeEventListener('user-updated', handleUserUpdate);
+    };
+  }, []);
 
   // Menu items cho admin
   const menuItems = [
@@ -66,6 +99,11 @@ const AdminLayout = ({ children }) => {
           label: 'Thêm sản phẩm',
         },
       ],
+    },
+    {
+      key: '/admin/categories',
+      icon: <FolderOutlined />,
+      label: 'Danh mục sản phẩm',
     },
     {
       key: '/admin/stock',
@@ -208,14 +246,20 @@ const AdminLayout = ({ children }) => {
 
           {/* User info */}
           <Space>
-            <Text>Xin chào, Admin</Text>
+            <Text>Xin chào, {userInfo?.first_name || userInfo?.username || 'Admin'}</Text>
             <Dropdown
               menu={{ items: userMenuItems }}
               placement="bottomRight"
             >
               <Avatar 
-                size="default" 
-                icon={<UserOutlined />} 
+                key={avatarTimestamp}
+                size="default"
+                src={
+                  userInfo?.avatar_url
+                    ? `http://localhost:8000${userInfo.avatar_url}?t=${avatarTimestamp}`
+                    : undefined
+                }
+                icon={!userInfo?.avatar_url && <UserOutlined />}
                 style={{ cursor: 'pointer' }}
               />
             </Dropdown>

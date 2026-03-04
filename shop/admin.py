@@ -1,7 +1,7 @@
 
 from django.contrib import admin
 from .models import (
-    User, Category, Brand, Product, ProductVariant, 
+    User, Category, Brand, Product, ProductVariant, ProductVariantImage, ProductSKU,
     Order, OrderItem, Review, Wishlist, Cart, CartItem,
     StockHistory, StockAlert, Coupon, UserCoupon, ProductVoucher
 )
@@ -43,12 +43,25 @@ class BrandAdmin(admin.ModelAdmin):
     search_fields = ['name']
     prepopulated_fields = {'description': ('name',)}
 
+# Inline cho ProductVariantImage
+class ProductVariantImageInline(admin.TabularInline):
+    model = ProductVariantImage
+    extra = 1
+    fields = ['image', 'is_primary', 'order']
+
+# Inline cho ProductSKU
+class ProductSKUInline(admin.TabularInline):
+    model = ProductSKU
+    extra = 1
+    fields = ['size', 'sku', 'stock_quantity', 'reserved_quantity', 'minimum_stock', 'cost_price', 'is_active']
+    readonly_fields = ['sku']
+
 # Inline cho ProductVariant
 class ProductVariantInline(admin.TabularInline):
     model = ProductVariant
     extra = 1
-    fields = ['image', 'size', 'color', 'price', 'discount_price', 'stock_quantity', 'reserved_quantity', 'minimum_stock', 'cost_price', 'is_active']
-    readonly_fields = ['sku']
+    fields = ['color', 'price', 'discount_price', 'is_active']
+    show_change_link = True
 
 # Inline cho ProductVoucher
 class ProductVoucherInline(admin.TabularInline):
@@ -82,26 +95,79 @@ class ProductAdmin(admin.ModelAdmin):
 # Custom admin cho ProductVariant  
 @admin.register(ProductVariant)
 class ProductVariantAdmin(admin.ModelAdmin):
-    list_display = ['sku', 'product', 'size', 'color', 'price', 'discount_price', 'stock_quantity', 'reserved_quantity', 'available_quantity', 'is_low_stock', 'is_active']
-    list_filter = ['size', 'color', 'is_active', 'product__category', 'product__brand']
-    search_fields = ['product__name', 'sku', 'size', 'color']
-    readonly_fields = ['sku', 'available_quantity', 'is_low_stock', 'need_reorder', 'created_at', 'updated_at', 'image_preview']
+    list_display = ['product', 'color', 'price', 'discount_price', 'get_total_stock', 'get_total_available', 'is_active']
+    list_filter = ['color', 'is_active', 'product__category', 'product__brand']
+    search_fields = ['product__name', 'color']
+    readonly_fields = ['created_at', 'updated_at', 'get_total_stock', 'get_total_available']
+    inlines = [ProductVariantImageInline, ProductSKUInline]
     
     fieldsets = (
         ('Thông tin sản phẩm', {
-            'fields': ('product', 'sku', 'size', 'color')
+            'fields': ('product', 'color')
         }),
-        ('Ảnh và giá', {
-            'fields': ('image', 'image_preview', 'price', 'discount_price')
+        ('Giá', {
+            'fields': ('price', 'discount_price')
         }),
-        ('Quản lý kho', {
-            'fields': ('stock_quantity', 'reserved_quantity', 'available_quantity', 'minimum_stock', 'reorder_point', 'cost_price')
+        ('Tồn kho', {
+            'fields': ('get_total_stock', 'get_total_available')
         }),
         ('Trạng thái', {
-            'fields': ('is_active', 'is_low_stock', 'need_reorder')
+            'fields': ('is_active',)
         }),
         ('Thời gian', {
             'fields': ('created_at', 'updated_at'),
+            'classes': ('collapse',)
+        }),
+    )
+    
+    def get_total_stock(self, obj):
+        return obj.get_total_stock()
+    get_total_stock.short_description = 'Total Stock'
+    
+    def get_total_available(self, obj):
+        return obj.get_total_available()
+    get_total_available.short_description = 'Available Stock'
+
+
+# Custom admin cho ProductSKU
+@admin.register(ProductSKU)
+class ProductSKUAdmin(admin.ModelAdmin):
+    list_display = ['sku', 'variant', 'size', 'stock_quantity', 'reserved_quantity', 'available_quantity', 'is_low_stock', 'is_active']
+    list_filter = ['size', 'is_active', 'variant__product__category', 'variant__product__brand']
+    search_fields = ['sku', 'variant__product__name', 'variant__color']
+    readonly_fields = ['sku', 'created_at', 'updated_at']
+    
+    fieldsets = (
+        ('Thông tin cơ bản', {
+            'fields': ('variant', 'size', 'sku')
+        }),
+        ('Quản lý kho', {
+            'fields': ('stock_quantity', 'reserved_quantity', 'minimum_stock', 'reorder_point', 'cost_price')
+        }),
+        ('Trạng thái', {
+            'fields': ('is_active',)
+        }),
+        ('Thời gian', {
+            'fields': ('created_at', 'updated_at'),
+            'classes': ('collapse',)
+        }),
+    )
+
+
+# Custom admin cho ProductVariantImage
+@admin.register(ProductVariantImage)
+class ProductVariantImageAdmin(admin.ModelAdmin):
+    list_display = ['variant', 'is_primary', 'order', 'image_preview', 'created_at']
+    list_filter = ['is_primary', 'variant__product__category']
+    search_fields = ['variant__product__name', 'variant__color']
+    readonly_fields = ['created_at', 'image_preview']
+    
+    fieldsets = (
+        ('Thông tin ảnh', {
+            'fields': ('variant', 'image', 'image_preview', 'is_primary', 'order')
+        }),
+        ('Thời gian', {
+            'fields': ('created_at',),
             'classes': ('collapse',)
         }),
     )
@@ -112,15 +178,6 @@ class ProductVariantAdmin(admin.ModelAdmin):
         return "No image"
     image_preview.short_description = 'Preview'
     image_preview.allow_tags = True
-    
-    def available_quantity(self, obj):
-        return obj.available_quantity
-    available_quantity.short_description = 'Available Stock'
-    
-    def is_low_stock(self, obj):
-        return obj.is_low_stock
-    is_low_stock.boolean = True
-    is_low_stock.short_description = 'Low Stock'
 
 # Custom admin cho Order
 @admin.register(Order)
@@ -133,9 +190,9 @@ class OrderAdmin(admin.ModelAdmin):
 # Custom admin cho OrderItem
 @admin.register(OrderItem)
 class OrderItemAdmin(admin.ModelAdmin):
-    list_display = ['order', 'product_variant', 'quantity', 'price_per_item']
-    list_filter = ['order__status', 'product_variant__product__category']
-    search_fields = ['order__id', 'product_variant__product__name']
+    list_display = ['order', 'product_sku', 'quantity', 'price_per_item']
+    list_filter = ['order__status']
+    search_fields = ['order__id', 'product_sku__variant__product__name']
 
 # Custom admin cho Review
 @admin.register(Review)
@@ -161,15 +218,15 @@ class WishlistAdmin(admin.ModelAdmin):
 # Custom admin cho StockHistory
 @admin.register(StockHistory)
 class StockHistoryAdmin(admin.ModelAdmin):
-    list_display = ['id', 'product_variant', 'transaction_type', 'quantity', 'quantity_before', 'quantity_after', 'created_by', 'created_at']
-    list_filter = ['transaction_type', 'created_at', 'product_variant__product__category']
-    search_fields = ['product_variant__product__name', 'product_variant__sku', 'reference_number', 'notes']
+    list_display = ['id', 'product_sku', 'transaction_type', 'quantity', 'quantity_before', 'quantity_after', 'created_by', 'created_at']
+    list_filter = ['transaction_type', 'created_at']
+    search_fields = ['product_sku__variant__product__name', 'product_sku__sku', 'reference_number', 'notes']
     readonly_fields = ['created_at']
     date_hierarchy = 'created_at'
     
     fieldsets = (
         ('Transaction Info', {
-            'fields': ('product_variant', 'transaction_type', 'quantity', 'quantity_before', 'quantity_after')
+            'fields': ('product_sku', 'transaction_type', 'quantity', 'quantity_before', 'quantity_after')
         }),
         ('Reference', {
             'fields': ('order', 'reference_number', 'cost_per_item')
@@ -183,9 +240,9 @@ class StockHistoryAdmin(admin.ModelAdmin):
 # Custom admin cho StockAlert
 @admin.register(StockAlert)
 class StockAlertAdmin(admin.ModelAdmin):
-    list_display = ['id', 'product_variant', 'alert_type', 'current_quantity', 'threshold', 'is_resolved', 'created_at']
+    list_display = ['id', 'product_sku', 'alert_type', 'current_quantity', 'threshold', 'is_resolved', 'created_at']
     list_filter = ['alert_type', 'is_resolved', 'created_at']
-    search_fields = ['product_variant__product__name', 'product_variant__sku']
+    search_fields = ['product_sku__variant__product__name', 'product_sku__sku']
     readonly_fields = ['created_at', 'resolved_at']
     
     actions = ['mark_as_resolved']

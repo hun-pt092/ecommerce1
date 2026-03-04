@@ -164,7 +164,7 @@ const CheckoutPage = () => {
         // Tạo temporary cart chỉ cho order này
         await authAxios.post('cart/', {
           items: cartData.items.map(item => ({
-            product_variant_id: item.product_variant.id,
+            product_sku_id: item.product_sku.id,
             quantity: item.quantity
           }))
         });
@@ -176,7 +176,7 @@ const CheckoutPage = () => {
         if (originalCart && originalCart.items && originalCart.items.length > 0) {
           await authAxios.post('cart/', {
             items: originalCart.items.map(item => ({
-              product_variant_id: item.product_variant.id,
+              product_sku_id: item.product_sku.id,
               quantity: item.quantity
             }))
           });

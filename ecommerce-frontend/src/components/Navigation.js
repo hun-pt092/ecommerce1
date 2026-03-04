@@ -42,7 +42,9 @@ const Navigation = () => {
   const location = useLocation();
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [cartItemCount, setCartItemCount] = useState(0);
+  const [wishlistCount, setWishlistCount] = useState(0);
   const [userInfo, setUserInfo] = useState(null);
+  const [avatarTimestamp, setAvatarTimestamp] = useState(Date.now()); // For cache busting
   const [profileModalVisible, setProfileModalVisible] = useState(false);
   const [passwordModalVisible, setPasswordModalVisible] = useState(false);
   const [isEditMode, setIsEditMode] = useState(false);
@@ -82,15 +84,34 @@ const Navigation = () => {
     // Fetch cart item count and user info if logged in
     if (token) {
       fetchCartCount();
+      fetchWishlistCount();
       fetchUserInfo();
     } else {
       setCartItemCount(0);
+      setWishlistCount(0);
       setUserInfo(null);
     }
 
     // Fetch categories
     fetchCategories();
   }, [location]);
+
+  // Separate useEffect for event listener (no dependencies to avoid re-creating)
+  useEffect(() => {
+    const handleUserUpdate = () => {
+      console.log('User updated event received');
+      const token = localStorage.getItem('access_token');
+      if (token) {
+        fetchUserInfo();
+      }
+    };
+    
+    window.addEventListener('user-updated', handleUserUpdate);
+    
+    return () => {
+      window.removeEventListener('user-updated', handleUserUpdate);
+    };
+  }, []); // Empty dependency - only setup once
 
   const fetchCategories = async () => {
     try {
@@ -114,10 +135,23 @@ const Navigation = () => {
     }
   };
 
+  const fetchWishlistCount = async () => {
+    try {
+      const response = await authAxios.get('wishlist/');
+      setWishlistCount(response.data?.length || 0);
+    } catch (error) {
+      console.error('Error fetching wishlist count:', error);
+      setWishlistCount(0);
+    }
+  };
+
   const fetchUserInfo = async () => {
     try {
       const response = await authAxios.get('user/');
+      console.log('User info fetched:', response.data);
+      console.log('Avatar URL:', response.data.avatar_url);
       setUserInfo(response.data);
+      setAvatarTimestamp(Date.now()); // Update timestamp to bust cache
     } catch (error) {
       console.error('Error fetching user info:', error);
       setUserInfo(null);
@@ -250,7 +284,7 @@ const Navigation = () => {
       label: 'Thông tin cá nhân',
       icon: <UserOutlined />,
       onClick: () => {
-        setProfileModalVisible(true);
+        navigate('/profile');
       }
     },
     {
@@ -481,12 +515,30 @@ const Navigation = () => {
           {isLoggedIn && (
             <Button
               type="text"
-              icon={<HeartOutlined style={{ fontSize: '20px' }} />}
+              icon={
+                <HeartOutlined 
+                  style={{ 
+                    fontSize: '20px',
+                    color: '#ff4d4f',
+                    transition: 'all 0.3s ease'
+                  }} 
+                />
+              }
               onClick={() => {
                 navigate('/wishlist');
                 window.scrollTo({ top: 0, behavior: 'smooth' });
               }}
-              style={{ display: 'flex', alignItems: 'center' }}
+              style={{ 
+                display: 'flex', 
+                alignItems: 'center',
+                transition: 'transform 0.2s ease'
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.transform = 'scale(1.1)';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.transform = 'scale(1)';
+              }}
               title="Sản phẩm yêu thích"
               className="desktop-wishlist"
             />
@@ -523,7 +575,16 @@ const Navigation = () => {
                   borderRadius: '6px',
                   transition: 'background-color 0.3s'
                 }}>
-                  <Avatar size="small" icon={<UserOutlined />} />
+                  <Avatar 
+                    key={avatarTimestamp}
+                    size="small"
+                    src={
+                      userInfo?.avatar_url
+                        ? `http://localhost:8000${userInfo.avatar_url}?t=${avatarTimestamp}`
+                        : undefined
+                    }
+                    icon={!userInfo?.avatar_url && <UserOutlined />}
+                  />
                   <span style={{ 
                     marginLeft: '8px',
                     color: '#595959',
@@ -684,7 +745,7 @@ const Navigation = () => {
           {isLoggedIn ? (
             <Space direction="vertical" style={{ width: '100%' }} size="middle">
               <div style={{ display: 'flex', alignItems: 'center', padding: '8px' }}>
-                <Avatar icon={<UserOutlined />} />
+                <Avatar key={avatarTimestamp} icon={<UserOutlined />} src={userInfo?.avatar_url ? `${userInfo.avatar_url}?t=${avatarTimestamp}` : undefined} />
                 <span style={{ marginLeft: '12px', fontWeight: '500' }}>
                   {userInfo?.first_name ? 
                     `${userInfo.first_name} ${userInfo.last_name || ''}`.trim() : 
@@ -745,7 +806,7 @@ const Navigation = () => {
         title={
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <div style={{ display: 'flex', alignItems: 'center' }}>
-              <Avatar size="large" icon={<UserOutlined />} style={{ marginRight: 12 }} />
+              <Avatar key={avatarTimestamp} size="large" icon={<UserOutlined />} src={userInfo?.avatar_url ? `${userInfo.avatar_url}?t=${avatarTimestamp}` : undefined} style={{ marginRight: 12 }} />
               <div>
                 <div style={{ fontSize: '18px', fontWeight: 'bold' }}>
                   {isEditMode ? 'Chỉnh sửa thông tin' : 'Thông tin cá nhân'}
