@@ -31,6 +31,7 @@ import { vi } from 'date-fns/locale';
 import dayjs from 'dayjs';
 import { useTheme } from '../contexts/ThemeContext';
 import ThemeToggle from './ThemeToggle';
+import MegaMenu from './MegaMenu';
 import logoImage from '../logo (2).png';
 
 const { Header } = Layout;
@@ -390,7 +391,13 @@ const Navigation = () => {
     {
       key: '/products',
       label: (
-        <Dropdown menu={{ items: categoryMenuItems }} placement="bottomLeft">
+        <Dropdown 
+          dropdownRender={() => <MegaMenu categories={categories} />}
+          placement="bottom"
+          trigger={['hover']}
+          mouseEnterDelay={0.1}
+          mouseLeaveDelay={0.2}
+        >
           <span style={{ cursor: 'pointer' }}>
             <ShoppingCartOutlined style={{ marginRight: 8 }} />
             Sản phẩm

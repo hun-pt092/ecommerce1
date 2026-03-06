@@ -4,7 +4,7 @@
 from django.db.models.signals import post_save, pre_save, post_delete
 from django.dispatch import receiver
 from django.db import transaction
-from .models import Order, OrderItem
+from .models import Order, OrderItem, Review
 from .services.stock_service import StockService
 import logging
 import time
@@ -43,6 +43,7 @@ def order_status_changed(sender, instance, **kwargs):
     """
     Signal khi Order status thay đổi
     Tự động return stock khi status = cancelled/returned
+    Tự động update sold_count khi status = delivered
     """
     logger.info(f"=== SIGNAL PRE_SAVE TRIGGERED for Order #{instance.pk} ===")
     
@@ -84,6 +85,15 @@ def order_status_changed(sender, instance, **kwargs):
                         logger.info(f"✓ Returned {item.quantity} items of {item.product_sku} (new stock: {item.product_sku.stock_quantity})")
                     except Exception as e:
                         logger.error(f"Failed to return stock for order #{instance.id}: {str(e)}")
+        
+        # Nếu status thay đổi sang delivered - cập nhật sold_count
+        elif new_status == 'delivered' and old_status != 'delivered':
+            logger.info(f"✓ Order #{instance.id} delivered - UPDATING SOLD COUNT")
+            with transaction.atomic():
+                for item in instance.items.all():
+                    product = item.product_sku.variant.product
+                    product.increment_sold_count(item.quantity)
+                    logger.info(f"✓ Updated sold_count for {product.name}: +{item.quantity}")
         else:
             logger.info(f"✗ No stock return needed (status transition: {old_status} → {new_status})")
                         
@@ -150,3 +160,19 @@ def orderitem_deleted(sender, instance, **kwargs):
             logger.info(f"Returned {instance.quantity} items of {instance.product_sku}")
         except Exception as e:
             logger.error(f"Failed to return stock: {str(e)}")
+
+
+# ============= PRODUCT STATISTICS SIGNALS =============
+
+@receiver(post_save, sender=Review)
+@receiver(post_delete, sender=Review)
+def update_product_rating(sender, instance, **kwargs):
+    """
+    Tự động cập nhật avg_rating khi có Review mới hoặc bị xóa
+    """
+    try:
+        product = instance.product
+        product.update_avg_rating()
+        logger.info(f"Updated avg_rating for product: {product.name} -> {product.avg_rating}")
+    except Exception as e:
+        logger.error(f"Failed to update product rating: {str(e)}")

@@ -204,7 +204,7 @@ const ProductList = () => {
   const fetchProducts = async () => {
     setLoading(true);
     try {
-      const response = await authAxios.get('/admin/products/');
+      const response = await authAxios.get('/admin/products/?page_size=200');
       // Handle pagination format
       const productsData = response.data.results || response.data || [];
       
@@ -318,8 +318,9 @@ const ProductList = () => {
           loading={loading}
           pagination={{
             total: filteredProducts.length,
-            pageSize: 10,
+            pageSize: 20,
             showSizeChanger: true,
+            pageSizeOptions: ['10', '20', '50', '100', '200'],
             showQuickJumper: true,
             showTotal: (total, range) => 
               `${range[0]}-${range[1]} của ${total} sản phẩm`,

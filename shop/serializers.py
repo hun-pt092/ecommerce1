@@ -41,9 +41,23 @@ class RegisterSerializer(serializers.ModelSerializer):
 
 # Category serializer
 class CategorySerializer(serializers.ModelSerializer):
+    children = serializers.SerializerMethodField()
+    product_count = serializers.SerializerMethodField()
+    
     class Meta:
         model = Category
-        fields = '__all__'
+        fields = ['id', 'name', 'parent', 'display_group', 'children', 'product_count']
+    
+    def get_children(self, obj):
+        # Chỉ trả children cho parent categories (tránh nested quá sâu)
+        if obj.parent is None:
+            children = obj.children.all()
+            return CategorySerializer(children, many=True, context={'skip_children': True}).data
+        return []
+    
+    def get_product_count(self, obj):
+        # Dùng annotated field từ queryset nếu có, nếu không thì query
+        return getattr(obj, 'active_product_count', obj.products.filter(is_active=True).count())
 
 # Brand serializer
 class BrandSerializer(serializers.ModelSerializer):
@@ -142,6 +156,8 @@ class ProductSerializer(serializers.ModelSerializer):
     price = serializers.SerializerMethodField()
     display_image = serializers.SerializerMethodField()
     price_range = serializers.SerializerMethodField()
+    is_best_seller = serializers.BooleanField(read_only=True)
+    review_count = serializers.IntegerField(read_only=True)
 
     class Meta:
         model = Product
@@ -570,15 +586,36 @@ class ReviewSerializer(serializers.ModelSerializer):
     user_first_name = serializers.CharField(source='user.first_name', read_only=True)
     user_last_name = serializers.CharField(source='user.last_name', read_only=True)
     product_name = serializers.CharField(source='product.name', read_only=True)
+    product_image = serializers.SerializerMethodField(read_only=True)
     
     class Meta:
         model = Review
         fields = [
             'id', 'product', 'user', 'order', 'rating', 'comment', 
             'created_at', 'user_name', 'user_first_name', 'user_last_name',
-            'product_name'
+            'product_name', 'product_image'
         ]
         read_only_fields = ['user', 'created_at']
+    
+    def get_product_image(self, obj):
+        """Get the primary image of the product's first variant"""
+        try:
+            # Get first variant of the product
+            variant = obj.product.variants.first()
+            if variant:
+                # Get primary image or first image
+                primary_image = variant.images.filter(is_primary=True).first()
+                if not primary_image:
+                    primary_image = variant.images.first()
+                
+                if primary_image and primary_image.image:
+                    request = self.context.get('request')
+                    if request:
+                        return request.build_absolute_uri(primary_image.image.url)
+                    return primary_image.image.url
+        except Exception as e:
+            pass
+        return None
     
     def validate_rating(self, value):
         if value < 1 or value > 5:

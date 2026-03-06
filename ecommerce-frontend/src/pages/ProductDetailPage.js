@@ -52,6 +52,23 @@ const { Option } = Select;
 const { TabPane } = Tabs;
 const { useBreakpoint } = Grid;
 
+// Add shimmer animation CSS for skeleton loading
+const shimmerStyle = document.createElement('style');
+shimmerStyle.textContent = `
+  @keyframes shimmer {
+    0% {
+      background-position: 200% 0;
+    }
+    100% {
+      background-position: -200% 0;
+    }
+  }
+`;
+if (!document.head.querySelector('[data-shimmer]')) {
+  shimmerStyle.setAttribute('data-shimmer', 'true');
+  document.head.appendChild(shimmerStyle);
+}
+
 const ProductDetailPage = () => {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -71,6 +88,8 @@ const ProductDetailPage = () => {
   const carouselRef = useRef(null); // Dùng useRef thay vì useState
   const [reviewRefresh, setReviewRefresh] = useState(0);
   const [currentColorIndex, setCurrentColorIndex] = useState(0);
+  const [imageLoadingStates, setImageLoadingStates] = useState({});
+  const [totalReviews, setTotalReviews] = useState(0);
 
   // Helper function to get full image URL
   const getImageUrl = (imagePath) => {
@@ -157,8 +176,22 @@ const ProductDetailPage = () => {
     // Scroll to top when page loads or product ID changes
     window.scrollTo(0, 0);
     fetchProduct();
+    fetchReviewCount(); // Fetch review count ngay khi load trang
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
+
+  // Fetch review count separately
+  const fetchReviewCount = async () => {
+    try {
+      const response = await apiClient.get(`products/${id}/stats/`);
+      if (response.data) {
+        setTotalReviews(response.data.total_reviews || 0);
+      }
+    } catch (error) {
+      console.error('Error fetching review count:', error);
+      setTotalReviews(0);
+    }
+  };
 
   const fetchProduct = async () => {
     try {
@@ -447,7 +480,7 @@ const ProductDetailPage = () => {
         {/* Breadcrumb */}
         <Breadcrumb 
           separator={<span style={{ color: theme.mode === 'dark' ? '#666' : '#999', margin: '0 8px' }}>/</span>}
-          style={{ marginBottom: '24px', fontSize: '14px' }}
+          style={{ marginBottom: '24px', fontSize: '16px' }}
         >
           <Breadcrumb.Item>
             <Button 
@@ -457,25 +490,37 @@ const ProductDetailPage = () => {
                 padding: 0, 
                 color: '#1890ff',
                 height: 'auto',
-                fontWeight: 500
+                fontSize: '16px',
+                textDecoration: 'none'
               }}
+              onMouseEnter={(e) => e.target.style.textDecoration = 'underline'}
+              onMouseLeave={(e) => e.target.style.textDecoration = 'none'}
             >
               Trang chủ
             </Button>
           </Breadcrumb.Item>
           <Breadcrumb.Item>
-            <span style={{ 
-              color: theme.mode === 'dark' ? '#888' : '#999',
-              fontSize: '14px'
-            }}>
+            <Button 
+              type="link" 
+              onClick={() => navigate(`/?category=${product?.category?.id}`)} 
+              style={{ 
+                padding: 0, 
+                color: theme.mode === 'dark' ? '#888' : '#999',
+                height: 'auto',
+                fontSize: '16px',
+                textDecoration: 'none'
+              }}
+              onMouseEnter={(e) => e.target.style.textDecoration = 'underline'}
+              onMouseLeave={(e) => e.target.style.textDecoration = 'none'}
+            >
               {product?.category?.name}
-            </span>
+            </Button>
           </Breadcrumb.Item>
           <Breadcrumb.Item>
             <span style={{ 
               color: theme.mode === 'dark' ? '#fff' : '#262626', 
               fontWeight: 600,
-              fontSize: '14px'
+              fontSize: '15px'
             }}>
               {product?.name}
             </span>
@@ -506,73 +551,215 @@ const ProductDetailPage = () => {
                     dotPosition="bottom"
                     style={{ background: theme.mode === 'dark' ? '#1a1a1a' : '#fafafa' }}
                   >
-                    {getCurrentVariantImages().map((imageUrl, index) => (
-                      <div key={index} style={{ 
-                        width: '100%',
-                        height: '500px',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        background: theme.mode === 'dark' ? '#1a1a1a' : '#fafafa'
-                      }}>
-                        <Image
-                          width="100%"
-                          height="500px"
-                          src={imageUrl}
-                          alt={`${product.name} - ${selectedColor} - ${index + 1}`}
-                          style={{ objectFit: 'cover' }}
-                          preview={false}
-                          fallback="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100' height='100'%3E%3Crect width='100' height='100' fill='%23f0f0f0'/%3E%3C/svg%3E"
-                        />
-                      </div>
-                    ))}
+                    {getCurrentVariantImages().map((imageUrl, index) => {
+                      const isImageLoading = imageLoadingStates[imageUrl] !== false;
+                      return (
+                        <div key={index}>
+                          {/* Container with aspect ratio using padding trick */}
+                          <div style={{ 
+                            position: 'relative',
+                            width: '100%',
+                            paddingBottom: '75%', // 4:3 aspect ratio (3/4 = 0.75)
+                            background: theme.mode === 'dark' ? '#1a1a1a' : '#fafafa',
+                            overflow: 'hidden'
+                          }}>
+                            {/* Skeleton loading - per image */}
+                            {isImageLoading && (
+                              <div style={{
+                                position: 'absolute',
+                                top: 0,
+                                left: 0,
+                                width: '100%',
+                                height: '100%',
+                                background: theme.mode === 'dark'
+                                  ? 'linear-gradient(90deg, #2a2a2a 25%, #3a3a3a 50%, #2a2a2a 75%)'
+                                  : 'linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%)',
+                                backgroundSize: '200% 100%',
+                                animation: 'shimmer 1.5s infinite',
+                                zIndex: 2
+                              }} />
+                            )}
+                            {/* Image container - fills the padding area */}
+                            <div style={{
+                              position: 'absolute',
+                              top: 0,
+                              left: 0,
+                              width: '100%',
+                              height: '100%',
+                              overflow: 'hidden'
+                            }}>
+                              {/* Zoom wrapper */}
+                              <div 
+                                style={{
+                                  width: '100%',
+                                  height: '100%',
+                                  transition: 'transform 0.4s cubic-bezier(0.4, 0, 0.2, 1)',
+                                  cursor: 'zoom-in',
+                                  willChange: 'transform'
+                                }}
+                                onMouseEnter={(e) => {
+                                  e.currentTarget.style.transform = 'scale(1.2)';
+                                }}
+                                onMouseLeave={(e) => {
+                                  e.currentTarget.style.transform = 'scale(1)';
+                                }}
+                              >
+                                <Image
+                                  width="100%"
+                                  height="100%"
+                                  src={imageUrl}
+                                  alt={`${product.name} - ${selectedColor} - ${index + 1}`}
+                                  style={{ 
+                                    objectFit: 'cover',
+                                    display: 'block'
+                                  }}
+                                  preview={{
+                                    mask: <div style={{ background: 'rgba(0, 0, 0, 0.5)', fontSize: '14px' }}>🔍 Nhấn để xem lớn</div>
+                                  }}
+                                  loading="lazy"
+                                  placeholder={
+                                    <div style={{
+                                      width: '100%',
+                                      height: '100%',
+                                      background: theme.mode === 'dark' ? '#2a2a2a' : '#f0f0f0'
+                                    }} />
+                                  }
+                                  onLoad={() => {
+                                    setImageLoadingStates(prev => ({ ...prev, [imageUrl]: false }));
+                                  }}
+                                  onError={() => {
+                                    setImageLoadingStates(prev => ({ ...prev, [imageUrl]: false }));
+                                  }}
+                                  fallback="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100' height='100'%3E%3Crect width='100' height='100' fill='%23f0f0f0'/%3E%3Ctext x='50' y='50' text-anchor='middle' fill='%23999' font-size='14'%3ENo Image%3C/text%3E%3C/svg%3E"
+                                />
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
                   </Carousel>
 
                   {/* Thumbnail Gallery cho ảnh của variant hiện tại */}
                   {getCurrentVariantImages().length > 1 && (
                     <div style={{ 
-                      padding: '16px',
+                      padding: '20px',
                       display: 'flex',
-                      gap: '12px',
+                      gap: '16px',
                       overflowX: 'auto',
+                      overflowY: 'hidden',
                       background: theme.mode === 'dark' ? '#1a1a1a' : '#fafafa',
-                      borderTop: `1px solid ${theme.borderColor}`
+                      borderTop: `1px solid ${theme.borderColor}`,
+                      scrollbarWidth: 'thin',
+                      scrollbarColor: theme.mode === 'dark' ? '#666 #1a1a1a' : '#ddd #fafafa'
                     }}>
-                      {getCurrentVariantImages().map((imageUrl, index) => (
-                        <div
-                          key={index}
-                          onClick={() => {
-                            setActiveImageIndex(index);
-                            if (carouselRef.current) {
-                              carouselRef.current.goTo(index);
-                            }
-                          }}
-                          style={{ 
-                            minWidth: '80px',
-                            width: '80px',
-                            height: '80px',
-                            border: activeImageIndex === index
-                              ? '3px solid #1890ff' 
-                              : `2px solid ${theme.borderColor}`,
-                            borderRadius: '8px',
-                            overflow: 'hidden',
-                            cursor: 'pointer',
-                            transition: 'all 0.3s ease',
-                            opacity: activeImageIndex === index ? 1 : 0.6,
-                            transform: activeImageIndex === index ? 'scale(1.05)' : 'scale(1)',
-                          }}
-                        >
-                          <img
-                            src={imageUrl}
-                            alt={`Thumbnail ${index + 1}`}
-                            style={{ 
-                              width: '100%',
-                              height: '100%',
-                              objectFit: 'cover'
+                      {getCurrentVariantImages().map((imageUrl, index) => {
+                        const isActive = activeImageIndex === index;
+                        return (
+                          <div
+                            key={index}
+                            onClick={() => {
+                              setActiveImageIndex(index);
+                              if (carouselRef.current) {
+                                carouselRef.current.goTo(index);
+                              }
                             }}
-                          />
-                        </div>
-                      ))}
+                            style={{ 
+                              position: 'relative',
+                              minWidth: '100px',
+                              width: '100px',
+                              height: '100px',
+                              border: isActive
+                                ? '3px solid #1890ff' 
+                                : `2px solid ${theme.borderColor}`,
+                              borderRadius: '12px',
+                              overflow: 'hidden',
+                              cursor: 'pointer',
+                              transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                              opacity: isActive ? 1 : 0.7,
+                              transform: isActive ? 'translateY(-4px) scale(1.05)' : 'translateY(0) scale(1)',
+                              boxShadow: isActive 
+                                ? '0 8px 16px rgba(24, 144, 255, 0.4)' 
+                                : '0 2px 8px rgba(0, 0, 0, 0.1)',
+                              flexShrink: 0
+                            }}
+                            onMouseEnter={(e) => {
+                              if (!isActive) {
+                                e.currentTarget.style.transform = 'translateY(-4px) scale(1.08)';
+                                e.currentTarget.style.boxShadow = '0 6px 16px rgba(0, 0, 0, 0.2)';
+                                e.currentTarget.style.opacity = '1';
+                                e.currentTarget.style.borderColor = '#40a9ff';
+                              }
+                            }}
+                            onMouseLeave={(e) => {
+                              if (!isActive) {
+                                e.currentTarget.style.transform = 'translateY(0) scale(1)';
+                                e.currentTarget.style.boxShadow = '0 2px 8px rgba(0, 0, 0, 0.1)';
+                                e.currentTarget.style.opacity = '0.7';
+                                e.currentTarget.style.borderColor = theme.borderColor;
+                              }
+                            }}
+                          >
+                            {/* Active indicator */}
+                            {isActive && (
+                              <div style={{
+                                position: 'absolute',
+                                top: '6px',
+                                right: '6px',
+                                width: '24px',
+                                height: '24px',
+                                background: '#1890ff',
+                                borderRadius: '50%',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                zIndex: 2,
+                                boxShadow: '0 2px 8px rgba(0, 0, 0, 0.3)'
+                              }}>
+                                <CheckCircleOutlined style={{ color: '#fff', fontSize: '14px' }} />
+                              </div>
+                            )}
+                            {/* Thumbnail image */}
+                            <img
+                              src={imageUrl}
+                              alt={`Thumbnail ${index + 1}`}
+                              loading={index < 3 ? 'eager' : 'lazy'}
+                              style={{ 
+                                width: '100%',
+                                height: '100%',
+                                objectFit: 'cover',
+                                display: 'block',
+                                transition: 'transform 0.3s ease'
+                              }}
+                              onMouseEnter={(e) => {
+                                if (!isActive) {
+                                  e.currentTarget.style.transform = 'scale(1.1)';
+                                }
+                              }}
+                              onMouseLeave={(e) => {
+                                if (!isActive) {
+                                  e.currentTarget.style.transform = 'scale(1)';
+                                }
+                              }}
+                            />
+                            {/* Number indicator */}
+                            <div style={{
+                              position: 'absolute',
+                              bottom: '6px',
+                              left: '6px',
+                              background: 'rgba(0, 0, 0, 0.6)',
+                              color: '#fff',
+                              padding: '2px 8px',
+                              borderRadius: '12px',
+                              fontSize: '11px',
+                              fontWeight: 600,
+                              backdropFilter: 'blur(4px)'
+                            }}>
+                              {index + 1}/{getCurrentVariantImages().length}
+                            </div>
+                          </div>
+                        );
+                      })}
                     </div>
                   )}
 
@@ -1120,22 +1307,53 @@ const ProductDetailPage = () => {
                 )}
               </div>
               
-              <InputNumber
-                min={1}
-                max={selectedSKU?.available_quantity || selectedSKU?.stock_quantity || 1}
-                value={quantity}
-                onChange={setQuantity}
-                size="large"
-                disabled={!selectedSKU || (selectedSKU.available_quantity || selectedSKU.stock_quantity) === 0}
-                style={{ 
-                  width: '100%',
-                  borderRadius: '12px'
-                }}
-                controls={{
-                  upIcon: <PlusOutlined style={{ fontSize: '14px' }} />,
-                  downIcon: <MinusOutlined style={{ fontSize: '14px' }} />
-                }}
-              />
+              {/* Quantity selector with better UX */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                <Button 
+                  size="large"
+                  icon={<MinusOutlined />}
+                  onClick={() => setQuantity(Math.max(1, quantity - 1))}
+                  disabled={!selectedSKU || quantity <= 1}
+                  style={{ 
+                    borderRadius: '8px',
+                    width: '48px',
+                    height: '48px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center'
+                  }}
+                />
+                <InputNumber
+                  min={1}
+                  max={selectedSKU?.available_quantity || selectedSKU?.stock_quantity || 1}
+                  value={quantity}
+                  onChange={(val) => setQuantity(val || 1)}
+                  size="large"
+                  disabled={!selectedSKU || (selectedSKU.available_quantity || selectedSKU.stock_quantity) === 0}
+                  style={{ 
+                    width: '100px',
+                    textAlign: 'center',
+                    height: '48px',
+                    fontSize: '16px',
+                    fontWeight: 600
+                  }}
+                  controls={false}
+                />
+                <Button 
+                  size="large"
+                  icon={<PlusOutlined />}
+                  onClick={() => setQuantity(Math.min((selectedSKU?.available_quantity || selectedSKU?.stock_quantity || 1), quantity + 1))}
+                  disabled={!selectedSKU || quantity >= (selectedSKU?.available_quantity || selectedSKU?.stock_quantity || 1)}
+                  style={{ 
+                    borderRadius: '8px',
+                    width: '48px',
+                    height: '48px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center'
+                  }}
+                />
+              </div>
             </div>
 
             {/* Action Buttons - Modernized */}
@@ -1467,7 +1685,7 @@ const ProductDetailPage = () => {
               <TabPane 
                 tab={
                   <span style={{ fontSize: '16px', fontWeight: 600 }}>
-                    ⭐ Đánh giá ({0})
+                    ⭐ Đánh giá ({totalReviews})
                   </span>
                 } 
                 key="3"
@@ -1482,6 +1700,7 @@ const ProductDetailPage = () => {
                   <ReviewList 
                     productId={product.id} 
                     refresh={reviewRefresh}
+                    onReviewsLoaded={(count) => setTotalReviews(count)}
                   />
                 </div>
               </TabPane>

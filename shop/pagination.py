@@ -5,7 +5,7 @@ from rest_framework.response import Response
 class StandardResultsSetPagination(PageNumberPagination):
     page_size = 20
     page_size_query_param = 'page_size'
-    max_page_size = 100
+    max_page_size = 200  # Tăng từ 100 lên 200
     
     def get_paginated_response(self, data):
         return Response({
@@ -23,7 +23,7 @@ class StandardResultsSetPagination(PageNumberPagination):
 class ProductPagination(PageNumberPagination):
     page_size = 12  # Số sản phẩm phù hợp cho grid layout
     page_size_query_param = 'page_size'
-    max_page_size = 50
+    max_page_size = 200  # Tăng từ 50 lên 200 cho FE
     
     def get_paginated_response(self, data):
         return Response({

@@ -1,146 +1,144 @@
 import React, { useState } from 'react';
+import { Form, Rate, Input, Button, Alert, message } from 'antd';
+import { StarFilled, SendOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
+import authAxios from '../api/AuthAxios';
 
-const ReviewForm = ({ productId, onReviewSubmitted, onCancel }) => {
-    const [rating, setRating] = useState(5);
-    const [comment, setComment] = useState('');
+const { TextArea } = Input;
+
+const ReviewForm = ({ productId, onReviewSubmitted }) => {
+    const [form] = Form.useForm();
     const [loading, setLoading] = useState(false);
-    const [error, setError] = useState(null);
+    const [errorMessage, setErrorMessage] = useState(null);
     const navigate = useNavigate();
 
-    const submitReview = async (e) => {
-        e.preventDefault();
-        
+    const onFinish = async (values) => {
         const token = localStorage.getItem('access_token');
         if (!token) {
+            message.warning('Vui lòng đăng nhập để đánh giá sản phẩm');
             navigate('/login');
             return;
         }
 
         setLoading(true);
-        setError(null);
+        setErrorMessage(null);
 
         try {
-            const response = await fetch('http://localhost:8000/api/reviews/create/', {
-                method: 'POST',
-                headers: {
-                    'Authorization': `Bearer ${token}`,
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    product: productId,
-                    rating: rating,
-                    comment: comment.trim()
-                })
+            await authAxios.post('/reviews/create/', {
+                product: productId,
+                rating: values.rating,
+                comment: values.comment?.trim() || ''
             });
 
-            if (response.ok) {
-                const reviewData = await response.json();
-                if (onReviewSubmitted) {
-                    onReviewSubmitted(reviewData);
-                }
-                setRating(5);
-                setComment('');
-                alert('Đánh giá đã được gửi thành công!');
-            } else {
-                const errorData = await response.json();
-                if (response.status === 400) {
-                    if (errorData.non_field_errors) {
-                        setError(errorData.non_field_errors[0]);
-                    } else {
-                        setError(errorData.error || 'Có lỗi xảy ra khi gửi đánh giá');
-                    }
-                } else if (response.status === 401) {
-                    localStorage.removeItem('access_token');
-                    navigate('/login');
-                } else {
-                    setError('Có lỗi xảy ra khi gửi đánh giá');
-                }
+            message.success('Đánh giá của bạn đã được gửi thành công!');
+            form.resetFields();
+            setErrorMessage(null);
+            if (onReviewSubmitted) {
+                onReviewSubmitted();
             }
         } catch (error) {
-            console.error('Error submitting review:', error);
-            setError('Có lỗi xảy ra khi gửi đánh giá');
+            console.error('Review error:', error.response?.data);
+            
+            if (error.response?.status === 400) {
+                // Lấy error message từ backend
+                const backendError = error.response?.data?.non_field_errors?.[0] 
+                    || error.response?.data?.error
+                    || error.response?.data?.detail;
+                
+                if (backendError && backendError.includes('purchased')) {
+                    setErrorMessage('⚠️ Bạn chỉ có thể đánh giá sản phẩm đã mua và được giao thành công. Vui lòng hoàn thành đơn hàng trước khi đánh giá.');
+                } else {
+                    setErrorMessage(backendError || 'Bạn đã đánh giá sản phẩm này rồi!');
+                }
+                message.error(backendError || 'Không thể gửi đánh giá');
+            } else if (error.response?.status === 401) {
+                message.warning('Phiên đăng nhập hết hạn. Vui lòng đăng nhập lại');
+                localStorage.removeItem('access_token');
+                navigate('/login');
+            } else {
+                setErrorMessage('Có lỗi xảy ra. Vui lòng thử lại sau');
+                message.error('Có lỗi xảy ra. Vui lòng thử lại sau');
+            }
         } finally {
             setLoading(false);
         }
     };
 
     return (
-        <div className="bg-white p-6 rounded-lg shadow-md">
-            <h3 className="text-xl font-semibold mb-4">Đánh giá sản phẩm</h3>
+        <div style={{ 
+            background: '#fafafa', 
+            padding: '24px', 
+            borderRadius: '12px',
+            border: '1px solid #f0f0f0'
+        }}>
+            <h3 style={{ 
+                fontSize: '18px', 
+                fontWeight: 600, 
+                marginBottom: '20px',
+                color: '#262626'
+            }}>
+                <StarFilled style={{ color: '#fadb14', marginRight: '8px' }} />
+                Viết đánh giá của bạn
+            </h3>
             
-            {error && (
-                <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded mb-4">
-                    {error}
-                </div>
+            {errorMessage && (
+                <Alert
+                    message="Không thể gửi đánh giá"
+                    description={errorMessage}
+                    type="error"
+                    showIcon
+                    closable
+                    onClose={() => setErrorMessage(null)}
+                    style={{ marginBottom: '20px' }}
+                />
             )}
-
-            <form onSubmit={submitReview}>
-                <div className="mb-4">
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Đánh giá của bạn *
-                    </label>
-                    <div className="flex items-center space-x-1">
-                        {[1, 2, 3, 4, 5].map((star) => (
-                            <button
-                                key={star}
-                                type="button"
-                                onClick={() => setRating(star)}
-                                className={`text-2xl ${star <= rating ? 'text-yellow-400' : 'text-gray-300'} hover:text-yellow-400 transition duration-200`}
-                            >
-                                ★
-                            </button>
-                        ))}
-                        <span className="ml-2 text-sm text-gray-600">
-                            ({rating} sao)
-                        </span>
-                    </div>
-                </div>
-
-                <div className="mb-4">
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Nhận xét
-                    </label>
-                    <textarea
-                        value={comment}
-                        onChange={(e) => setComment(e.target.value)}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                        rows="4"
-                        placeholder="Chia sẻ trải nghiệm của bạn về sản phẩm này..."
+            
+            <Form
+                form={form}
+                onFinish={onFinish}
+                layout="vertical"
+                initialValues={{ rating: 5 }}
+            >
+                <Form.Item
+                    label={<span style={{ fontWeight: 500 }}>Đánh giá của bạn</span>}
+                    name="rating"
+                    rules={[{ required: true, message: 'Vui lòng chọn số sao' }]}
+                >
+                    <Rate 
+                        style={{ fontSize: '32px' }}
+                        character={<StarFilled />}
                     />
-                </div>
+                </Form.Item>
 
-                <div className="flex space-x-3">
-                    <button
-                        type="submit"
-                        disabled={loading}
-                        className={`px-6 py-2 rounded-lg font-medium transition duration-200 ${
-                            loading 
-                                ? 'bg-gray-400 cursor-not-allowed' 
-                                : 'bg-blue-600 hover:bg-blue-700'
-                        } text-white`}
+                <Form.Item
+                    label={<span style={{ fontWeight: 500 }}>Nhận xét</span>}
+                    name="comment"
+                >
+                    <TextArea
+                        rows={4}
+                        placeholder="Chia sẻ trải nghiệm của bạn về sản phẩm này..."
+                        maxLength={500}
+                        showCount
+                        style={{ borderRadius: '8px' }}
+                    />
+                </Form.Item>
+
+                <Form.Item style={{ marginBottom: 0 }}>
+                    <Button
+                        type="primary"
+                        htmlType="submit"
+                        loading={loading}
+                        icon={<SendOutlined />}
+                        size="large"
+                        style={{ 
+                            borderRadius: '8px',
+                            fontWeight: 500
+                        }}
                     >
-                        {loading ? (
-                            <div className="flex items-center">
-                                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                                Đang gửi...
-                            </div>
-                        ) : (
-                            'Gửi đánh giá'
-                        )}
-                    </button>
-                    
-                    {onCancel && (
-                        <button
-                            type="button"
-                            onClick={onCancel}
-                            className="px-6 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition duration-200 font-medium"
-                        >
-                            Hủy
-                        </button>
-                    )}
-                </div>
-            </form>
+                        Gửi đánh giá
+                    </Button>
+                </Form.Item>
+            </Form>
         </div>
     );
 };

@@ -1,6 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { Card, Rate, Button, Empty, Spin, Alert, Space, Typography, Tag, Avatar, Divider, Row, Col, Image } from 'antd';
+import { StarFilled, DeleteOutlined, EyeOutlined, ShoppingOutlined, HeartOutlined, EditOutlined } from '@ant-design/icons';
 import '../App.css';
+
+const { Title, Text, Paragraph } = Typography;
 
 const MyReviewsPage = () => {
     const [reviews, setReviews] = useState([]);
@@ -79,122 +83,259 @@ const MyReviewsPage = () => {
         });
     };
 
-    const renderStars = (rating) => {
-        return (
-            <div className="flex items-center">
-                {[1, 2, 3, 4, 5].map((star) => (
-                    <span
-                        key={star}
-                        className={`text-lg ${star <= rating ? 'text-yellow-400' : 'text-gray-300'}`}
-                    >
-                        ★
-                    </span>
-                ))}
-            </div>
-        );
-    };
-
     if (loading) {
         return (
-            <div className="container mx-auto px-4 py-8">
-                <div className="text-center">
-                    <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-                    <p className="mt-2">Đang tải đánh giá của bạn...</p>
-                </div>
+            <div style={{ 
+                minHeight: 'calc(100vh - 200px)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center'
+            }}>
+                <Spin size="large" tip="Đang tải đánh giá của bạn..." />
             </div>
         );
     }
 
     if (error) {
         return (
-            <div className="container mx-auto px-4 py-8">
-                <div className="text-center text-red-600">
-                    <p>{error}</p>
-                    <button 
-                        onClick={() => window.location.reload()} 
-                        className="mt-4 bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
-                    >
-                        Thử lại
-                    </button>
-                </div>
+            <div style={{ padding: '40px 24px', maxWidth: '1200px', margin: '0 auto' }}>
+                <Alert
+                    message="Lỗi"
+                    description={error}
+                    type="error"
+                    showIcon
+                    action={
+                        <Button size="small" danger onClick={() => window.location.reload()}>
+                            Thử lại
+                        </Button>
+                    }
+                />
             </div>
         );
     }
 
     return (
-        <div className="container mx-auto px-4 py-8">
-            <div className="flex justify-between items-center mb-6">
-                <h1 className="text-3xl font-bold text-gray-800">Đánh giá của tôi</h1>
-                <span className="text-gray-600">
-                    {reviews.length} đánh giá
-                </span>
+        <div style={{ 
+            minHeight: 'calc(100vh - 200px)',
+            background: 'linear-gradient(180deg, #f5f7fa 0%, #ffffff 100%)'
+        }}>
+            {/* Header Section with Gradient */}
+            <div style={{
+                background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                padding: '48px 24px',
+                marginBottom: '32px',
+                boxShadow: '0 4px 20px rgba(102, 126, 234, 0.15)'
+            }}>
+                <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
+                    <Space align="center" size="large">
+                        <Avatar 
+                            size={64} 
+                            style={{ 
+                                background: 'rgba(255,255,255,0.2)',
+                                backdropFilter: 'blur(10px)'
+                            }}
+                            icon={<StarFilled style={{ fontSize: '32px', color: '#fff' }} />}
+                        />
+                        <div>
+                            <Title level={2} style={{ color: '#fff', margin: 0, marginBottom: '8px' }}>
+                                Đánh giá của tôi
+                            </Title>
+                            <Text style={{ color: 'rgba(255,255,255,0.9)', fontSize: '16px' }}>
+                                <HeartOutlined /> {reviews.length} đánh giá đã chia sẻ
+                            </Text>
+                        </div>
+                    </Space>
+                </div>
             </div>
 
-            {reviews.length === 0 ? (
-                <div className="text-center py-12">
-                    <svg className="mx-auto h-24 w-24 text-gray-400 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.196-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" />
-                    </svg>
-                    <h3 className="text-lg font-medium text-gray-900 mb-2">
-                        Bạn chưa có đánh giá nào
-                    </h3>
-                    <p className="text-gray-500 mb-4">
-                        Mua sắm và đánh giá sản phẩm để chia sẻ trải nghiệm của bạn
-                    </p>
-                    <button
-                        onClick={() => navigate('/')}
-                        className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition duration-200"
+            <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '0 24px 48px' }}>
+                {reviews.length === 0 ? (
+                    <Card
+                        style={{
+                            borderRadius: '16px',
+                            boxShadow: '0 8px 24px rgba(0,0,0,0.06)',
+                            border: 'none'
+                        }}
                     >
-                        Khám phá sản phẩm
-                    </button>
-                </div>
-            ) : (
-                <div className="space-y-6">
-                    {reviews.map((review) => (
-                        <div key={review.id} className="bg-white rounded-lg shadow-md border border-gray-200 p-6">
-                            <div className="flex items-start justify-between mb-4">
-                                <div className="flex-1">
-                                    <h3 
-                                        className="text-lg font-semibold text-gray-800 mb-2 cursor-pointer hover:text-blue-600 transition duration-200"
-                                        onClick={() => navigate(`/products/${review.product}`)}
-                                    >
-                                        {review.product_name}
-                                    </h3>
-                                    <div className="flex items-center space-x-4 mb-2">
-                                        {renderStars(review.rating)}
-                                        <span className="text-sm text-gray-500">
-                                            {formatDate(review.created_at)}
-                                        </span>
-                                    </div>
+                        <Empty
+                            image="https://gw.alipayobjects.com/zos/antfincdn/ZHrcdLPrvN/empty.svg"
+                            imageStyle={{
+                                height: 180,
+                            }}
+                            description={
+                                <div style={{ marginTop: '24px' }}>
+                                    <Title level={4} style={{ color: '#8c8c8c', marginBottom: '8px' }}>
+                                        Bạn chưa có đánh giá nào
+                                    </Title>
+                                    <Text type="secondary" style={{ fontSize: '15px' }}>
+                                        Mua sắm và đánh giá sản phẩm để chia sẻ trải nghiệm của bạn
+                                    </Text>
                                 </div>
-                                
-                                <div className="flex space-x-2">
-                                    <button
-                                        onClick={() => navigate(`/products/${review.product}`)}
-                                        className="text-blue-600 hover:text-blue-800 text-sm font-medium"
-                                    >
-                                        Xem sản phẩm
-                                    </button>
-                                    <button
-                                        onClick={() => deleteReview(review.id)}
-                                        className="text-red-600 hover:text-red-800 text-sm font-medium"
-                                    >
-                                        Xóa
-                                    </button>
-                                </div>
-                            </div>
-                            
-                            {review.comment && (
-                                <div className="bg-gray-50 p-4 rounded-lg">
-                                    <p className="text-gray-700 leading-relaxed">
-                                        {review.comment}
-                                    </p>
-                                </div>
-                            )}
-                        </div>
-                    ))}
-                </div>
-            )}
+                            }
+                        >
+                            <Button 
+                                type="primary" 
+                                size="large"
+                                icon={<ShoppingOutlined />}
+                                onClick={() => navigate('/')}
+                                style={{
+                                    background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                                    border: 'none',
+                                    height: '48px',
+                                    padding: '0 32px',
+                                    fontSize: '16px',
+                                    borderRadius: '24px',
+                                    marginTop: '16px'
+                                }}
+                            >
+                                Khám phá sản phẩm
+                            </Button>
+                        </Empty>
+                    </Card>
+                ) : (
+                    <Row gutter={[16, 16]}>
+                        {reviews.map((review) => (
+                            <Col xs={24} key={review.id}>
+                                <Card
+                                    hoverable
+                                    style={{
+                                        borderRadius: '16px',
+                                        boxShadow: '0 2px 8px rgba(0,0,0,0.06)',
+                                        border: '1px solid #f0f0f0',
+                                        transition: 'all 0.3s ease'
+                                    }}
+                                    bodyStyle={{ padding: '24px' }}
+                                    onMouseEnter={(e) => {
+                                        e.currentTarget.style.boxShadow = '0 8px 24px rgba(102, 126, 234, 0.15)';
+                                        e.currentTarget.style.transform = 'translateY(-2px)';
+                                    }}
+                                    onMouseLeave={(e) => {
+                                        e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.06)';
+                                        e.currentTarget.style.transform = 'translateY(0)';
+                                    }}
+                                >
+                                    <Row gutter={24} align="top">
+                                        {/* Product Image */}
+                                        <Col>
+                                            <div 
+                                                style={{ 
+                                                    cursor: 'pointer',
+                                                    borderRadius: '12px',
+                                                    overflow: 'hidden',
+                                                    boxShadow: '0 4px 12px rgba(0,0,0,0.08)'
+                                                }}
+                                                onClick={() => navigate(`/products/${review.product}`)}
+                                            >
+                                                <Image
+                                                    width={120}
+                                                    height={120}
+                                                    src={review.product_image || 'https://via.placeholder.com/120'}
+                                                    alt={review.product_name}
+                                                    style={{ objectFit: 'cover' }}
+                                                    preview={false}
+                                                    fallback="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMIAAADDCAYAAADQvc6UAAABRWlDQ1BJQ0MgUHJvZmlsZQAAKJFjYGASSSwoyGFhYGDIzSspCnJ3UoiIjFJgf8LAwSDCIMogwMCcmFxc4BgQ4ANUwgCjUcG3awyMIPqyLsis7PPOq3QdDFcvjV3jOD1boQVTPQrgSkktTgbSf4A4LbmgqISBgTEFyFYuLykAsTuAbJEioKOA7DkgdjqEvQHEToKwj4DVhAQ5A9k3gGyB5IxEoBmML4BsnSQk8XQkNtReEOBxcfXxUQg1Mjc0dyHgXNJBSWpFCYh2zi+oLMpMzyhRcASGUqqCZ16yno6CkYGRAQMDKMwhqj/fAIcloxgHQqxAjIHBEugw5sUIsSQpBobtQPdLciLEVJYzMPBHMDBsayhILEqEO4DxG0txmrERhM29nYGBddr//5/DGRjYNRkY/l7////39v///y4Dmn+LgeHANwDrkl1AuO+pmgAAADhlWElmTU0AKgAAAAgAAYdpAAQAAAABAAAAGgAAAAAAAqACAAQAAAABAAAAwqADAAQAAAABAAAAwwAAAAD9b/HnAAAHlklEQVR4Ae3dP3PTWBSGcbGzM6GCKqlIBRV0dHRJFarQ0eUT8LH4BnRU0NHR0UEFVdIlFRV7TzRksomPY8uykTk/zewQfKw/9znv4yvJynLv4uLiV2dBoDiBf4qP3/ARuCRABEFAoBEgghggQAQZQKAnYEaQBAQaASKIAQJEkAEEegJmBElAoBEgghggQAQZQKAnYEaQBAQaASKIAQJEkAEEegJmBElAoBEgghggQAQZQKAnYEaQBAQaASKIAQJEkAEEegJmBElAoBEgghggQAQZQKAnYEaQBAQaASKIAQJEkAEEegJmBElAoBEgghggQAQZQKAnYEaQBAQaASKIAQJEkAEEegJmBElAoBEgghggQAQZQKAnYEaQBAQaASKIAQJEkAEEegJmBElAoBEgghggQAQZQKAnYEaQBAQaASKIAQJEkAEEegJmBElAoBEgghggQAQZQKAnYEaQBAQaASKIAQJEkAEEegJmBElAoBEgghggQAQZQKAnYEaQBAQaASKIAQJEkAEEegJmBElAoBEgghggQAQZQKAnYEaQBAQaASKIAQJEkAEEegJmBElAoBEgghggQAQZQKAnYEaQBAQaASKIAQJEkAEEegJmBElAoBEgghggQAQZQKAnYEaQBAQaASKIAQJEkAEEegJmBElAoBEgghgg"
+                                                />
+                                            </div>
+                                        </Col>
+                                        
+                                        <Col flex="auto">
+                                            <Space direction="vertical" size="small" style={{ width: '100%' }}>
+                                                <div>
+                                                    <Text 
+                                                        strong 
+                                                        style={{ 
+                                                            fontSize: '18px',
+                                                            color: '#262626',
+                                                            cursor: 'pointer',
+                                                            transition: 'color 0.2s'
+                                                        }}
+                                                        onClick={() => navigate(`/products/${review.product}`)}
+                                                        onMouseEnter={(e) => e.target.style.color = '#667eea'}
+                                                        onMouseLeave={(e) => e.target.style.color = '#262626'}
+                                                    >
+                                                        {review.product_name}
+                                                    </Text>
+                                                </div>
+                                                
+                                                <Space size="middle">
+                                                    <Rate disabled value={review.rating} style={{ fontSize: '16px' }} />
+                                                    <Tag color="blue">{review.rating} sao</Tag>
+                                                    <Text type="secondary" style={{ fontSize: '13px' }}>
+                                                        {formatDate(review.created_at)}
+                                                    </Text>
+                                                </Space>
+
+                                                {review.comment && (
+                                                    <Card
+                                                        size="small"
+                                                        style={{
+                                                            marginTop: '12px',
+                                                            background: 'linear-gradient(135deg, #f5f7fa 0%, #fafbfc 100%)',
+                                                            border: '1px solid #e8e8e8',
+                                                            borderRadius: '12px'
+                                                        }}
+                                                        bodyStyle={{ padding: '16px' }}
+                                                    >
+                                                        <Paragraph 
+                                                            style={{ 
+                                                                margin: 0,
+                                                                color: '#595959',
+                                                                fontSize: '15px',
+                                                                lineHeight: '1.6'
+                                                            }}
+                                                        >
+                                                            "{review.comment}"
+                                                        </Paragraph>
+                                                    </Card>
+                                                )}
+                                            </Space>
+                                        </Col>
+                                        
+                                        <Col>
+                                            <Space direction="vertical" size="small">
+                                                <Button
+                                                    type="primary"
+                                                    icon={<EyeOutlined />}
+                                                    onClick={() => navigate(`/products/${review.product}`)}
+                                                    style={{
+                                                        borderRadius: '8px',
+                                                        width: '140px'
+                                                    }}
+                                                >
+                                                    Xem sản phẩm
+                                                </Button>
+                                                <Button
+                                                    icon={<EditOutlined />}
+                                                    onClick={() => navigate(`/products/${review.product}`)}
+                                                    style={{
+                                                        borderRadius: '8px',
+                                                        width: '140px',
+                                                        borderColor: '#667eea',
+                                                        color: '#667eea'
+                                                    }}
+                                                >
+                                                    Sửa đánh giá
+                                                </Button>
+                                                <Button
+                                                    danger
+                                                    icon={<DeleteOutlined />}
+                                                    onClick={() => deleteReview(review.id)}
+                                                    style={{
+                                                        borderRadius: '8px',
+                                                        width: '140px'
+                                                    }}
+                                                >
+                                                    Xóa đánh giá
+                                                </Button>
+                                            </Space>
+                                        </Col>
+                                    </Row>
+                                </Card>
+                            </Col>
+                        ))}
+                    </Row>
+                )}
+            </div>
         </div>
     );
 };

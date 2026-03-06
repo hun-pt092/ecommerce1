@@ -76,9 +76,9 @@ function HomePage() {
     setLoading(true);
     try {
       const [productsRes, categoriesRes, brandsRes] = await Promise.all([
-        apiClient.get('products/?page_size=100'),
-        apiClient.get('categories/?page_size=100').catch(() => ({ data: [] })),
-        apiClient.get('brands/?page_size=100').catch(() => ({ data: [] }))
+        apiClient.get('products/?page_size=200'),
+        apiClient.get('categories/?page_size=200').catch(() => ({ data: [] })),
+        apiClient.get('brands/?page_size=200').catch(() => ({ data: [] }))
       ]);
       
       // Handle pagination format - extract results if present

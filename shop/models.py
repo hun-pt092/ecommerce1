@@ -1,6 +1,7 @@
 from django.db import models
 from django.contrib.auth.models import AbstractUser
 from django.utils import timezone
+from django.utils.text import slugify
 from datetime import timedelta
 import uuid
 import os
@@ -18,8 +19,16 @@ class User(AbstractUser):
     # email, username, password đã có sẵn từ AbstractUser
 
 class Category(models.Model):
+    DISPLAY_GROUP_CHOICES = [
+        ('men', 'Nam'),
+        ('women', 'Nữ'),
+        ('accessories', 'Phụ Kiện'),
+        ('other', 'Khác'),
+    ]
+    
     name = models.CharField(max_length=100)
     parent = models.ForeignKey('self', on_delete=models.SET_NULL, null=True, blank=True, related_name='children')
+    display_group = models.CharField(max_length=20, choices=DISPLAY_GROUP_CHOICES, default='other', help_text='Nhóm hiển thị trong mega menu')
 
     def __str__(self):
         return self.name
@@ -39,12 +48,21 @@ class Brand(models.Model):
 
 class Product(models.Model):
     name = models.CharField(max_length=200)
+    slug = models.SlugField(max_length=250, unique=True, blank=True, db_index=True)  # URL thân thiện
     sku = models.CharField(max_length=50, unique=True, blank=True)  # Mã SKU
     description = models.TextField(blank=True)
     short_description = models.TextField(max_length=500, blank=True)  # Mô tả ngắn
     category = models.ForeignKey(Category, on_delete=models.CASCADE, related_name='products')
     brand = models.ForeignKey(Brand, on_delete=models.SET_NULL, null=True, blank=True, related_name='products')
     material = models.CharField(max_length=100, blank=True)  # Chất liệu
+    
+    # Tags và phân loại
+    tags = models.JSONField(default=list, blank=True)  # ["mùa hè", "cotton", "form rộng"]
+    
+    # Thống kê
+    sold_count = models.PositiveIntegerField(default=0, verbose_name='Số lượng đã bán')  # Tổng số đã bán
+    view_count = models.PositiveIntegerField(default=0, verbose_name='Lượt xem')  # Số lượt xem
+    avg_rating = models.DecimalField(max_digits=3, decimal_places=2, default=0, verbose_name='Đánh giá TB')  # Điểm TB (0-5.00)
     
     # Trạng thái sản phẩm
     is_active = models.BooleanField(default=True)  # Hiển thị hay không
@@ -61,6 +79,18 @@ class Product(models.Model):
         # Tự động tạo SKU nếu chưa có
         if not self.sku:
             self.sku = f"PRD-{uuid.uuid4().hex[:8].upper()}"
+        
+        # Tự động tạo slug từ name nếu chưa có
+        if not self.slug:
+            base_slug = slugify(self.name)
+            slug = base_slug
+            counter = 1
+            # Đảm bảo slug là unique
+            while Product.objects.filter(slug=slug).exclude(pk=self.pk).exists():
+                slug = f"{base_slug}-{counter}"
+                counter += 1
+            self.slug = slug
+        
         super().save(*args, **kwargs)
     
     def get_price(self):
@@ -73,8 +103,11 @@ class Product(models.Model):
         first_variant = self.variants.first()
         if first_variant:
             first_image = first_variant.images.first()
-            if first_image:
-                return first_image.image.url
+            if first_image and first_image.image:
+                try:
+                    return first_image.image.url
+                except ValueError:
+                    pass
         return None
     
     def get_price_range(self):
@@ -98,6 +131,33 @@ class Product(models.Model):
                 return f"{int(min_price):,}₫"
             return f"{int(min_price):,}₫ - {int(max_price):,}₫"
         return "0₫"
+    
+    def update_avg_rating(self):
+        """Cập nhật điểm đánh giá trung bình từ các review"""
+        from django.db.models import Avg
+        result = self.reviews.aggregate(Avg('rating'))
+        self.avg_rating = result['rating__avg'] or 0
+        self.save(update_fields=['avg_rating'])
+    
+    def increment_view_count(self):
+        """Tăng lượt xem sản phẩm"""
+        self.view_count += 1
+        self.save(update_fields=['view_count'])
+    
+    def increment_sold_count(self, quantity=1):
+        """Tăng số lượng đã bán"""
+        self.sold_count += quantity
+        self.save(update_fields=['sold_count'])
+    
+    @property
+    def is_best_seller(self):
+        """Kiểm tra có phải sản phẩm bán chạy không (đã bán > 100)"""
+        return self.sold_count > 100
+    
+    @property
+    def review_count(self):
+        """Số lượng đánh giá"""
+        return self.reviews.count()
 
     class Meta:
         ordering = ['-created_at']
@@ -136,11 +196,19 @@ class ProductVariant(models.Model):
     def get_primary_image(self):
         """Lấy ảnh chính của variant"""
         primary = self.images.filter(is_primary=True).first()
-        if primary:
-            return primary.image.url if primary.image else None
+        if primary and primary.image:
+            try:
+                return primary.image.url
+            except ValueError:
+                pass
         # Nếu không có ảnh primary, lấy ảnh đầu tiên
         first_image = self.images.first()
-        return first_image.image.url if first_image and first_image.image else None
+        if first_image and first_image.image:
+            try:
+                return first_image.image.url
+            except ValueError:
+                pass
+        return None
     
     def get_total_stock(self):
         """Tổng tồn kho của tất cả SKUs"""

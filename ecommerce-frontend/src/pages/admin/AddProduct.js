@@ -231,20 +231,30 @@ const AddProduct = () => {
       
       // Prepare variants data for JSON (without image files)
       const variantsForJSON = variants.map(variant => ({
+        id: variant.id,  // ✅ THÊM ID để BE biết update thay vì xóa/tạo mới
         color: variant.color,
         price: variant.price,
         discount_price: variant.discount_price,
         is_active: variant.is_active !== false,
-        sizes: variant.sizes || [],
+        sizes: (variant.sizes || []).map(size => ({
+          id: size.id,  // ✅ THÊM ID của SKU
+          name: size.name,
+          stock_quantity: size.stock_quantity,
+          minimum_stock: size.minimum_stock || 5,
+          reorder_point: size.reorder_point || 10,
+          cost_price: size.cost_price || 0,
+        })),
       }));
       
       formData.append('variants', JSON.stringify(variantsForJSON));
       
       // Thêm ảnh variant (mỗi variant có thể có nhiều ảnh)
+      // ⚠️ CHỈ GỬI ẢNH MỚI (File object), KHÔNG GỬI ẢNH CŨ (object từ DB)
       variants.forEach((variant, variantIndex) => {
         if (variant.images && variant.images.length > 0) {
           variant.images.forEach((imageFile, imageIndex) => {
-            if (imageFile instanceof File) {
+            // Chỉ gửi nếu là File object MỚI, không phải object từ database
+            if (imageFile instanceof File && imageFile.name) {
               // Format: variant_image_{color}_{index}
               // Index 0 will be primary image
               const imageKey = imageIndex === 0 
@@ -253,6 +263,9 @@ const AddProduct = () => {
               
               console.log(`✅ Adding variant image: ${imageKey}`, imageFile.name);
               formData.append(imageKey, imageFile);
+            } else if (typeof imageFile === 'object' && imageFile.id) {
+              // Đây là ảnh cũ từ DB (có id), KHÔNG GỬI lại
+              console.log(`⏭️  Skipping existing image: variant ${variant.color}, image ID ${imageFile.id}`);
             }
           });
         }

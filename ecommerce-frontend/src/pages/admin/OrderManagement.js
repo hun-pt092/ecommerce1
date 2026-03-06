@@ -85,7 +85,7 @@ const OrderManagement = () => {
       if (filters.status) params.append('status', filters.status);
       if (filters.payment_status) params.append('payment_status', filters.payment_status);
       if (filters.search) params.append('search', filters.search);
-      params.append('page_size', '100'); // Đảm bảo lấy đủ tất cả đơn hàng
+      params.append('page_size', '200'); // Đảm bảo lấy đủ tất cả đơn hàng
 
       const response = await apiClient.get(`/admin/orders/?${params.toString()}`);
       const ordersData = response.data.results || response.data || [];
@@ -409,12 +409,12 @@ const OrderManagement = () => {
           rowKey="id"
           scroll={{ x: 1200 }}
           pagination={{
-            pageSize: 10,
+            pageSize: 20,
             showSizeChanger: true,
             showQuickJumper: true,
             showTotal: (total, range) =>
               `${range[0]}-${range[1]} của ${total} đơn hàng`,
-            pageSizeOptions: ['10', '20', '50'],
+            pageSizeOptions: ['10', '20', '50', '100', '200'],
           }}
         />
       </Card>

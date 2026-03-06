@@ -1,6 +1,6 @@
 ﻿#from django.shortcuts import render
 
-from rest_framework import generics, permissions
+from rest_framework import generics, permissions, filters
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
@@ -152,6 +152,43 @@ class ProductListView(generics.ListAPIView):
     serializer_class = ProductSerializer
     permission_classes = (permissions.AllowAny,)
     pagination_class = ProductPagination
+    filter_backends = [filters.SearchFilter, filters.OrderingFilter]
+    search_fields = ['name', 'description', 'category__name', 'brand__name', 'tags']
+    ordering_fields = ['created_at', 'sold_count', 'average_rating', 'variants__price']
+    ordering = ['-created_at']  # Default ordering
+    
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        
+        # Filter by is_new
+        is_new = self.request.query_params.get('is_new')
+        if is_new:
+            queryset = queryset.filter(is_new=True)
+        
+        # Filter by on_sale (có discount)
+        on_sale = self.request.query_params.get('on_sale')
+        if on_sale:
+            queryset = queryset.filter(variants__discount_price__isnull=False).distinct()
+        
+        # Filter by category
+        category = self.request.query_params.get('category')
+        if category:
+            queryset = queryset.filter(category_id=category)
+        
+        # Filter by min_rating
+        min_rating = self.request.query_params.get('min_rating')
+        if min_rating:
+            queryset = queryset.filter(average_rating__gte=float(min_rating))
+        
+        # Filter by price range
+        min_price = self.request.query_params.get('min_price')
+        max_price = self.request.query_params.get('max_price')
+        if min_price:
+            queryset = queryset.filter(variants__price__gte=float(min_price)).distinct()
+        if max_price:
+            queryset = queryset.filter(variants__price__lte=float(max_price)).distinct()
+        
+        return queryset
 
 # Chi tiáº¿t sáº£n pháº©m
 class ProductDetailView(generics.RetrieveAPIView):
@@ -161,9 +198,15 @@ class ProductDetailView(generics.RetrieveAPIView):
 
 # Public Categories List (for filtering)
 class CategoryListView(generics.ListAPIView):
-    queryset = Category.objects.all()
     serializer_class = CategorySerializer
     permission_classes = (permissions.AllowAny,)
+    
+    def get_queryset(self):
+        # Tối ưu: prefetch children và annotate product_count để tránh N+1 queries
+        from django.db.models import Count, Q
+        return Category.objects.prefetch_related('children').annotate(
+            active_product_count=Count('products', filter=Q(products__is_active=True))
+        )
 
 # Public Brands List (for filtering)  
 class BrandListView(generics.ListAPIView):
@@ -915,49 +958,142 @@ class AdminProductDetailView(generics.RetrieveUpdateDestroyAPIView):
                 try:
                     variants_data = json.loads(variants_json)
                     
-                    # Delete existing variants (cascade will delete images and SKUs)
-                    product.variants.all().delete()
+                    print("\n--- VARIANTS UPDATE DEBUG ---")
+                    print(f"Has variants_json: True")
+                    print(f"Variants data count: {len(variants_data)}")
+                    print(f"Variants data: {variants_data}")
                     
-                    # Create new variants
-                    for variant_data in variants_data:
-                        # Create ProductVariant (color + price level)
-                        variant = ProductVariant.objects.create(
-                            product=product,
-                            color=variant_data.get('color', ''),
-                            price=variant_data.get('price', 0),
-                            discount_price=variant_data.get('discount_price'),
-                            is_active=variant_data.get('is_active', True)
-                        )
-                        
-                        # Create ProductVariantImages
+                    # INCREMENTAL UPDATE: Chỉ xóa variants KHÔNG CÓ trong request
+                    incoming_variant_ids = [v.get('id') for v in variants_data if v.get('id')]
+                    print(f"Incoming variant IDs: {incoming_variant_ids}")
+                    
+                    # Xóa variants không còn trong request
+                    variants_to_delete = product.variants.exclude(id__in=incoming_variant_ids) if incoming_variant_ids else product.variants.all()
+                    deleted_count = variants_to_delete.count()
+                    if deleted_count > 0:
+                        print(f"⚠️  Deleting {deleted_count} variants not in request")
+                        variants_to_delete.delete()
+                    
+                    # Update/Create variants
+                    for idx, variant_data in enumerate(variants_data, 1):
+                        variant_id = variant_data.get('id')
                         color = variant_data.get('color', '')
-                        # Support multiple images per variant
-                        image_index = 0
-                        while True:
-                            image_key = f'variant_image_{color}_{image_index}' if image_index > 0 else f'variant_image_{color}'
-                            image_file = request.FILES.get(image_key)
-                            if not image_file:
-                                break
-                            
-                            ProductVariantImage.objects.create(
-                                variant=variant,
-                                image=image_file,
-                                is_primary=(image_index == 0),
-                                order=image_index
-                            )
-                            image_index += 1
                         
-                        # Create ProductSKUs (size + stock level)
-                        sizes_data = variant_data.get('sizes', [])
-                        for size_data in sizes_data:
-                            ProductSKU.objects.create(
-                                variant=variant,
-                                size=size_data.get('name', ''),
-                                stock_quantity=size_data.get('stock_quantity', 0),
-                                minimum_stock=size_data.get('minimum_stock', 5),
-                                reorder_point=size_data.get('reorder_point', 10),
-                                cost_price=size_data.get('cost_price', 0)
+                        print(f"\n  Variant {idx}: ID={variant_id}, Color={color}")
+                        
+                        if variant_id:
+                            # UPDATE existing variant
+                            try:
+                                variant = ProductVariant.objects.get(id=variant_id, product=product)
+                                print(f"    ✓ Updating existing variant")
+                                variant.color = color
+                                variant.price = variant_data.get('price', 0)
+                                variant.discount_price = variant_data.get('discount_price')
+                                variant.is_active = variant_data.get('is_active', True)
+                                variant.save()
+                                
+                                # Check if has new images to upload
+                                image_files = [f for k, f in request.FILES.items() if k.startswith(f'variant_image_{color}')]
+                                existing_images_count = variant.images.count()
+                                print(f"    📸 Image check: current={existing_images_count}, new_files={[f.name for f in image_files]}")
+                                
+                                has_new_images = len(image_files) > 0
+                                print(f"    📸 Has new images: {has_new_images}")
+                                
+                                if has_new_images:
+                                    # Delete old images only if uploading new ones
+                                    print(f"    🗑️  Deleting {existing_images_count} old images")
+                                    variant.images.all().delete()
+                                else:
+                                    # Keep existing images
+                                    print(f"    ✓ No new images, keeping {existing_images_count} existing images")
+                                
+                            except ProductVariant.DoesNotExist:
+                                print(f"    ⚠️  Variant ID {variant_id} not found, creating NEW")
+                                variant = ProductVariant.objects.create(
+                                    product=product,
+                                    color=color,
+                                    price=variant_data.get('price', 0),
+                                    discount_price=variant_data.get('discount_price'),
+                                    is_active=variant_data.get('is_active', True)
+                                )
+                                has_new_images = True  # New variant needs images
+                        else:
+                            # CREATE new variant
+                            print(f"    ⚠️  No ID, creating NEW variant")
+                            variant = ProductVariant.objects.create(
+                                product=product,
+                                color=color,
+                                price=variant_data.get('price', 0),
+                                discount_price=variant_data.get('discount_price'),
+                                is_active=variant_data.get('is_active', True)
                             )
+                            has_new_images = True  # New variant needs images
+                            existing_images_count = 0
+                        
+                        # Upload new images if has_new_images flag is True
+                        if has_new_images:
+                            # Support multiple images per variant
+                            image_index = 0
+                            while True:
+                                image_key = f'variant_image_{color}_{image_index}' if image_index > 0 else f'variant_image_{color}'
+                                image_file = request.FILES.get(image_key)
+                                if not image_file:
+                                    break
+                                
+                                ProductVariantImage.objects.create(
+                                    variant=variant,
+                                    image=image_file,
+                                    is_primary=(image_index == 0),
+                                    order=image_index
+                                )
+                                print(f"    ✅ Created image {image_index}: {image_file.name}")
+                                image_index += 1
+                        
+                        # Update ProductSKUs (sizes)
+                        sizes_data = variant_data.get('sizes', [])
+                        incoming_sku_ids = [s.get('id') for s in sizes_data if s.get('id')]
+                        
+                        # Delete SKUs not in request
+                        skus_to_delete = variant.skus.exclude(id__in=incoming_sku_ids) if incoming_sku_ids else variant.skus.all()
+                        deleted_skus = skus_to_delete.count()
+                        if deleted_skus > 0:
+                            print(f"    🗑️  Deleting {deleted_skus} SKUs not in request")
+                            skus_to_delete.delete()
+                        
+                        # Update/Create SKUs
+                        for size_data in sizes_data:
+                            sku_id = size_data.get('id')
+                            if sku_id:
+                                # Update existing SKU
+                                try:
+                                    sku = ProductSKU.objects.get(id=sku_id, variant=variant)
+                                    sku.size = size_data.get('name', sku.size)
+                                    sku.stock_quantity = size_data.get('stock_quantity', sku.stock_quantity)
+                                    sku.minimum_stock = size_data.get('minimum_stock', sku.minimum_stock)
+                                    sku.reorder_point = size_data.get('reorder_point', sku.reorder_point)
+                                    sku.cost_price = size_data.get('cost_price', sku.cost_price)
+                                    sku.save()
+                                except ProductSKU.DoesNotExist:
+                                    # Create if not found
+                                    ProductSKU.objects.create(
+                                        variant=variant,
+                                        size=size_data.get('name', ''),
+                                        stock_quantity=size_data.get('stock_quantity', 0),
+                                        minimum_stock=size_data.get('minimum_stock', 5),
+                                        reorder_point=size_data.get('reorder_point', 10),
+                                        cost_price=size_data.get('cost_price', 0)
+                                    )
+                            else:
+                                # Create new SKU
+                                ProductSKU.objects.create(
+                                    variant=variant,
+                                    size=size_data.get('name', ''),
+                                    stock_quantity=size_data.get('stock_quantity', 0),
+                                    minimum_stock=size_data.get('minimum_stock', 5),
+                                    reorder_point=size_data.get('reorder_point', 10),
+                                    cost_price=size_data.get('cost_price', 0)
+                                )
                 except json.JSONDecodeError as e:
                     print(f"JSON decode error: {e}")
                     pass

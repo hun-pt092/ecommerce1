@@ -41,8 +41,9 @@ const ProductVariantsForm = ({ variants = [], onChange }) => {
     color: '',
     price: '',
     discount_price: '',
-    images: [], // Array of image files
-    imagePreviews: [], // Array of preview URLs
+    existingImages: [], // ✅ Ảnh cũ từ DB (không có khi tạo mới)
+    images: [], // ✅ Array of NEW image files only
+    imagePreviews: [], // Array of preview URLs (cả cũ và mới)
   });
 
   // Form thêm size cho variant đã chọn
@@ -57,13 +58,16 @@ const ProductVariantsForm = ({ variants = [], onChange }) => {
     if (variants && variants.length > 0) {
       // Backend trả về ProductVariant with skus[] and images[]
       const parsedVariants = variants.map(variant => ({
+        id: variant.id, // ✅ Giữ ID để update
         color: variant.color || '',
         price: variant.price || 0,
         discount_price: variant.discount_price || null,
         is_active: variant.is_active !== false,
-        images: variant.images || [],
+        existingImages: variant.images || [], // ✅ Ảnh cũ từ DB (object với id)
+        images: [], // ✅ Ảnh MỚI upload (File objects) - ban đầu rỗng
         imagePreviews: variant.images?.map(img => img.image_url || img.image) || [],
         sizes: variant.skus?.map(sku => ({
+          id: sku.id, // ✅ Giữ ID của SKU
           name: sku.size || '',
           stock_quantity: sku.stock_quantity || 0,
           minimum_stock: sku.minimum_stock || 5,
@@ -80,14 +84,23 @@ const ProductVariantsForm = ({ variants = [], onChange }) => {
   useEffect(() => {
     // Convert to format expected by backend
     const formatted = variantsList.map(variant => ({
+      id: variant.id, // ✅ Gửi ID để BE biết update
       color: variant.color,
       price: variant.price,
       discount_price: variant.discount_price,
       is_active: variant.is_active,
-      images: variant.images, // File objects
+      images: variant.images, // ✅ CHỈ File objects MỚI, KHÔNG có ảnh cũ
       imagePreviews: variant.imagePreviews, // For display only
       sizes: variant.sizes,
     }));
+    
+    // DEBUG: Log variant images để kiểm tra
+    formatted.forEach(v => {
+      if (v.images && v.images.length > 0) {
+        console.log(`📸 Variant ${v.color} has ${v.images.length} images:`, 
+          v.images.map(img => img instanceof File ? `File: ${img.name}` : `Object: ${JSON.stringify(img)}`));
+      }
+    });
     
     onChange(formatted);
   }, [variantsList, onChange]);

@@ -1,0 +1,127 @@
+.mega-menu-container {
+  width: 100%;
+  max-width: 1200px;
+  max-height: 400px;
+  overflow-y: auto;
+  background: #ffffff;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  animation: slideDown 200ms ease-out;
+  padding: 20px 30px;
+  border-radius: 4px;
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.category-block {
+  margin-bottom: 8px;
+}
+
+.parent-category {
+  cursor: pointer;
+  padding: 8px 12px;
+  border-radius: 4px;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.parent-category:hover {
+  background: #e6f7ff;
+  padding-left: 16px;
+}
+
+.parent-category h5 {
+  margin: 0;
+  color: #262626;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.parent-category:hover h5 {
+  color: #1890ff;
+}
+
+.count {
+  font-size: 12px !important;
+  color: #8c8c8c !important;
+}
+
+.child-list {
+  list-style: none;
+  padding: 0 0 0 12px;
+  margin: 0;
+}
+
+.child-list li {
+  cursor: pointer;
+  padding: 6px 12px;
+  border-radius: 4px;
+  transition: all 0.15s ease;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.child-list li:hover {
+  background: #f5f5f5;
+  padding-left: 16px;
+}
+
+.child-list li .ant-typography {
+  color: #595959;
+  font-size: 14px;
+}
+
+.child-list li:hover .ant-typography {
+  color: #1890ff;
+}
+
+/* Dark theme */
+[data-theme='dark'] .mega-menu-container {
+  background: #1f1f1f;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
+}
+
+[data-theme='dark'] .parent-category h5 {
+  color: #d9d9d9;
+}
+
+[data-theme='dark'] .parent-category:hover {
+  background: #111b26;
+}
+
+[data-theme='dark'] .parent-category:hover h5 {
+  color: #40a9ff;
+}
+
+[data-theme='dark'] .child-list li .ant-typography {
+  color: #bfbfbf;
+}
+
+[data-theme='dark'] .child-list li:hover {
+  background: #262626;
+}
+
+[data-theme='dark'] .child-list li:hover .ant-typography {
+  color: #40a9ff;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .mega-menu-container {
+    padding: 16px 20px;
+  }
+}
+
+
